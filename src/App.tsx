@@ -17,7 +17,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as Network from "expo-network";
 import { openRepository, Repository } from "./data/repository";
 import { Channel, Source, SourceKind } from "./domain/types";
-import { parseM3U } from "./domain/m3u";
+import { MAX_MIB, parseM3U } from "./domain/m3u";
 import {
   downloadPlaylist,
   ImportIOError,
@@ -75,6 +75,8 @@ export default function App() {
   const [remoteAllowed, setRemoteAllowed] = useState(false),
     [revokePending, setRevokePending] = useState(false),
     [mobileWarning, setMobileWarning] = useState(true),
+    [swipeReverse, setSwipeReverse] = useState(false),
+    [skipUnreachable, setSkipUnreachable] = useState(true),
     // One confirmation covers this metered connection until Wi-Fi returns.
     [mobileAccepted, setMobileAccepted] = useState(false),
     [form, setForm] = useState<SourceFormState | null>(null),
@@ -84,6 +86,8 @@ export default function App() {
     [rename, setRename] = useState<Source | null>(null),
     [renameText, setRenameText] = useState("");
   const [playing, setPlaying] = useState<Channel | null>(null),
+    // For "回到上一个频道": the channel watched before the current one.
+    [previousChannel, setPreviousChannel] = useState<Channel | null>(null),
     [playQueue, setPlayQueue] = useState<Channel[]>([]),
     [allChannels, setAllChannels] = useState<Channel[]>([]),
     [revision, setRevision] = useState(0);
@@ -99,6 +103,11 @@ export default function App() {
     generation = useRef(0),
     checkGeneration = useRef(0),
     playGeneration = useRef(0),
+    lastWatched = useRef<Channel | null>(null),
+    // The full catalog (thousands of rows) is cached for the channel sheet and
+    // only re-read after imports, refreshes, deletions or clearing.
+    catalogStale = useRef(true),
+    catalogLoad = useRef(0),
     saving = useRef(false),
     loadGeneration = useRef(0),
     mounted = useRef(true),
@@ -138,11 +147,15 @@ export default function App() {
       .then(async (r) => {
         const allowed = await r.getSetting("remoteAllowed", false);
         const warning = await r.getSetting("mobileWarning", true);
+        const reverse = await r.getSetting("swipeReverse", false);
+        const skipDead = await r.getSetting("skipUnreachable", true);
         const favorites = await r.listChannels({ mode: "favorites" });
         if (active) {
           remoteRef.current = allowed;
           setRemoteAllowed(allowed);
           setMobileWarning(warning);
+          setSwipeReverse(reverse);
+          setSkipUnreachable(skipDead);
           setTab(favorites.length ? "favorites" : "all");
           setRepo(r);
         }
@@ -338,7 +351,9 @@ export default function App() {
         updateForm({ content, fileName: asset.name, kind: "file" });
     } catch {
       if (task === generation.current)
-        setFormError("文件读取失败或超过 2 MiB，请选择有效 UTF-8 M3U 文件。");
+        setFormError(
+          `文件读取失败或超过 ${MAX_MIB} MiB，请选择有效 UTF-8 M3U 文件。`,
+        );
     } finally {
       if (task === generation.current) {
         setBusy(false);
@@ -423,6 +438,7 @@ export default function App() {
           content: f.kind === "file" ? f.content : undefined,
         });
       }
+      invalidateCatalog();
       setForm(null);
       setTab("all");
       setRecentEditing(false);
@@ -596,28 +612,50 @@ export default function App() {
       if (mounted.current) setRecentBusy(false);
     }
   };
+  /** Background catalog load for the sheet; the sheet uses the queue until then. */
+  const loadCatalog = () => {
+    if (!repo || !catalogStale.current) return;
+    catalogStale.current = false;
+    const load = ++catalogLoad.current;
+    repo
+      .listChannels()
+      .then((catalog) => {
+        if (mounted.current && load === catalogLoad.current)
+          setAllChannels(catalog.filter((channel) => channel.active));
+      })
+      .catch(() => {
+        if (load === catalogLoad.current) catalogStale.current = true;
+      });
+  };
+  const invalidateCatalog = () => {
+    catalogStale.current = true;
+    catalogLoad.current += 1;
+    setAllChannels([]);
+  };
   const play = async (c: Channel, queue = channels) => {
     if (!repo || !c.active) return;
     const task = ++playGeneration.current;
     const epoch = permissionEpoch.current;
     try {
       if (!(await guardRemote()) || epoch !== permissionEpoch.current) return;
-      const catalog = await repo.listChannels();
+      // Read only this channel so the player opens at once; loading 10k+
+      // catalog rows first took ~5 s on the emulator.
+      const fresh = await repo.getChannel(c.id);
       if (
         !mounted.current ||
         task !== playGeneration.current ||
         epoch !== permissionEpoch.current
       )
         return;
-      const selected = catalog.find(
-        (channel) => channel.id === c.id && channel.active,
-      );
+      const selected = fresh?.active ? fresh : null;
       if (!selected) {
         setError("频道已不可用，请重新读取频道后重试");
         return;
       }
-      setAllChannels(catalog.filter((channel) => channel.active));
+      loadCatalog();
       setPlayQueue(queue.filter((x) => x.active));
+      const from = playing ?? lastWatched.current;
+      if (from && from.id !== selected.id) setPreviousChannel(from);
       setPlaying(selected);
     } catch {
       if (
@@ -641,10 +679,13 @@ export default function App() {
     cancelTask();
     if (check?.sourceId === s.id) stopCheck();
     if (playing?.sourceId === s.id) setPlaying(null);
+    if (previousChannel?.sourceId === s.id) setPreviousChannel(null);
+    if (lastWatched.current?.sourceId === s.id) lastWatched.current = null;
     repo.cancelRefresh(s.id);
     setError("");
     try {
       await repo.deleteSource(s.id);
+      invalidateCatalog();
       for (const key of ["all", "favorites", "recent"] as const) {
         const saved = tabFilters.current[key];
         if (saved?.sourceId === s.id)
@@ -704,9 +745,14 @@ export default function App() {
     stopCheck();
     try {
       await repo.clearAll();
+      invalidateCatalog();
       setRevokePending(false);
       setMobileWarning(true);
       setMobileAccepted(false);
+      setSwipeReverse(false);
+      setSkipUnreachable(true);
+      setPreviousChannel(null);
+      lastWatched.current = null;
       setCheckSummaries({});
       tabFilters.current = {};
       tabOffsets.current = {};
@@ -767,140 +813,163 @@ export default function App() {
       style={styles.screen}
       edges={["top", "bottom", "left", "right"]}
     >
-      {!!error && !manage && !rename && !form && (
-        <View style={{ padding: 12 }}>
-          <Notice title={error} error />
-          <Button secondary label="关闭提示" onPress={() => setError("")} />
-        </View>
-      )}
-      {tab === "settings" ? (
-        <SettingsScreen
-          remoteAllowed={remoteAllowed}
-          revokePending={revokePending}
-          mobileWarning={mobileWarning}
-          onManageSources={() => {
-            setError("");
-            setManage(true);
-          }}
-          onRevoke={() => void revoke()}
-          onAllowRemote={() => void guardRemote()}
-          onMobileWarningChange={(v) => {
-            setMobileWarning(v);
-            void repo.setSetting("mobileWarning", v).catch(() => {
-              setMobileWarning(!v);
-              setError("设置保存失败");
-            });
-          }}
-          onClearAll={() => void clearAll()}
-        />
-      ) : (
-        <FlatList
-          ref={listRef}
-          data={!hasCurrentList || listError ? [] : channels}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          onScroll={(e) => {
-            if (!listLoading)
-              tabOffsets.current[tab] = e.nativeEvent.contentOffset.y;
-          }}
-          scrollEventThrottle={100}
-          keyExtractor={(c) => c.id}
-          contentContainerStyle={styles.content}
-          ListHeaderComponent={
-            <ChannelListHeader
-              key={listTab}
-              tab={listTab}
-              sources={sources}
-              channelCount={channels.length}
-              search={search}
-              sourceId={sourceId}
-              group={group}
-              groups={groups}
-              recentBusy={recentBusy}
-              recentEditing={recentEditing}
-              recentCount={recent.length}
-              onToggleRecentEditing={() => {
-                if (recentBusy) return;
-                if (!recentEditing) {
-                  tabOffsets.current.recent = 0;
-                  restoreTab.current = "recent";
+      {/* The player overlays this content; hide it from TalkBack meanwhile. */}
+      <View
+        style={{ flex: 1 }}
+        importantForAccessibility={playing ? "no-hide-descendants" : "auto"}
+        accessibilityElementsHidden={!!playing}
+      >
+        {!!error && !manage && !rename && !form && (
+          <View style={{ padding: 12 }}>
+            <Notice title={error} error />
+            <Button secondary label="关闭提示" onPress={() => setError("")} />
+          </View>
+        )}
+        {tab === "settings" ? (
+          <SettingsScreen
+            remoteAllowed={remoteAllowed}
+            revokePending={revokePending}
+            mobileWarning={mobileWarning}
+            onManageSources={() => {
+              setError("");
+              setManage(true);
+            }}
+            onRevoke={() => void revoke()}
+            onAllowRemote={() => void guardRemote()}
+            onMobileWarningChange={(v) => {
+              setMobileWarning(v);
+              void repo.setSetting("mobileWarning", v).catch(() => {
+                setMobileWarning(!v);
+                setError("设置保存失败");
+              });
+            }}
+            swipeReverse={swipeReverse}
+            onSwipeReverseChange={(v) => {
+              setSwipeReverse(v);
+              void repo.setSetting("swipeReverse", v).catch(() => {
+                setSwipeReverse(!v);
+                setError("设置保存失败");
+              });
+            }}
+            skipUnreachable={skipUnreachable}
+            onSkipUnreachableChange={(v) => {
+              setSkipUnreachable(v);
+              void repo.setSetting("skipUnreachable", v).catch(() => {
+                setSkipUnreachable(!v);
+                setError("设置保存失败");
+              });
+            }}
+            onClearAll={() => void clearAll()}
+          />
+        ) : (
+          <FlatList
+            ref={listRef}
+            data={!hasCurrentList || listError ? [] : channels}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            onScroll={(e) => {
+              if (!listLoading)
+                tabOffsets.current[tab] = e.nativeEvent.contentOffset.y;
+            }}
+            scrollEventThrottle={100}
+            keyExtractor={(c) => c.id}
+            contentContainerStyle={styles.content}
+            ListHeaderComponent={
+              <ChannelListHeader
+                key={listTab}
+                tab={listTab}
+                sources={sources}
+                channelCount={channels.length}
+                search={search}
+                sourceId={sourceId}
+                group={group}
+                groups={groups}
+                recentBusy={recentBusy}
+                recentEditing={recentEditing}
+                recentCount={recent.length}
+                onToggleRecentEditing={() => {
+                  if (recentBusy) return;
+                  if (!recentEditing) {
+                    tabOffsets.current.recent = 0;
+                    restoreTab.current = "recent";
+                    setSearch("");
+                    setQuery("");
+                  }
+                  setRecentEditing((value) => !value);
+                }}
+                onClearRecent={() => {
+                  setError("");
+                  void clearRecent().catch(() =>
+                    setError("清空观看记录失败，请重试"),
+                  );
+                }}
+                onSearchChange={(text) => {
+                  tabOffsets.current[tab] = 0;
+                  restoreTab.current = tab;
+                  setSearch(text);
+                }}
+                onClearSearch={() => {
+                  tabOffsets.current[tab] = 0;
+                  restoreTab.current = tab;
                   setSearch("");
                   setQuery("");
+                }}
+                onSourceChange={(id) => {
+                  tabOffsets.current[tab] = 0;
+                  restoreTab.current = tab;
+                  setSourceId(id);
+                  setGroup("");
+                }}
+                onGroupChange={(name) => {
+                  tabOffsets.current[tab] = 0;
+                  restoreTab.current = tab;
+                  setGroup(name);
+                }}
+              />
+            }
+            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+            renderItem={({ item }) => (
+              <ChannelRow
+                channel={item}
+                onPlay={() => void play(item)}
+                onFavorite={() => void favorite(item)}
+                onRemoveRecent={
+                  tab === "recent" && recentEditing
+                    ? () => {
+                        setError("");
+                        void removeRecent(item).catch(() =>
+                          setError("删除观看记录失败，请重试"),
+                        );
+                      }
+                    : undefined
                 }
-                setRecentEditing((value) => !value);
-              }}
-              onClearRecent={() => {
-                setError("");
-                void clearRecent().catch(() =>
-                  setError("清空观看记录失败，请重试"),
-                );
-              }}
-              onSearchChange={(text) => {
-                tabOffsets.current[tab] = 0;
-                restoreTab.current = tab;
-                setSearch(text);
-              }}
-              onClearSearch={() => {
-                tabOffsets.current[tab] = 0;
-                restoreTab.current = tab;
-                setSearch("");
-                setQuery("");
-              }}
-              onSourceChange={(id) => {
-                tabOffsets.current[tab] = 0;
-                restoreTab.current = tab;
-                setSourceId(id);
-                setGroup("");
-              }}
-              onGroupChange={(name) => {
-                tabOffsets.current[tab] = 0;
-                restoreTab.current = tab;
-                setGroup(name);
-              }}
-            />
-          }
-          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-          renderItem={({ item }) => (
-            <ChannelRow
-              channel={item}
-              onPlay={() => void play(item)}
-              onFavorite={() => void favorite(item)}
-              onRemoveRecent={
-                tab === "recent" && recentEditing
-                  ? () => {
-                      setError("");
-                      void removeRecent(item).catch(() =>
-                        setError("删除观看记录失败，请重试"),
-                      );
-                    }
-                  : undefined
-              }
-              recentBusy={recentBusy}
-            />
-          )}
-          ListEmptyComponent={
-            <ChannelListEmpty
-              tab={listTab}
-              loading={listLoading}
-              error={listError}
-              hasSources={sources.length > 0}
-              filtered={!!(query || sourceId || group)}
-              onRetry={changed}
-              onAddUrl={() => startForm("url")}
-              onAddFile={() => startForm("file")}
-              onShowAll={() => {
-                setRecentEditing(false);
-                setTab("all");
-                setSourceId("");
-                setGroup("");
-                setSearch("");
-                setQuery("");
-              }}
-            />
-          }
-        />
-      )}
-      <BottomTabs tab={tab} onChange={changeTab} />
+                recentBusy={recentBusy}
+              />
+            )}
+            ListEmptyComponent={
+              <ChannelListEmpty
+                tab={listTab}
+                loading={listLoading}
+                error={listError}
+                hasSources={sources.length > 0}
+                filtered={!!(query || sourceId || group)}
+                onRetry={changed}
+                onAddUrl={() => startForm("url")}
+                onAddFile={() => startForm("file")}
+                onShowAll={() => {
+                  setRecentEditing(false);
+                  setTab("all");
+                  setSourceId("");
+                  setGroup("");
+                  setSearch("");
+                  setQuery("");
+                }}
+              />
+            }
+          />
+        )}
+        <BottomTabs tab={tab} onChange={changeTab} />
+      </View>
       <SourceManagerModal
         visible={manage}
         error={error}
@@ -977,23 +1046,40 @@ export default function App() {
           <PlayerScreen
             channel={playing}
             channels={playQueue}
-            allChannels={allChannels}
+            allChannels={allChannels.length ? allChannels : undefined}
             recentChannels={recent}
             onSelect={(channel, queue) => {
               if (queue) setPlayQueue(queue);
+              if (channel.id !== playing.id) setPreviousChannel(playing);
               setPlaying(channel);
             }}
-            onClose={() => setPlaying(null)}
+            onClose={() => {
+              lastWatched.current = playing;
+              setPlaying(null);
+            }}
             onFavorite={(c) => void favorite(c)}
             onStarted={(c) => {
+              // Only the recent list changes; re-reading a 10k-row channel tab
+              // here would compete with stream start-up.
               void repo
                 .recordRecent(c.id)
-                .then(changed)
+                .then(async () => {
+                  if (tab === "recent") changed();
+                  else setRecent(await repo.listChannels({ mode: "recent" }));
+                })
                 .catch(() => setError("观看记录未能保存"));
             }}
             remoteAllowed={remoteAllowed}
             mobileWarning={mobileWarning && !mobileAccepted}
             onMobileAccepted={() => setMobileAccepted(true)}
+            swipeReverse={swipeReverse}
+            skipUnreachable={skipUnreachable}
+            // Resolve from the fresh catalog: a refresh may have changed it.
+            previousChannel={
+              previousChannel
+                ? (allChannels.find((c) => c.id === previousChannel.id) ?? null)
+                : null
+            }
           />
         </View>
       )}

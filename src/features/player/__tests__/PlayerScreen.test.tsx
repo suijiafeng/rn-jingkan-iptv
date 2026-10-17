@@ -721,3 +721,186 @@ test("manual list dragging cancels a pending automatic location retry", async ()
   offsetSpy.mockRestore();
   jest.useRealTimers();
 });
+
+describe("zapping", () => {
+  const third: Channel = {
+    ...first,
+    id: "third",
+    identityKey: "three",
+    name: "城市夜色",
+    streamUrl: "https://example.test/three.m3u8",
+    sortIndex: 2,
+  };
+  const swipe = async (
+    ui: Awaited<ReturnType<typeof render>>,
+    dy: number,
+    dx = 0,
+  ) => {
+    const layer = ui.getByTestId("fullscreen-gesture-layer");
+    await act(() => {
+      layer.props.onResponderGrant({ nativeEvent: { pageX: 100, pageY: 300 } });
+      layer.props.onResponderRelease({
+        nativeEvent: { pageX: 100 + dx, pageY: 300 + dy },
+      });
+    });
+  };
+  const fullscreen = async (options: PlayerScreenProps) => {
+    const ui = await render(<PlayerScreen {...options} />);
+    await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
+    return ui;
+  };
+
+  test("fullscreen swipe up selects the next channel and down the previous", async () => {
+    const options = props({
+      channel: second,
+      channels: [first, second, third],
+    });
+    const ui = await fullscreen(options);
+    await swipe(ui, -120);
+    expect(options.onSelect).toHaveBeenLastCalledWith(third);
+    await swipe(ui, 120);
+    expect(options.onSelect).toHaveBeenLastCalledWith(first);
+    await ui.unmount();
+  });
+
+  test("reverse setting flips swipe direction; mostly horizontal drags do nothing", async () => {
+    const options = props({
+      channel: second,
+      channels: [first, second, third],
+      swipeReverse: true,
+    });
+    const ui = await fullscreen(options);
+    await swipe(ui, -120);
+    expect(options.onSelect).toHaveBeenLastCalledWith(first);
+    await swipe(ui, -80, 200);
+    expect(options.onSelect).toHaveBeenCalledTimes(1);
+    await ui.unmount();
+  });
+
+  test("a tap toggles controls and swiping past the end shows a boundary hint", async () => {
+    const options = props({ channel: second, channels: [first, second] });
+    const ui = await fullscreen(options);
+    expect(ui.getByRole("button", { name: "退出全屏" })).toBeTruthy();
+    await swipe(ui, 0);
+    expect(ui.queryByRole("button", { name: "退出全屏" })).toBeNull();
+    await swipe(ui, -120);
+    expect(options.onSelect).not.toHaveBeenCalled();
+    expect(ui.getByText("已经是最后一个频道")).toBeTruthy();
+    await ui.unmount();
+  });
+
+  test("TalkBack actions switch channels without gestures", async () => {
+    const options = props({
+      channel: second,
+      channels: [first, second, third],
+    });
+    const ui = await fullscreen(options);
+    const layer = ui.getByTestId("fullscreen-gesture-layer");
+    await act(() =>
+      layer.props.onAccessibilityAction({
+        nativeEvent: { actionName: "increment" },
+      }),
+    );
+    expect(options.onSelect).toHaveBeenLastCalledWith(third);
+    await ui.unmount();
+  });
+
+  test("previous/next and swipes skip channels last checked unreachable when enabled", async () => {
+    const dead = { ...second, checkStatus: "unreachable" as const };
+    const options = props({
+      channel: first,
+      channels: [first, dead, third],
+      skipUnreachable: true,
+    });
+    const ui = await render(<PlayerScreen {...options} />);
+    await fireEvent.press(ui.getByRole("button", { name: "下一台" }));
+    expect(options.onSelect).toHaveBeenLastCalledWith(third);
+    await ui.unmount();
+    const plain = props({ channel: first, channels: [first, dead, third] });
+    const ui2 = await render(<PlayerScreen {...plain} />);
+    await fireEvent.press(ui2.getByRole("button", { name: "下一台" }));
+    expect(plain.onSelect).toHaveBeenLastCalledWith(dead);
+    await ui2.unmount();
+  });
+
+  test("returning to the previous channel is one tap and hidden for the same or inactive channel", async () => {
+    const options = props({ previousChannel: second });
+    const ui = await render(<PlayerScreen {...options} />);
+    await fireEvent.press(
+      ui.getByRole("button", { name: "回到上一个频道 自然之声" }),
+    );
+    expect(options.onSelect).toHaveBeenLastCalledWith(second);
+    await ui.rerender(
+      <PlayerScreen
+        {...options}
+        previousChannel={{ ...second, active: false }}
+      />,
+    );
+    expect(ui.queryByRole("button", { name: /回到上一个频道/ })).toBeNull();
+    await ui.rerender(<PlayerScreen {...options} previousChannel={first} />);
+    expect(ui.queryByRole("button", { name: /回到上一个频道/ })).toBeNull();
+    await ui.unmount();
+  });
+});
+
+describe("waiting and failure", () => {
+  afterEach(() => jest.useRealTimers());
+
+  // The counter re-arms after each render, so advance one second at a time.
+  const seconds = async (n: number) => {
+    for (let i = 0; i < n; i += 1)
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+  };
+
+  test("connecting shows elapsed seconds; with hidden fullscreen controls it offers the next channel after 15 s", async () => {
+    jest.useFakeTimers();
+    const options = props();
+    const ui = await render(<PlayerScreen {...options} />);
+    await seconds(3);
+    expect(ui.getByText("已等待 3 秒")).toBeTruthy();
+    await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
+    const layer = ui.getByTestId("fullscreen-gesture-layer");
+    await act(() => {
+      layer.props.onResponderGrant({ nativeEvent: { pageX: 10, pageY: 10 } });
+      layer.props.onResponderRelease({ nativeEvent: { pageX: 10, pageY: 10 } });
+    });
+    expect(ui.queryByRole("button", { name: "退出全屏" })).toBeNull();
+    expect(ui.queryByRole("button", { name: "换下一台" })).toBeNull();
+    await seconds(12);
+    expect(ui.getByText(/比平时慢/)).toBeTruthy();
+    await fireEvent.press(ui.getByRole("button", { name: "换下一台" }));
+    expect(options.onSelect).toHaveBeenLastCalledWith(second);
+    await ui.unmount();
+  });
+
+  test("portrait loading never duplicates the visible next button", async () => {
+    jest.useFakeTimers();
+    const ui = await render(<PlayerScreen {...props()} />);
+    await seconds(16);
+    expect(ui.getByText(/比平时慢/)).toBeTruthy();
+    expect(ui.queryByRole("button", { name: "换下一台" })).toBeNull();
+    expect(ui.getByRole("button", { name: "下一台" })).toBeTruthy();
+    await ui.unmount();
+  });
+
+  test("after a timeout, retry starts a fresh attempt and a second timeout does not hang", async () => {
+    jest.useFakeTimers();
+    const options = props();
+    const ui = await render(<PlayerScreen {...options} />);
+    await seconds(30);
+    expect(ui.getByText("连接超时")).toBeTruthy();
+    const mountsBefore = mockMounts.mock.calls.length;
+    await fireEvent.press(ui.getByRole("button", { name: "重试播放" }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockMounts.mock.calls.length).toBe(mountsBefore + 1);
+    await seconds(30);
+    expect(ui.getByText("连接超时")).toBeTruthy();
+    await fireEvent.press(ui.getByRole("button", { name: "下一台" }));
+    expect(options.onSelect).toHaveBeenLastCalledWith(second);
+    await ui.unmount();
+  });
+});

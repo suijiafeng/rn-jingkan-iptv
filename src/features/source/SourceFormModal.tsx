@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Card, Heading, Notice } from "../../components/ui";
 import { displayGroups } from "../../domain/channelLabels";
+import { MAX_MIB } from "../../domain/m3u";
 import { IMPORT_ISSUE_LABELS, ImportIssueReason } from "../../domain/types";
 import { colors, styles } from "../../theme";
 import type { SourceFormState } from "./form";
@@ -123,7 +124,7 @@ export function SourceFormModal({
                       <>
                         <Notice
                           title={form.fileName || "选择 M3U 文件"}
-                          body="使用系统文件选择器，仅读取你选中的文件。上限 2 MiB，UTF-8 编码。"
+                          body={`使用系统文件选择器，仅读取你选中的文件。上限 ${MAX_MIB} MiB，UTF-8 编码。`}
                         />
                         <Button
                           label="选择 / 更换文件"

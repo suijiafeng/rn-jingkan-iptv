@@ -69,6 +69,13 @@ const repo = {
   cancelRefresh: jest.fn(),
   toggleFavorite: jest.fn(),
   saveCheckResults: jest.fn(async () => {}),
+  // Playback reads just the chosen channel; derive it from the list mock.
+  getChannel: jest.fn(
+    async (id: string): Promise<unknown> =>
+      ((await listChannelsForLookup()) as { id: string }[]).find(
+        (channel) => channel.id === id,
+      ) ?? null,
+  ),
   deleteSource: jest.fn(async () => {}),
   renameSource: jest.fn(async () => {}),
   removeRecent: jest.fn(async (_channelId: string) => {}),
@@ -95,6 +102,9 @@ async function openSourceManager() {
   await fireEvent.press(await screen.findByText("管理节目来源"));
   await waitFor(() => expect(screen.getByText("检测可用性")).toBeTruthy());
   return ui;
+}
+function listChannelsForLookup(): Promise<unknown> {
+  return (repo.listChannels as jest.Mock)();
 }
 beforeEach(() => {
   jest.clearAllMocks();
@@ -797,9 +807,15 @@ test("playback receives the complete catalog when opened from favorites", async 
   await render(<App />);
   await fireEvent.press(await screen.findByLabelText("收藏台，播放"));
   await waitFor(() => expect(mockPlayerProps).toHaveBeenCalled());
+  // The full catalog arrives after the player has already opened.
+  await waitFor(() =>
+    expect(mockPlayerProps.mock.calls.at(-1)![0].allChannels).toEqual([
+      favorite,
+      other,
+    ]),
+  );
   const props = mockPlayerProps.mock.calls.at(-1)![0];
   expect(props.channels).toEqual([favorite]);
-  expect(props.allChannels).toEqual([favorite, other]);
   await act(async () => props.onSelect(other, props.allChannels));
   const selected = mockPlayerProps.mock.calls.at(-1)![0];
   expect(selected.channel.id).toBe("other");
@@ -1086,4 +1102,49 @@ test("Android back exits history management before leaving the screen", async ()
   } finally {
     listener.mockRestore();
   }
+});
+
+test("the player opens without waiting for the full catalog, which is loaded once and reused", async () => {
+  const one = {
+    id: "one",
+    name: "第一台",
+    active: true,
+    favorite: false,
+    sourceId: "s",
+    sourceName: "来源",
+    groupName: "新闻",
+  };
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" ? true : fallback,
+  );
+  let releaseCatalog!: () => void;
+  const catalogCalls: unknown[] = [];
+  (repo.listChannels as jest.Mock).mockImplementation(async (query) => {
+    if (query?.mode) return query.mode === "recent" ? [] : [one];
+    if (query && (query.search !== undefined || query.sourceId !== undefined))
+      return [one];
+    catalogCalls.push(query);
+    // The player's catalog request (no filters at all) stalls until released.
+    if (catalogCalls.length > 0 && query === undefined)
+      await new Promise<void>((resolve) => {
+        releaseCatalog = resolve;
+      });
+    return [one];
+  });
+  (repo.getChannel as jest.Mock).mockImplementation(async () => one);
+  await render(<App />);
+  await fireEvent.press(await screen.findByLabelText("第一台，播放"));
+  await waitFor(() => expect(mockPlayerProps).toHaveBeenCalled());
+  expect(mockPlayerProps.mock.calls.at(-1)![0].allChannels).toBeUndefined();
+  await act(async () => releaseCatalog());
+  await waitFor(() =>
+    expect(mockPlayerProps.mock.calls.at(-1)![0].allChannels).toEqual([one]),
+  );
+  const loads = catalogCalls.filter((q) => q === undefined).length;
+  await act(async () => mockPlayerProps.mock.calls.at(-1)![0].onClose());
+  await fireEvent.press(await screen.findByLabelText("第一台，播放"));
+  await waitFor(() =>
+    expect(mockPlayerProps.mock.calls.at(-1)![0].channel.id).toBe("one"),
+  );
+  expect(catalogCalls.filter((q) => q === undefined).length).toBe(loads);
 });

@@ -7,14 +7,17 @@ import type {
 import { normalizeRemoteUrl, UrlValidationError } from "./url";
 import { normalizeGroups } from "./channelLabels";
 
+// 8 MiB fits the full iptv-org index (~2.5 MiB, 11k+ entries) with headroom;
+// still bounded because the text is held in memory while parsing.
 export const M3U_LIMITS = Object.freeze({
-  maxBytes: 2 * 1024 * 1024,
+  maxBytes: 8 * 1024 * 1024,
   maxLineBytes: 64 * 1024,
   maxEntries: 20_000,
   yieldEveryLines: 200,
 });
 const HLS_STRUCTURE_TAG =
   /^#EXT-X-(?:TARGETDURATION|MEDIA-SEQUENCE|DISCONTINUITY-SEQUENCE|STREAM-INF|I-FRAME-STREAM-INF|MEDIA|KEY|MAP|BYTERANGE|PLAYLIST-TYPE|ENDLIST|PART-INF|PART|SERVER-CONTROL)(?=[:\s]|$)/i;
+export const MAX_MIB = M3U_LIMITS.maxBytes / 1024 / 1024;
 export type M3UErrorCode =
   | "empty"
   | "missing_header"
@@ -32,7 +35,7 @@ export class M3UParseError extends Error {
         empty: "文件内容为空。",
         missing_header: "这不是有效的 M3U 频道目录（缺少 #EXTM3U）。",
         invalid_encoding: "文件不是有效的 UTF-8 文本，请重新导出为 UTF-8。",
-        too_large: "节目单超过 2 MiB 上限。",
+        too_large: `节目单超过 ${MAX_MIB} MiB 上限。`,
         line_too_long: "节目单有一行超过 64 KiB 上限。",
         too_many_entries: "节目单超过 20,000 条目上限。",
         hls_playlist: "这是 HLS 播放地址，不是频道目录。",

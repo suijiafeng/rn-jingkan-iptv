@@ -1,5 +1,6 @@
 import {
   adjacentChannelIndex,
+  adjacentPlayableIndex,
   backDestination,
   INITIAL_PLAY_TIMEOUT_MS,
   isOffline,
@@ -300,4 +301,15 @@ test("previous/next have boundaries and back dismisses sheet before fullscreen",
   expect(backDestination(true, true)).toBe("sheet");
   expect(backDestination(false, true)).toBe("fullscreen");
   expect(backDestination(false, false)).toBe("close");
+});
+
+test("adjacent playable index skips marked channels and never wraps", () => {
+  const items = ["a", "dead", "b", "dead2"];
+  const dead = (x: string) => x.startsWith("dead");
+  expect(adjacentPlayableIndex(items, 0, 1, dead)).toBe(2);
+  expect(adjacentPlayableIndex(items, 2, -1, dead)).toBe(0);
+  expect(adjacentPlayableIndex(items, 2, 1, dead)).toBeNull();
+  expect(adjacentPlayableIndex(items, 0, -1, dead)).toBeNull();
+  expect(adjacentPlayableIndex(items, 0, 1)).toBe(1);
+  expect(adjacentPlayableIndex(items, -1, 1, dead)).toBeNull();
 });

@@ -257,6 +257,17 @@ export class Repository {
     }));
   }
 
+  /** One channel by id (any state), for starting playback without the catalog. */
+  async getChannel(id: string): Promise<Channel | null> {
+    const row = await this.db.getFirstAsync<RawChannel>(
+      `${CHANNEL_SELECT} WHERE c.id = ?`,
+      [id],
+    );
+    return row
+      ? { ...row, active: row.active === 1, favorite: row.favorite === 1 }
+      : null;
+  }
+
   listFavorites(): Promise<Channel[]> {
     return this.listChannels({ mode: "favorites" });
   }

@@ -251,6 +251,26 @@ export function adjacentChannelIndex(
   return currentIndex < 0 || target < 0 || target >= length ? null : target;
 }
 
+/**
+ * Like adjacentChannelIndex, but steps over channels the caller wants skipped
+ * (e.g. last manual check found them unreachable). Boundaries never wrap.
+ */
+export function adjacentPlayableIndex<T>(
+  items: readonly T[],
+  currentIndex: number,
+  direction: -1 | 1,
+  skip: (item: T) => boolean = () => false,
+): number | null {
+  if (currentIndex < 0) return null;
+  for (
+    let target = currentIndex + direction;
+    target >= 0 && target < items.length;
+    target += direction
+  )
+    if (!skip(items[target])) return target;
+  return null;
+}
+
 export function backDestination(
   sheetOpen: boolean,
   fullscreen: boolean,

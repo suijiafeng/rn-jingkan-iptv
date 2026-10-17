@@ -1,7 +1,8 @@
 import { fetch as expoFetch } from "expo/fetch";
 import { File } from "expo-file-system";
 import { normalizeRemoteUrl } from "../domain/url";
-export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
+import { M3U_LIMITS, MAX_MIB } from "../domain/m3u";
+export const MAX_IMPORT_BYTES = M3U_LIMITS.maxBytes;
 export class ImportIOError extends Error {}
 export async function readBoundedStream(
   stream: ReadableStream<Uint8Array>,
@@ -32,7 +33,7 @@ export async function readBoundedStream(
       if (result.done) break;
       size += result.value.byteLength;
       if (size > maxBytes)
-        throw new ImportIOError("节目单超过 2 MiB 上限，请拆分后导入");
+        throw new ImportIOError(`节目单超过 ${MAX_MIB} MiB 上限，请拆分后导入`);
       chunks.push(result.value);
     }
     const bytes = new Uint8Array(size);
@@ -80,7 +81,7 @@ export async function downloadPlaylist(
             : `节目单服务器返回 HTTP ${response.status}，请稍后重试`,
       );
     if (Number(response.headers.get("content-length")) > MAX_IMPORT_BYTES)
-      throw new ImportIOError("节目单超过 2 MiB 上限");
+      throw new ImportIOError(`节目单超过 ${MAX_MIB} MiB 上限`);
     if (!response.body) throw new ImportIOError("服务器没有返回节目单");
     const finalUrl = normalizeRemoteUrl(response.url || url);
     return {
@@ -111,7 +112,7 @@ export async function readPickedFile(
   try {
     if (!file.exists) throw new ImportIOError("所选文件已不可访问，请重新选择");
     if (file.size > MAX_IMPORT_BYTES)
-      throw new ImportIOError("文件超过 2 MiB 上限");
+      throw new ImportIOError(`文件超过 ${MAX_MIB} MiB 上限`);
     return await readBoundedStream(file.readableStream(), signal);
   } finally {
     try {

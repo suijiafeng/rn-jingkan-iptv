@@ -12,6 +12,10 @@ interface Props {
   onRevoke: () => void;
   onAllowRemote: () => void;
   onMobileWarningChange: (value: boolean) => void;
+  swipeReverse: boolean;
+  onSwipeReverseChange: (value: boolean) => void;
+  skipUnreachable: boolean;
+  onSkipUnreachableChange: (value: boolean) => void;
   onClearAll: () => void;
 }
 
@@ -53,6 +57,39 @@ export function SettingsScreen(props: Props) {
             value={props.mobileWarning}
             trackColor={{ true: colors.accent }}
             onValueChange={props.onMobileWarningChange}
+          />
+        </View>
+      </Card>
+      <Card>
+        <Text style={styles.heading}>换台</Text>
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.body}>换台反转</Text>
+            <Text style={styles.muted}>
+              {props.swipeReverse
+                ? "全屏时上滑换上一台，下滑换下一台"
+                : "全屏时上滑换下一台，下滑换上一台"}
+            </Text>
+          </View>
+          <Switch
+            accessibilityLabel="换台反转"
+            value={props.swipeReverse}
+            trackColor={{ true: colors.accent }}
+            onValueChange={props.onSwipeReverseChange}
+          />
+        </View>
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.body}>跳过不可达频道</Text>
+            <Text style={styles.muted}>
+              上一台、下一台和滑动换台时，跳过可用性检测为不可达的频道
+            </Text>
+          </View>
+          <Switch
+            accessibilityLabel="跳过不可达频道"
+            value={props.skipUnreachable}
+            trackColor={{ true: colors.accent }}
+            onValueChange={props.onSkipUnreachableChange}
           />
         </View>
       </Card>

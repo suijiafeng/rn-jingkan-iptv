@@ -1,10 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { Source } from "../../../domain/types";
-import {
-  RenameSourceModal,
-  SourceManagerModal,
-} from "../SourceManagerModal";
+import { RenameSourceModal, SourceManagerModal } from "../SourceManagerModal";
 
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: jest.requireActual("react-native").View,
@@ -64,7 +61,9 @@ test.each(["manager", "rename"] as const)(
   "%s modal presents errors and lets the caller dismiss them",
   async (kind) => {
     const dismiss = jest.fn();
-    const ui = await render(renderModal(kind, "本地资料操作失败，请重试", dismiss));
+    const ui = await render(
+      renderModal(kind, "本地资料操作失败，请重试", dismiss),
+    );
 
     expect(screen.getByRole("alert")).toHaveTextContent(
       "本地资料操作失败，请重试",

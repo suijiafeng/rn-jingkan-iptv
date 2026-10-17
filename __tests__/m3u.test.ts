@@ -222,7 +222,7 @@ describe("M3U bounded import parser", () => {
   });
 
   it("uses recognizable, redacted error messages", () => {
-    expect(new M3UParseError("too_large").message).toContain("2 MiB");
+    expect(new M3UParseError("too_large").message).toContain("8 MiB");
   });
 });
 
