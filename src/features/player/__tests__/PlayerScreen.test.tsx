@@ -1,6 +1,6 @@
 import React from "react";
-import { AppState, BackHandler } from "react-native";
-import { act, fireEvent, render } from "@testing-library/react-native";
+import { AppState, BackHandler, FlatList, Keyboard } from "react-native";
+import { act, fireEvent, render, within } from "@testing-library/react-native";
 import { PlayerScreen, type PlayerScreenProps } from "../PlayerScreen";
 import type { Channel } from "../../../domain/types";
 
@@ -139,12 +139,65 @@ test("rotation preserves the current attempt; choosing a channel closes the shee
   await fireEvent.press(
     ui.getByRole("button", { name: "自然之声，我的节目单" }),
   );
-  expect(options.onSelect).toHaveBeenCalledWith(second);
+  expect(options.onSelect).toHaveBeenCalledWith(second, [first, second]);
   expect(ui.queryByText("选择频道")).toBeNull();
   expect(ui.getByRole("button", { name: "退出全屏" })).toBeTruthy();
   expect(mockMounts).toHaveBeenCalledTimes(1);
   await ui.unmount();
   expect(mockLock).toHaveBeenLastCalledWith(0);
+});
+
+test("all channels uses the full active catalog while previous/next keep the playback queue", async () => {
+  const inactive = {
+    ...second,
+    id: "inactive",
+    name: "失效频道",
+    active: false,
+  };
+  const options = props({
+    channels: [first],
+    allChannels: [first, second, inactive],
+  });
+  const ui = await render(<PlayerScreen {...options} />);
+  expect(
+    ui.getByRole("button", { name: "下一台" }).props.accessibilityState
+      .disabled,
+  ).toBe(true);
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  expect(ui.queryByRole("button", { name: "失效频道，我的节目单" })).toBeNull();
+  await fireEvent.press(
+    ui.getByRole("button", { name: "自然之声，我的节目单" }),
+  );
+  expect(options.onSelect).toHaveBeenCalledWith(second, [first, second]);
+  expect(ui.queryByText("选择频道")).toBeNull();
+  await ui.unmount();
+});
+
+test("favorites includes channels outside the initial playback queue and passes its own queue", async () => {
+  const options = props({ channels: [first], allChannels: [first, second] });
+  const ui = await render(<PlayerScreen {...options} />);
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  await fireEvent.press(ui.getByRole("button", { name: "收藏" }));
+  expect(
+    ui.queryByRole("button", { name: "山野纪实，我的节目单，当前频道" }),
+  ).toBeNull();
+  await fireEvent.press(
+    ui.getByRole("button", { name: "自然之声，我的节目单" }),
+  );
+  expect(options.onSelect).toHaveBeenCalledWith(second, [second]);
+  await ui.unmount();
+});
+
+test("choosing the current channel still updates the selected playback range", async () => {
+  const options = props({ channels: [first], allChannels: [first, second] });
+  const ui = await render(<PlayerScreen {...options} />);
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  await fireEvent.press(
+    ui.getByRole("button", { name: "山野纪实，我的节目单，当前频道" }),
+  );
+  expect(options.onSelect).toHaveBeenCalledWith(first, [first, second]);
+  expect(mockMounts).toHaveBeenCalledTimes(1);
+  await ui.unmount();
 });
 
 test("previous/next honor queue boundaries and switching releases prior channel", async () => {
@@ -197,4 +250,474 @@ test("hardware back closes sheet, then fullscreen, then player", async () => {
   expect(options.onClose).toHaveBeenCalledTimes(1);
   await ui.unmount();
   spy.mockRestore();
+});
+
+test("sheet search matches the full catalog and clearing search restores its channels", async () => {
+  const outside = { ...second, sourceName: "私有音乐单" };
+  const options = props({ channels: [first], allChannels: [first, outside] });
+  const ui = await render(<PlayerScreen {...options} />);
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  await fireEvent.changeText(ui.getByLabelText("搜索选台频道"), "音乐单");
+  expect(
+    ui.queryByRole("button", { name: "山野纪实，我的节目单，当前频道" }),
+  ).toBeNull();
+  await fireEvent.press(
+    ui.getByRole("button", { name: "自然之声，私有音乐单" }),
+  );
+  expect(options.onSelect).toHaveBeenCalledWith(outside, [outside]);
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  await fireEvent.press(ui.getByRole("button", { name: "清除选台搜索" }));
+  expect(
+    ui.getByRole("button", { name: "山野纪实，我的节目单，当前频道" }),
+  ).toBeTruthy();
+  expect(ui.getByLabelText("搜索选台频道").props.value).toBe("");
+  expect(mockMounts).toHaveBeenCalledTimes(1);
+  await ui.unmount();
+});
+
+test("sheet groups split multiple categories and selection uses the visible queue", async () => {
+  const music = { ...second, groupName: "纪录片;音乐" };
+  const options = props({ channels: [first], allChannels: [first, music] });
+  const ui = await render(<PlayerScreen {...options} />);
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  expect(
+    within(ui.getByTestId("player-group-tabs")).getAllByRole("button")[0].props
+      .accessibilityLabel,
+  ).toBe("全部");
+  expect(
+    ui.getByRole("button", { name: "全部" }).props.accessibilityState.selected,
+  ).toBe(true);
+  await fireEvent.press(ui.getByRole("button", { name: "音乐" }));
+  expect(
+    ui.getByRole("button", { name: "音乐" }).props.accessibilityState.selected,
+  ).toBe(true);
+  expect(
+    ui.queryByRole("button", { name: "山野纪实，我的节目单，当前频道" }),
+  ).toBeNull();
+  await fireEvent.press(
+    ui.getByRole("button", { name: "自然之声，我的节目单" }),
+  );
+  expect(options.onSelect).toHaveBeenCalledWith(music, [music]);
+  expect(mockMounts).toHaveBeenCalledTimes(1);
+  await ui.unmount();
+});
+
+test("all groups restores the channel queue while keeping its search and repeating a selected group preserves its filter", async () => {
+  const music = { ...second, groupName: "音乐" };
+  const news = {
+    ...second,
+    id: "news",
+    identityKey: "news",
+    name: "地方新闻",
+    groupName: "新闻",
+    streamUrl: "https://example.test/news.m3u8",
+    sortIndex: 2,
+  };
+  const options = props({
+    channels: [first],
+    allChannels: [first, music, news],
+  });
+  const ui = await render(<PlayerScreen {...options} />);
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  await fireEvent.press(ui.getByRole("button", { name: "音乐" }));
+  await fireEvent.changeText(ui.getByLabelText("搜索选台频道"), "我的节目单");
+  expect(ui.queryByRole("button", { name: "地方新闻，我的节目单" })).toBeNull();
+  await fireEvent.press(ui.getByRole("button", { name: "音乐" }));
+  expect(
+    ui.getByRole("button", { name: "音乐" }).props.accessibilityState.selected,
+  ).toBe(true);
+  expect(ui.queryByRole("button", { name: "地方新闻，我的节目单" })).toBeNull();
+  await fireEvent.press(ui.getByRole("button", { name: "全部" }));
+  expect(
+    ui.getByRole("button", { name: "音乐" }).props.accessibilityState.selected,
+  ).toBe(false);
+  expect(
+    ui.getByRole("button", { name: "全部" }).props.accessibilityState.selected,
+  ).toBe(true);
+  expect(ui.getByLabelText("搜索选台频道").props.value).toBe("我的节目单");
+  expect(
+    ui.getByRole("button", { name: "频道" }).props.accessibilityState.selected,
+  ).toBe(true);
+  expect(
+    ui.getByRole("button", { name: "山野纪实，我的节目单，当前频道" }),
+  ).toBeTruthy();
+  await fireEvent.press(
+    ui.getByRole("button", { name: "地方新闻，我的节目单" }),
+  );
+  expect(options.onSelect).toHaveBeenCalledWith(news, [first, music, news]);
+  await ui.unmount();
+});
+
+test("channel, favorite and recent scopes are mutually exclusive and groups belong only to channels", async () => {
+  const options = props({ recentChannels: [first] });
+  const ui = await render(<PlayerScreen {...options} />);
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  expect(
+    within(ui.getByTestId("player-scopes"))
+      .getAllByRole("button")
+      .map((item) => item.props.accessibilityLabel),
+  ).toEqual(["频道", "收藏", "最近"]);
+  for (const label of ["频道", "收藏", "最近", "频道"]) {
+    await fireEvent.press(ui.getByRole("button", { name: label }));
+    expect(
+      within(ui.getByTestId("player-scopes"))
+        .getAllByRole("button")
+        .filter((item) => item.props.accessibilityState.selected)
+        .map((item) => item.props.accessibilityLabel),
+    ).toEqual([label]);
+    expect(!!ui.queryByTestId("player-group-tabs")).toBe(label === "频道");
+  }
+  expect(mockMounts).toHaveBeenCalledTimes(1);
+  await ui.unmount();
+});
+
+test("recent uses ordered complete history outside the initial queue and favorite scope without history management actions", async () => {
+  const outside = {
+    ...first,
+    id: "outside",
+    identityKey: "outside",
+    name: "深夜电影",
+    groupName: "电影",
+    streamUrl: "https://example.test/outside.m3u8",
+  };
+  const inactive = {
+    ...first,
+    id: "inactive",
+    identityKey: "inactive",
+    name: "旧纪录片",
+    active: false,
+  };
+  const options = props({
+    channels: [first],
+    allChannels: [first, second, outside],
+    recentChannels: [outside, second, inactive],
+  });
+  const ui = await render(<PlayerScreen {...options} />);
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  await fireEvent.press(ui.getByRole("button", { name: "纪录片" }));
+  await fireEvent.press(ui.getByRole("button", { name: "收藏" }));
+  await fireEvent.changeText(ui.getByLabelText("搜索选台频道"), "不存在");
+  await fireEvent.press(ui.getByRole("button", { name: "最近" }));
+  expect(ui.getByLabelText("搜索选台频道").props.value).toBe("");
+  expect(ui.queryByTestId("player-group-tabs")).toBeNull();
+  expect(
+    ui.queryByRole("button", { name: /删除.*的观看记录|清空最近观看/ }),
+  ).toBeNull();
+  expect(
+    within(ui.getByTestId("player-channel-list"))
+      .getAllByRole("button", { name: /，我的节目单/ })
+      .map((item) => item.props.accessibilityLabel),
+  ).toEqual([
+    "深夜电影，我的节目单",
+    "自然之声，我的节目单",
+    "旧纪录片，我的节目单",
+  ]);
+  expect(
+    ui.getByRole("button", { name: "旧纪录片，我的节目单" }).props
+      .accessibilityState.disabled,
+  ).toBe(true);
+  await fireEvent.press(
+    ui.getByRole("button", { name: "旧纪录片，我的节目单" }),
+  );
+  expect(options.onSelect).not.toHaveBeenCalled();
+  await fireEvent.press(ui.getByRole("button", { name: "收藏深夜电影" }));
+  expect(options.onFavorite).toHaveBeenCalledWith(outside);
+  expect(ui.getByText("选择频道")).toBeTruthy();
+  await fireEvent.press(
+    ui.getByRole("button", { name: "自然之声，我的节目单" }),
+  );
+  expect(options.onSelect).toHaveBeenCalledWith(second, [outside, second]);
+  await ui.unmount();
+});
+
+test("changing scope clears search and group while pressing the current scope preserves them", async () => {
+  const music = { ...second, groupName: "音乐" };
+  const keyboardSpy = jest
+    .spyOn(Keyboard, "dismiss")
+    .mockImplementation(() => {});
+  const ui = await render(
+    <PlayerScreen
+      {...props({
+        allChannels: [first, music],
+        recentChannels: [music, first],
+      })}
+    />,
+  );
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  await fireEvent.press(ui.getByRole("button", { name: "音乐" }));
+  await fireEvent.changeText(ui.getByLabelText("搜索选台频道"), "自然");
+  keyboardSpy.mockClear();
+  await fireEvent.press(ui.getByRole("button", { name: "频道" }));
+  expect(
+    ui.getByRole("button", { name: "音乐" }).props.accessibilityState.selected,
+  ).toBe(true);
+  expect(ui.getByLabelText("搜索选台频道").props.value).toBe("自然");
+  expect(keyboardSpy).not.toHaveBeenCalled();
+  for (const label of ["收藏", "最近", "频道"]) {
+    await fireEvent.press(ui.getByRole("button", { name: label }));
+    expect(ui.getByLabelText("搜索选台频道").props.value).toBe("");
+    expect(keyboardSpy).toHaveBeenCalledTimes(1);
+    await fireEvent.changeText(ui.getByLabelText("搜索选台频道"), "音乐");
+    await fireEvent.press(ui.getByRole("button", { name: label }));
+    expect(ui.getByLabelText("搜索选台频道").props.value).toBe("音乐");
+    expect(keyboardSpy).toHaveBeenCalledTimes(1);
+    keyboardSpy.mockClear();
+  }
+  expect(
+    ui.getByRole("button", { name: "音乐" }).props.accessibilityState.selected,
+  ).toBe(false);
+  expect(mockMounts).toHaveBeenCalledTimes(1);
+  await ui.unmount();
+  keyboardSpy.mockRestore();
+});
+
+test("recent search filters its queue and clear search restores the recent order", async () => {
+  const music = { ...second, groupName: "音乐" };
+  const options = props({
+    allChannels: [first, music],
+    recentChannels: [music, first],
+  });
+  const ui = await render(<PlayerScreen {...options} />);
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  await fireEvent.press(ui.getByRole("button", { name: "最近" }));
+  await fireEvent.changeText(ui.getByLabelText("搜索选台频道"), "没有这个节目");
+  expect(ui.getByText("没有匹配频道，试试清除搜索")).toBeTruthy();
+  await fireEvent.press(ui.getByRole("button", { name: "清除选台搜索" }));
+  expect(
+    within(ui.getByTestId("player-channel-list"))
+      .getAllByRole("button", { name: /，我的节目单/ })
+      .map((item) => item.props.accessibilityLabel),
+  ).toEqual(["自然之声，我的节目单", "山野纪实，我的节目单，当前频道"]);
+  await fireEvent.changeText(ui.getByLabelText("搜索选台频道"), "音乐");
+  expect(
+    ui.queryByRole("button", { name: "山野纪实，我的节目单，当前频道" }),
+  ).toBeNull();
+  await fireEvent.press(
+    ui.getByRole("button", { name: "自然之声，我的节目单" }),
+  );
+  expect(options.onSelect).toHaveBeenCalledWith(music, [music]);
+  await ui.unmount();
+});
+
+test("locating the current channel leaves recent when history or its search hides it", async () => {
+  const indexSpy = jest
+    .spyOn(FlatList.prototype, "scrollToIndex")
+    .mockImplementation(() => {});
+  const ui = await render(
+    <PlayerScreen {...props({ recentChannels: [second] })} />,
+  );
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  await fireEvent.press(ui.getByRole("button", { name: "最近" }));
+  await fireEvent.changeText(ui.getByLabelText("搜索选台频道"), "自然");
+  await fireEvent.press(ui.getByRole("button", { name: "定位当前频道" }));
+  expect(ui.getByLabelText("搜索选台频道").props.value).toBe("");
+  expect(
+    ui.getByRole("button", { name: "最近" }).props.accessibilityState.selected,
+  ).toBe(false);
+  expect(
+    ui.getByRole("button", { name: "山野纪实，我的节目单，当前频道" }),
+  ).toBeTruthy();
+  expect(indexSpy).toHaveBeenLastCalledWith({
+    index: 0,
+    viewPosition: 0.35,
+    animated: false,
+  });
+  expect(mockMounts).toHaveBeenCalledTimes(1);
+  await ui.unmount();
+  indexSpy.mockRestore();
+});
+
+test("locating the current channel clears search, favorite scope and group when they hide it", async () => {
+  const indexSpy = jest
+    .spyOn(FlatList.prototype, "scrollToIndex")
+    .mockImplementation(() => {});
+  const music = { ...second, groupName: "音乐" };
+  const ui = await render(
+    <PlayerScreen {...props({ allChannels: [first, music] })} />,
+  );
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  await fireEvent.press(ui.getByRole("button", { name: "音乐" }));
+  await fireEvent.press(ui.getByRole("button", { name: "收藏" }));
+  await fireEvent.changeText(ui.getByLabelText("搜索选台频道"), "自然");
+  await fireEvent.press(ui.getByRole("button", { name: "定位当前频道" }));
+  expect(ui.getByLabelText("搜索选台频道").props.value).toBe("");
+  expect(
+    ui.getByRole("button", { name: "频道" }).props.accessibilityState.selected,
+  ).toBe(true);
+  expect(
+    ui.getByRole("button", { name: "全部" }).props.accessibilityState.selected,
+  ).toBe(true);
+  expect(
+    ui.getByRole("button", { name: "音乐" }).props.accessibilityState.selected,
+  ).toBe(false);
+  expect(
+    ui.getByRole("button", { name: "纪录片" }).props.accessibilityState
+      .selected,
+  ).toBe(false);
+  expect(
+    ui.getByRole("button", { name: "山野纪实，我的节目单，当前频道" }),
+  ).toBeTruthy();
+  expect(indexSpy).toHaveBeenLastCalledWith({
+    index: 0,
+    viewPosition: 0.35,
+    animated: false,
+  });
+  expect(mockMounts).toHaveBeenCalledTimes(1);
+  await ui.unmount();
+  indexSpy.mockRestore();
+});
+
+test("sheet restores its offset until the range or current channel changes", async () => {
+  const indexSpy = jest
+    .spyOn(FlatList.prototype, "scrollToIndex")
+    .mockImplementation(() => {});
+  const offsetSpy = jest
+    .spyOn(FlatList.prototype, "scrollToOffset")
+    .mockImplementation(() => {});
+  const options = props({ channel: second });
+  const ui = await render(<PlayerScreen {...options} />);
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  expect(indexSpy).toHaveBeenLastCalledWith({
+    index: 1,
+    viewPosition: 0.35,
+    animated: false,
+  });
+  await fireEvent.scroll(ui.getByTestId("player-channel-list"), {
+    nativeEvent: { contentOffset: { y: 240 } },
+  });
+  await fireEvent.press(ui.getByRole("button", { name: "关闭频道列表" }));
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  expect(offsetSpy).toHaveBeenLastCalledWith({ offset: 240, animated: false });
+  await fireEvent.changeText(ui.getByLabelText("搜索选台频道"), "没有这个频道");
+  expect(offsetSpy).toHaveBeenLastCalledWith({ offset: 0, animated: false });
+  expect(ui.getByText("没有匹配频道，试试清除搜索或切换分组")).toBeTruthy();
+  await fireEvent.press(ui.getByRole("button", { name: "清除选台搜索" }));
+  expect(indexSpy).toHaveBeenLastCalledWith({
+    index: 1,
+    viewPosition: 0.35,
+    animated: false,
+  });
+  await fireEvent.press(ui.getByRole("button", { name: "关闭频道列表" }));
+  await ui.rerender(<PlayerScreen {...options} channel={first} />);
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  expect(indexSpy).toHaveBeenLastCalledWith({
+    index: 0,
+    viewPosition: 0.35,
+    animated: false,
+  });
+  await ui.unmount();
+  indexSpy.mockRestore();
+  offsetSpy.mockRestore();
+});
+
+test("variable-height current-channel scrolling falls back and cancels retries on close", async () => {
+  jest.useFakeTimers();
+  const indexSpy = jest
+    .spyOn(FlatList.prototype, "scrollToIndex")
+    .mockImplementation(() => {});
+  const offsetSpy = jest
+    .spyOn(FlatList.prototype, "scrollToOffset")
+    .mockImplementation(() => {});
+  const ui = await render(<PlayerScreen {...props({ channel: second })} />);
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  await fireEvent(
+    ui.getByTestId("player-channel-list"),
+    "scrollToIndexFailed",
+    {
+      index: 1,
+      highestMeasuredFrameIndex: 0,
+      averageItemLength: 94,
+    },
+  );
+  expect(offsetSpy).toHaveBeenLastCalledWith({ offset: 94, animated: false });
+  const callsBeforeRetry = indexSpy.mock.calls.length;
+  await act(() => jest.advanceTimersByTime(100));
+  expect(indexSpy).toHaveBeenCalledTimes(callsBeforeRetry + 1);
+  await fireEvent(
+    ui.getByTestId("player-channel-list"),
+    "scrollToIndexFailed",
+    {
+      index: 1,
+      highestMeasuredFrameIndex: 0,
+      averageItemLength: 94,
+    },
+  );
+  await fireEvent.press(ui.getByRole("button", { name: "关闭频道列表" }));
+  await act(() => jest.advanceTimersByTime(100));
+  expect(indexSpy).toHaveBeenCalledTimes(callsBeforeRetry + 1);
+  await ui.unmount();
+  indexSpy.mockRestore();
+  offsetSpy.mockRestore();
+  jest.useRealTimers();
+});
+
+test("fullscreen has one accessible favorite shortcut and toggling it preserves native playback", async () => {
+  const options = props();
+  const ui = await render(<PlayerScreen {...options} />);
+  await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
+  expect(
+    ui.getAllByRole("button", {
+      name: "收藏当前频道",
+      includeHiddenElements: true,
+    }),
+  ).toHaveLength(1);
+  await fireEvent.press(ui.getByRole("button", { name: "收藏当前频道" }));
+  expect(options.onFavorite).toHaveBeenCalledWith(first);
+  await ui.rerender(
+    <PlayerScreen {...options} channel={{ ...first, favorite: true }} />,
+  );
+  expect(
+    ui.getByRole("button", { name: "取消收藏当前频道" }).props
+      .accessibilityState.selected,
+  ).toBe(true);
+  expect(ui.getByRole("button", { name: "退出全屏" })).toBeTruthy();
+  expect(mockMounts).toHaveBeenCalledTimes(1);
+  expect(mockUnmounts).not.toHaveBeenCalled();
+  await ui.unmount();
+});
+
+test("submitting search or choosing a group dismisses the keyboard without closing the sheet", async () => {
+  const keyboardSpy = jest
+    .spyOn(Keyboard, "dismiss")
+    .mockImplementation(() => {});
+  const ui = await render(<PlayerScreen {...props()} />);
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  await fireEvent(ui.getByLabelText("搜索选台频道"), "submitEditing");
+  expect(keyboardSpy).toHaveBeenCalledTimes(1);
+  await fireEvent.press(ui.getByRole("button", { name: "纪录片" }));
+  expect(keyboardSpy).toHaveBeenCalledTimes(2);
+  expect(ui.getByText("选择频道")).toBeTruthy();
+  await ui.unmount();
+  keyboardSpy.mockRestore();
+});
+
+test("manual list dragging cancels a pending automatic location retry", async () => {
+  jest.useFakeTimers();
+  const indexSpy = jest
+    .spyOn(FlatList.prototype, "scrollToIndex")
+    .mockImplementation(() => {});
+  const offsetSpy = jest
+    .spyOn(FlatList.prototype, "scrollToOffset")
+    .mockImplementation(() => {});
+  const ui = await render(<PlayerScreen {...props({ channel: second })} />);
+  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  await fireEvent(
+    ui.getByTestId("player-channel-list"),
+    "scrollToIndexFailed",
+    {
+      index: 1,
+      highestMeasuredFrameIndex: 0,
+      averageItemLength: 94,
+    },
+  );
+  const initialCalls = indexSpy.mock.calls.length;
+  await fireEvent(ui.getByTestId("player-channel-list"), "scrollBeginDrag", {
+    nativeEvent: { contentOffset: { y: 94 } },
+  });
+  await act(() => jest.advanceTimersByTime(100));
+  expect(indexSpy).toHaveBeenCalledTimes(initialCalls);
+  await ui.unmount();
+  indexSpy.mockRestore();
+  offsetSpy.mockRestore();
+  jest.useRealTimers();
 });

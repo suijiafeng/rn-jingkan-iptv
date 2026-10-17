@@ -1,15 +1,16 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Image,
+  Pressable,
   ScrollView,
   Text,
   TextInput,
+  StyleSheet,
   View,
 } from "react-native";
 import { Button, Heading, Notice } from "../../components/ui";
-import { channelTitle } from "../../domain/channelLabels";
-import type { Channel, Source } from "../../domain/types";
+import { GroupTabs } from "../../components/GroupTabs";
+import type { Source } from "../../domain/types";
 import { colors, styles } from "../../theme";
 
 export type Tab = "all" | "favorites" | "recent" | "settings";
@@ -19,103 +20,189 @@ interface HeaderProps {
   tab: ListTab;
   sources: Source[];
   channelCount: number;
-  resumable: Channel | undefined;
   search: string;
   sourceId: string;
   group: string;
   groups: string[];
-  onResume: () => void;
   onSearchChange: (text: string) => void;
   onClearSearch: () => void;
   onSourceChange: (sourceId: string) => void;
   onGroupChange: (group: string) => void;
+  onClearRecent: () => void;
+  recentBusy: boolean;
+  recentEditing: boolean;
+  onToggleRecentEditing: () => void;
+  recentCount: number;
 }
 
 export function ChannelListHeader(props: HeaderProps) {
-  const { tab, resumable } = props;
+  const { tab } = props;
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const selectedSource = props.sources.find(
+    (source) => source.id === props.sourceId,
+  );
+  const clearRecentDisabled = props.recentBusy || props.recentCount === 0;
+  const toggleRecentDisabled =
+    props.recentBusy || (!props.recentEditing && props.recentCount === 0);
   return (
-    <View style={{ gap: 12, marginBottom: 12 }}>
-      <Heading
-        title={
-          tab === "all" ? "全部频道" : tab === "favorites" ? "收藏" : "最近观看"
-        }
-        subtitle={
-          tab === "favorites"
-            ? "随手打开，都是常看的"
-            : tab === "recent"
-              ? "只记录成功播放的频道"
-              : `${props.sources.length} 份节目单 · 当前 ${props.channelCount} 个频道`
-        }
-      />
-      {tab === "favorites" && resumable && (
-        <>
-          <Image
-            source={require("../../../assets/quiet-landscape.png")}
-            style={{ width: "100%", height: 170 }}
-            resizeMode="contain"
-            accessibilityLabel="静看山景插画"
+    <View style={s.header}>
+      <View style={s.topRow}>
+        <View style={{ flex: 1 }}>
+          <Heading
+            title={
+              tab === "all" ? "频道" : tab === "favorites" ? "收藏" : "最近观看"
+            }
+            subtitle={
+              tab === "favorites"
+                ? "随手打开，都是常看的"
+                : tab === "recent"
+                  ? props.recentEditing
+                    ? "删除记录不会影响频道和收藏"
+                    : "按最近播放排序"
+                  : `${props.sources.length} 份节目单 · 当前 ${props.channelCount} 个频道`
+            }
           />
-          <Text style={styles.heading}>
-            上次看到 · {channelTitle(resumable.name).title}
+        </View>
+        {tab === "all" && props.sources.length > 1 && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={sourcesOpen ? "收起来源筛选" : "展开来源筛选"}
+            accessibilityState={{ expanded: sourcesOpen }}
+            onPress={() => setSourcesOpen((value) => !value)}
+            style={({ pressed }) => [
+              s.sourceToggle,
+              pressed && { opacity: 0.7 },
+            ]}
+          >
+            <Text numberOfLines={1} style={s.sourceText}>
+              {selectedSource?.name || "来源"} {sourcesOpen ? "▴" : "▾"}
+            </Text>
+          </Pressable>
+        )}
+        {tab === "recent" && (
+          <View style={s.headerActions}>
+            {props.recentEditing && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="清空最近观看"
+                accessibilityState={{ disabled: clearRecentDisabled }}
+                disabled={clearRecentDisabled}
+                onPress={props.onClearRecent}
+                style={({ pressed }) => [
+                  s.headerAction,
+                  {
+                    opacity: clearRecentDisabled ? 0.4 : pressed ? 0.7 : 1,
+                  },
+                ]}
+              >
+                <Text style={s.dangerText}>清空</Text>
+              </Pressable>
+            )}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                props.recentEditing ? "完成历史管理" : "管理观看记录"
+              }
+              accessibilityState={{ disabled: toggleRecentDisabled }}
+              disabled={toggleRecentDisabled}
+              onPress={props.onToggleRecentEditing}
+              style={({ pressed }) => [
+                s.headerAction,
+                {
+                  opacity: toggleRecentDisabled ? 0.4 : pressed ? 0.7 : 1,
+                },
+              ]}
+            >
+              <Text style={s.actionText}>
+                {props.recentEditing ? "完成" : "管理"}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+      {!(tab === "recent" && props.recentEditing) && (
+        <View style={s.searchRow}>
+          <TextInput
+            accessibilityLabel="搜索频道名称"
+            style={s.searchInput}
+            placeholder="搜索频道名称…"
+            placeholderTextColor={colors.muted}
+            value={props.search}
+            onChangeText={props.onSearchChange}
+            returnKeyType="search"
+            autoCorrect={false}
+          />
+          {!!props.search && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="清除搜索"
+              onPress={props.onClearSearch}
+              style={s.clearSearch}
+            >
+              <Text style={s.clearText}>清除搜索</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+      {tab === "all" && sourcesOpen && props.sources.length > 1 && (
+        <View style={{ gap: 6 }}>
+          <Text style={styles.muted}>选择节目来源</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8 }}
+          >
+            <Button
+              label="所有来源"
+              secondary={!!props.sourceId}
+              selected={!props.sourceId}
+              onPress={() => {
+                props.onSourceChange("");
+                setSourcesOpen(false);
+              }}
+            />
+            {props.sources.map((s) => (
+              <Button
+                key={s.id}
+                label={s.name}
+                secondary={props.sourceId !== s.id}
+                selected={props.sourceId === s.id}
+                onPress={() => {
+                  props.onSourceChange(s.id);
+                  setSourcesOpen(false);
+                }}
+              />
+            ))}
+          </ScrollView>
+        </View>
+      )}
+      {tab === "all" && (
+        <GroupTabs
+          groups={props.groups}
+          selected={props.group || null}
+          onChange={(name) => props.onGroupChange(name ?? "")}
+          testID="channel-group-tabs"
+        />
+      )}
+      {tab === "all" && !!props.sourceId && (
+        <View style={s.scopeRow}>
+          <Text style={[styles.muted, { flex: 1 }]}>
+            范围：{selectedSource?.name || "所有来源"}
+            {props.group ? ` · ${props.group}` : ""}
           </Text>
-          <Button label="继续观看" onPress={props.onResume} />
-        </>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="清空来源和分组筛选"
+            style={s.reset}
+            onPress={() => {
+              props.onSourceChange("");
+              props.onGroupChange("");
+            }}
+          >
+            <Text style={s.clearText}>重置筛选</Text>
+          </Pressable>
+        </View>
       )}
-      <TextInput
-        accessibilityLabel="搜索频道名称"
-        style={styles.input}
-        placeholder="搜索频道名称…"
-        placeholderTextColor={colors.muted}
-        value={props.search}
-        onChangeText={props.onSearchChange}
-      />
-      {!!props.search && (
-        <Button label="清除搜索" secondary onPress={props.onClearSearch} />
-      )}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8 }}
-      >
-        <Button
-          label="所有来源"
-          secondary={!!props.sourceId}
-          onPress={() => props.onSourceChange("")}
-        />
-        {props.sources.map((s) => (
-          <Button
-            key={s.id}
-            label={s.name}
-            secondary={props.sourceId !== s.id}
-            onPress={() => props.onSourceChange(s.id)}
-          />
-        ))}
-      </ScrollView>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8 }}
-      >
-        <Button
-          label="全部分组"
-          secondary={!!props.group}
-          onPress={() => props.onGroupChange("")}
-        />
-        {props.groups.map((g) => (
-          <Button
-            key={g}
-            label={g}
-            secondary={g !== props.group}
-            onPress={() => props.onGroupChange(g)}
-          />
-        ))}
-      </ScrollView>
-      <Text style={styles.muted}>
-        范围：
-        {props.sources.find((s) => s.id === props.sourceId)?.name ||
-          "所有来源"}{" "}
-        · {props.group || "全部分组"}
-      </Text>
     </View>
   );
 }
@@ -166,7 +253,13 @@ export function ChannelListEmpty(props: EmptyProps) {
         body={
           !props.hasSources
             ? "添加你信任的 M3U 链接或本地文件。频道、收藏和最近观看保存在这台手机。"
-            : "可以清空筛选，或去频道页看看。"
+            : props.filtered
+              ? "试试清空搜索或筛选条件。"
+              : props.tab === "favorites"
+                ? "点击频道旁的星标，将常看的频道收在这里。"
+                : props.tab === "recent"
+                  ? "成功播放过的频道会出现在这里。"
+                  : "可以添加其他节目单，或刷新现有来源。"
         }
       />
       {!props.hasSources ? (
@@ -182,8 +275,8 @@ export function ChannelListEmpty(props: EmptyProps) {
 }
 
 const TABS = [
-  ["favorites", "收藏"],
   ["all", "频道"],
+  ["favorites", "收藏"],
   ["recent", "最近"],
   ["settings", "设置"],
 ] as const;
@@ -211,6 +304,8 @@ export function BottomTabs({
           key={key}
           label={label}
           secondary={tab !== key}
+          selected={tab === key}
+          accessibilityRole="tab"
           onPress={() => {
             if (key !== tab) onChange(key);
           }}
@@ -220,3 +315,58 @@ export function BottomTabs({
     </View>
   );
 }
+
+const s = StyleSheet.create({
+  header: { gap: 10, marginBottom: 12 },
+  topRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  sourceToggle: {
+    minWidth: 48,
+    minHeight: 48,
+    maxWidth: 144,
+    paddingHorizontal: 12,
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: colors.raised,
+  },
+  sourceText: { color: colors.accent, fontSize: 14, lineHeight: 21 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 4 },
+  headerAction: {
+    minHeight: 48,
+    minWidth: 48,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionText: { color: colors.accent, fontSize: 14, lineHeight: 21 },
+  dangerText: { color: colors.bad, fontSize: 14, lineHeight: 21 },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.raised,
+    borderRadius: 14,
+  },
+  searchInput: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 52,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: colors.text,
+    fontSize: 15,
+  },
+  clearSearch: {
+    minWidth: 48,
+    minHeight: 48,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  clearText: { color: colors.accent, fontSize: 12, lineHeight: 18 },
+  scopeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  reset: {
+    minHeight: 48,
+    minWidth: 48,
+    paddingHorizontal: 8,
+    justifyContent: "center",
+  },
+});

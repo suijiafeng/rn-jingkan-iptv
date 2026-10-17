@@ -551,6 +551,17 @@ export class Repository {
     });
   }
 
+  async removeRecent(channelId: string): Promise<void> {
+    await this.serialize(async () => {
+      await this.db.withExclusiveTransactionAsync(async (tx) => {
+        await tx.runAsync("DELETE FROM recents WHERE channelId = ?", [
+          channelId,
+        ]);
+        await tx.runAsync(CLEAN_UNREFERENCED);
+      });
+    });
+  }
+
   async clearRecent(): Promise<void> {
     await this.serialize(async () => {
       await this.db.withExclusiveTransactionAsync(async (tx) => {

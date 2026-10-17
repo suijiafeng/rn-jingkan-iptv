@@ -21,6 +21,8 @@ interface ManagerProps {
   sources: Source[];
   check: CheckProgress | null;
   summaries: Record<string, CheckSummary>;
+  error?: string;
+  onDismissError?: () => void;
   onClose: () => void;
   onAdd: (kind: SourceKind) => void;
   onRefresh: (source: Source) => void;
@@ -44,6 +46,18 @@ export function SourceManagerModal(props: ManagerProps) {
             title="管理节目来源"
             subtitle={`${props.sources.length} 份节目单 · 手动刷新，不自动联网`}
           />
+          {!!props.error && (
+            <>
+              <Notice title={props.error} error />
+              {props.onDismissError && (
+                <Button
+                  label="关闭提示"
+                  secondary
+                  onPress={props.onDismissError}
+                />
+              )}
+            </>
+          )}
           <Button label="添加节目单" onPress={() => props.onAdd("url")} />
           <Button
             label="从文件导入"
@@ -132,6 +146,8 @@ export function SourceManagerModal(props: ManagerProps) {
 interface RenameProps {
   source: Source | null;
   text: string;
+  error?: string;
+  onDismissError?: () => void;
   onChangeText: (text: string) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -147,6 +163,18 @@ export function RenameSourceModal(props: RenameProps) {
       <SafeAreaView style={styles.screen}>
         <View style={styles.content}>
           <Heading title="来源改名" />
+          {!!props.error && (
+            <>
+              <Notice title={props.error} error />
+              {props.onDismissError && (
+                <Button
+                  label="关闭提示"
+                  secondary
+                  onPress={props.onDismissError}
+                />
+              )}
+            </>
+          )}
           <TextInput
             accessibilityLabel="来源名称"
             style={styles.input}

@@ -1,5 +1,12 @@
 import React from "react";
-import { Pressable, Text, View, StyleSheet, ViewStyle } from "react-native";
+import {
+  Pressable,
+  Text,
+  View,
+  StyleSheet,
+  ViewStyle,
+  type AccessibilityRole,
+} from "react-native";
 import { colors, styles } from "../theme";
 export function Button({
   label,
@@ -7,6 +14,8 @@ export function Button({
   secondary = false,
   disabled = false,
   danger = false,
+  selected,
+  accessibilityRole = "button",
   style,
 }: {
   label: string;
@@ -14,13 +23,18 @@ export function Button({
   secondary?: boolean;
   disabled?: boolean;
   danger?: boolean;
+  selected?: boolean;
+  accessibilityRole?: AccessibilityRole;
   style?: ViewStyle;
 }) {
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={accessibilityRole}
       accessibilityLabel={label}
-      accessibilityState={{ disabled }}
+      accessibilityState={{
+        disabled,
+        ...(selected !== undefined ? { selected } : {}),
+      }}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [

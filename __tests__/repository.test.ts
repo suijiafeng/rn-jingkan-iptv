@@ -400,6 +400,97 @@ describe("SQLite repository with real SQLite", () => {
     expect(recent[0].id).toBe(channels[5].id);
   });
 
+  it("removes one recent without changing the remaining order, active channels or favorites", async () => {
+    await importInitial();
+    const channels = await repo.listChannels();
+    for (const channel of channels) await repo.recordRecent(channel.id);
+    await repo.toggleFavorite(channels[1].id);
+
+    await repo.removeRecent(channels[1].id);
+
+    expect((await repo.listRecent()).map((channel) => channel.id)).toEqual([
+      channels[2].id,
+      channels[0].id,
+    ]);
+    expect(await repo.listChannels()).toHaveLength(3);
+    expect(await repo.listFavorites()).toMatchObject([
+      { id: channels[1].id, active: true },
+    ]);
+    await expect(repo.removeRecent(channels[1].id)).resolves.toBeUndefined();
+    await expect(repo.removeRecent("missing-channel")).resolves.toBeUndefined();
+    expect((await repo.listRecent()).map((channel) => channel.id)).toEqual([
+      channels[2].id,
+      channels[0].id,
+    ]);
+  });
+
+  it("cleans an inactive channel after its recent is removed and preserves an inactive favorite", async () => {
+    const source = await importInitial();
+    const [news, sport, finance] = await repo.listChannels();
+    await repo.toggleFavorite(sport.id);
+    await repo.recordRecent(sport.id);
+    await repo.recordRecent(finance.id);
+    const replacement = content([
+      { name: news.name, id: "news", url: news.streamUrl },
+    ]);
+    await repo.refreshSource(
+      source.id,
+      source.revision,
+      await parseM3U(replacement),
+    );
+
+    await repo.removeRecent(finance.id);
+
+    expect(
+      (await repo.listChannels({ includeInactive: true })).map(
+        (channel) => channel.id,
+      ),
+    ).toEqual(expect.arrayContaining([news.id, sport.id]));
+    expect(await repo.listChannels({ includeInactive: true })).toHaveLength(2);
+    await repo.removeRecent(sport.id);
+    expect(await repo.listRecent()).toEqual([]);
+    expect(await repo.listFavorites()).toMatchObject([
+      { id: sport.id, active: false },
+    ]);
+    expect(await repo.listChannels({ includeInactive: true })).toHaveLength(2);
+    expect(await db.getAllAsync("PRAGMA foreign_key_check")).toEqual([]);
+  });
+
+  it.each(["DELETE FROM recents WHERE", "DELETE FROM channels WHERE"])(
+    "rolls back a single recent removal when %s fails",
+    async (statement) => {
+      const source = await importInitial();
+      const [news, sport] = await repo.listChannels();
+      await repo.recordRecent(news.id);
+      await repo.recordRecent(sport.id);
+      const replacement = content([
+        { name: news.name, id: "news", url: news.streamUrl },
+      ]);
+      await repo.refreshSource(
+        source.id,
+        source.revision,
+        await parseM3U(replacement),
+      );
+      const before = await repo.listRecent();
+      db.failWhen = (sql) => sql.startsWith(statement);
+
+      await expect(repo.removeRecent(sport.id)).rejects.toThrow(
+        "simulated disk failure",
+      );
+
+      expect(await repo.listRecent()).toEqual(before);
+      expect(await repo.listChannels({ includeInactive: true })).toHaveLength(
+        2,
+      );
+      db.failWhen = undefined;
+      await repo.removeRecent(sport.id);
+      expect(await repo.listRecent()).toMatchObject([{ id: news.id }]);
+      expect(await repo.listChannels({ includeInactive: true })).toHaveLength(
+        1,
+      );
+    },
+  );
+
   it("renames sources, safely stores settings and clears all private app data", async () => {
     const source = await importInitial();
     await repo.renameSource(source.id, " 我的频道 ");

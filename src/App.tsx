@@ -50,6 +50,8 @@ import {
   Tab,
 } from "./features/channel/ChannelListParts";
 
+type ListFilters = { sourceId: string; group: string; search: string };
+
 export default function App() {
   const [repo, setRepo] = useState<Repository | null>(null),
     [startupAttempt, setStartupAttempt] = useState(0),
@@ -83,7 +85,11 @@ export default function App() {
     [renameText, setRenameText] = useState("");
   const [playing, setPlaying] = useState<Channel | null>(null),
     [playQueue, setPlayQueue] = useState<Channel[]>([]),
+    [allChannels, setAllChannels] = useState<Channel[]>([]),
     [revision, setRevision] = useState(0);
+  const [recentBusy, setRecentBusy] = useState(false),
+    [recentEditing, setRecentEditing] = useState(false);
+  const recentMutation = useRef(false);
   const [check, setCheck] = useState<CheckProgress | null>(null),
     [checkSummaries, setCheckSummaries] = useState<
       Record<string, CheckSummary>
@@ -91,6 +97,8 @@ export default function App() {
   const controller = useRef<AbortController | null>(null),
     checkController = useRef<AbortController | null>(null),
     generation = useRef(0),
+    checkGeneration = useRef(0),
+    playGeneration = useRef(0),
     saving = useRef(false),
     loadGeneration = useRef(0),
     mounted = useRef(true),
@@ -99,6 +107,7 @@ export default function App() {
   // Each bottom tab keeps its own scroll position across tab switches.
   const listRef = useRef<FlatList<Channel>>(null),
     tabOffsets = useRef<Partial<Record<Tab, number>>>({}),
+    tabFilters = useRef<Partial<Record<ListTab, ListFilters>>>({}),
     restoreTab = useRef<Tab | null>(null);
   const changed = useCallback(() => setRevision((v) => v + 1), []);
   const loadRequest = useMemo(
@@ -120,6 +129,7 @@ export default function App() {
   const stopCheck = useCallback(() => {
     checkController.current?.abort();
     checkController.current = null;
+    setCheck(null);
   }, []);
   useEffect(() => {
     mounted.current = true;
@@ -159,11 +169,13 @@ export default function App() {
       repo.listSources(),
       repo.listChannels({
         mode: tab === "settings" ? "all" : tab,
-        sourceId: sourceId || undefined,
-        groupName: group || undefined,
+        sourceId: tab === "all" ? sourceId || undefined : undefined,
+        groupName: tab === "all" ? group || undefined : undefined,
         search: query,
       }),
-      repo.listGroups(sourceId || undefined),
+      tab === "all"
+        ? repo.listGroups(sourceId || undefined)
+        : Promise.resolve([]),
       repo.listChannels({ mode: "recent" }),
     ])
       .then(([s, c, g, r]) => {
@@ -176,9 +188,10 @@ export default function App() {
           if (restoreTab.current === tab) {
             restoreTab.current = null;
             const offset = tabOffsets.current[tab] ?? 0;
-            requestAnimationFrame(() =>
-              listRef.current?.scrollToOffset({ offset, animated: false }),
-            );
+            requestAnimationFrame(() => {
+              if (active && id === loadGeneration.current)
+                listRef.current?.scrollToOffset({ offset, animated: false });
+            });
           }
         }
       })
@@ -208,7 +221,8 @@ export default function App() {
     });
     return () => sub.remove();
   }, [cancelTask, stopCheck]);
-  const guardRemote = async () => {
+  const guardRemote = async (signal?: AbortSignal) => {
+    if (signal?.aborted) return false;
     if (remoteRef.current) return true;
     if (revokePending) {
       setError("联网许可撤销尚未保存，请先在设置中重试保存撤销。");
@@ -216,7 +230,13 @@ export default function App() {
     }
     const epoch = permissionEpoch.current;
     const ok = await confirm("允许访问节目来源？", RISK, "了解风险并允许");
-    if (!ok || !repo || epoch !== permissionEpoch.current || !mounted.current)
+    if (
+      !ok ||
+      !repo ||
+      signal?.aborted ||
+      epoch !== permissionEpoch.current ||
+      !mounted.current
+    )
       return false;
     try {
       await repo.setSetting("remoteAllowed", true);
@@ -229,8 +249,9 @@ export default function App() {
     setRemoteAllowed(true);
     return true;
   };
-  const checkNetwork = async () => {
+  const checkNetwork = async (signal?: AbortSignal) => {
     const net = await Network.getNetworkStateAsync();
+    if (signal?.aborted) return false;
     if (isOffline(net))
       throw new ImportIOError("当前没有可用网络，请连接后重试");
     // Same rule as playback: VPN/unknown transports may be metered.
@@ -240,6 +261,7 @@ export default function App() {
         "下载节目单或播放直播会消耗流量。确认后，在连回 Wi-Fi 之前不再询问。",
         "继续",
       );
+      if (signal?.aborted) return false;
       if (ok) setMobileAccepted(true);
       return ok;
     }
@@ -277,11 +299,16 @@ export default function App() {
         setManage(false);
         return true;
       }
+      if (recentEditing) {
+        setRecentEditing(false);
+        return true;
+      }
       return false;
     });
     return () => sub.remove();
   });
   const startForm = (kind: SourceKind) => {
+    setError("");
     setForm(initialForm(kind));
     setFormError("");
   };
@@ -326,6 +353,7 @@ export default function App() {
     const c = new AbortController();
     controller.current = c;
     setBusy(true);
+    setError("");
     setFormError("");
     try {
       let text = snapshot.content,
@@ -397,9 +425,11 @@ export default function App() {
       }
       setForm(null);
       setTab("all");
+      setRecentEditing(false);
       setSourceId("");
       setGroup("");
       setSearch("");
+      setQuery("");
       changed();
     } catch {
       setFormError("保存失败，旧数据未改变。请重试；刷新冲突时请重新刷新。");
@@ -410,6 +440,7 @@ export default function App() {
   };
   const refresh = async (s: Source) => {
     if (!repo || busy) return;
+    setError("");
     try {
       const token = await repo.beginRefresh(s.id);
       const content =
@@ -429,27 +460,45 @@ export default function App() {
   };
   /** Manual, user-started availability sweep of one source's channels. */
   const runCheck = async (s: Source) => {
-    if (!repo || checkController.current) return;
-    try {
-      if (!(await guardRemote())) return;
-      if (!(await checkNetwork())) return;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "无法开始检测，请重试");
+    if (!repo || checkController.current || AppState.currentState !== "active")
       return;
-    }
     const c = new AbortController();
     checkController.current = c;
+    const task = ++checkGeneration.current;
     const epoch = permissionEpoch.current;
+    const current = () => mounted.current && task === checkGeneration.current;
+    const allowed = () =>
+      current() &&
+      checkController.current === c &&
+      !c.signal.aborted &&
+      remoteRef.current &&
+      epoch === permissionEpoch.current &&
+      AppState.currentState === "active";
+    let started = false;
+    let savingResults = false;
+    setError("");
+    setCheck({ sourceId: s.id, done: 0, total: s.channelCount });
     try {
+      if (!(await guardRemote(c.signal)) || !allowed()) return;
+      if (!(await checkNetwork(c.signal)) || !allowed()) return;
       const targets = await repo.listChannels({ sourceId: s.id });
+      if (!allowed()) return;
       setCheck({ sourceId: s.id, done: 0, total: targets.length });
+      started = true;
       const results = await checkChannels(targets, {
         signal: c.signal,
-        onProgress: (done, total) => setCheck({ sourceId: s.id, done, total }),
+        onProgress: (done, total) => {
+          if (allowed()) setCheck({ sourceId: s.id, done, total });
+        },
       });
-      // Revoked consent discards results gathered under the old permission.
-      if (epoch !== permissionEpoch.current) return;
+      // Manual stop may save finished results, but a newer sweep or revocation
+      // makes this task obsolete and must not publish its results.
+      if (!current() || epoch !== permissionEpoch.current || !remoteRef.current)
+        return;
+      savingResults = true;
       await repo.saveCheckResults(results);
+      if (!current() || epoch !== permissionEpoch.current || !remoteRef.current)
+        return;
       const ok = results.filter((r) => r.ok).length;
       setCheckSummaries((all) => ({
         ...all,
@@ -460,11 +509,24 @@ export default function App() {
         },
       }));
       changed();
-    } catch {
-      setError("检测结果未能保存，请重试");
+    } catch (e) {
+      if (
+        current() &&
+        (savingResults || !c.signal.aborted) &&
+        epoch === permissionEpoch.current
+      )
+        setError(
+          started
+            ? "检测结果未能保存，请重试"
+            : e instanceof ImportIOError
+              ? e.message
+              : "无法开始检测，请检查网络后重试",
+        );
     } finally {
-      if (checkController.current === c) checkController.current = null;
-      setCheck(null);
+      if (checkController.current === c) {
+        checkController.current = null;
+        setCheck(null);
+      }
     }
   };
   const favorite = async (c: Channel) => {
@@ -475,6 +537,7 @@ export default function App() {
         x.id === c.id ? { ...x, favorite: fav } : x;
       setPlaying((p) => (p ? patch(p) : p));
       setPlayQueue((q) => q.map(patch));
+      setAllChannels((q) => q.map(patch));
       setRecent((r) => r.map(patch));
       setChannels((list) => list.map(patch));
       // Re-read the current view after a write: the user may have switched tabs
@@ -484,15 +547,85 @@ export default function App() {
       setError("收藏未能保存，请重试");
     }
   };
+  const forgetRecent = (channelId?: string) => {
+    const patch = (channel: Channel) =>
+      !channelId || channel.id === channelId
+        ? { ...channel, lastPlayedAt: null }
+        : channel;
+    setRecent((items) =>
+      channelId ? items.filter((item) => item.id !== channelId) : [],
+    );
+    setChannels((items) => items.map(patch));
+    setAllChannels((items) => items.map(patch));
+    setPlayQueue((items) => items.map(patch));
+    setPlaying((current) => (current ? patch(current) : current));
+    changed();
+  };
+  const removeRecent = async (channel: Channel) => {
+    if (!repo || recentMutation.current) return;
+    recentMutation.current = true;
+    setRecentBusy(true);
+    try {
+      await repo.removeRecent(channel.id);
+      if (mounted.current) forgetRecent(channel.id);
+    } finally {
+      recentMutation.current = false;
+      if (mounted.current) setRecentBusy(false);
+    }
+  };
+  const clearRecent = async () => {
+    if (!repo || recentMutation.current) return;
+    recentMutation.current = true;
+    setRecentBusy(true);
+    try {
+      if (
+        !(await confirm(
+          "清空最近观看？",
+          "只删除观看记录，收藏与频道保留。",
+          "清空",
+        ))
+      )
+        return;
+      await repo.clearRecent();
+      if (mounted.current) {
+        forgetRecent();
+        setRecentEditing(false);
+      }
+    } finally {
+      recentMutation.current = false;
+      if (mounted.current) setRecentBusy(false);
+    }
+  };
   const play = async (c: Channel, queue = channels) => {
-    if (!c.active) return;
+    if (!repo || !c.active) return;
+    const task = ++playGeneration.current;
     const epoch = permissionEpoch.current;
     try {
       if (!(await guardRemote()) || epoch !== permissionEpoch.current) return;
+      const catalog = await repo.listChannels();
+      if (
+        !mounted.current ||
+        task !== playGeneration.current ||
+        epoch !== permissionEpoch.current
+      )
+        return;
+      const selected = catalog.find(
+        (channel) => channel.id === c.id && channel.active,
+      );
+      if (!selected) {
+        setError("频道已不可用，请重新读取频道后重试");
+        return;
+      }
+      setAllChannels(catalog.filter((channel) => channel.active));
       setPlayQueue(queue.filter((x) => x.active));
-      setPlaying(c);
+      setPlaying(selected);
     } catch {
-      setError("无法保存网络许可，请重试");
+      if (
+        mounted.current &&
+        task === playGeneration.current &&
+        epoch === permissionEpoch.current
+      )
+        setError("无法读取播放频道，请重试");
     }
   };
   const remove = async (s: Source) => {
@@ -509,8 +642,14 @@ export default function App() {
     if (check?.sourceId === s.id) stopCheck();
     if (playing?.sourceId === s.id) setPlaying(null);
     repo.cancelRefresh(s.id);
+    setError("");
     try {
       await repo.deleteSource(s.id);
+      for (const key of ["all", "favorites", "recent"] as const) {
+        const saved = tabFilters.current[key];
+        if (saved?.sourceId === s.id)
+          tabFilters.current[key] = { ...saved, sourceId: "", group: "" };
+      }
       if (sourceId === s.id) {
         setSourceId("");
         setGroup("");
@@ -569,14 +708,36 @@ export default function App() {
       setMobileWarning(true);
       setMobileAccepted(false);
       setCheckSummaries({});
+      tabFilters.current = {};
+      tabOffsets.current = {};
       setSourceId("");
       setGroup("");
       setSearch("");
+      setQuery("");
       setTab("all");
+      setRecentEditing(false);
       changed();
     } catch {
       setError("清理未完成，请重试");
     }
+  };
+  const changeTab = (key: Tab) => {
+    setRecentEditing(false);
+    if (tab !== "settings")
+      tabFilters.current[tab] = {
+        sourceId: tab === "all" ? sourceId : "",
+        group: tab === "all" ? group : "",
+        search,
+      };
+    if (key !== "settings") {
+      const saved = tabFilters.current[key];
+      setSourceId(key === "all" ? (saved?.sourceId ?? "") : "");
+      setGroup(key === "all" ? (saved?.group ?? "") : "");
+      setSearch(saved?.search ?? "");
+      setQuery(saved?.search.trim() ?? "");
+    }
+    restoreTab.current = key;
+    setTab(key);
   };
   if (!repo)
     return (
@@ -600,14 +761,13 @@ export default function App() {
         </View>
       </SafeAreaView>
     );
-  const resumable = recent.find((channel) => channel.active);
   const listTab: ListTab = tab === "settings" ? "all" : tab;
   return (
     <SafeAreaView
       style={styles.screen}
       edges={["top", "bottom", "left", "right"]}
     >
-      {error && (
+      {!!error && !manage && !rename && !form && (
         <View style={{ padding: 12 }}>
           <Notice title={error} error />
           <Button secondary label="关闭提示" onPress={() => setError("")} />
@@ -618,7 +778,10 @@ export default function App() {
           remoteAllowed={remoteAllowed}
           revokePending={revokePending}
           mobileWarning={mobileWarning}
-          onManageSources={() => setManage(true)}
+          onManageSources={() => {
+            setError("");
+            setManage(true);
+          }}
           onRevoke={() => void revoke()}
           onAllowRemote={() => void guardRemote()}
           onMobileWarningChange={(v) => {
@@ -627,20 +790,6 @@ export default function App() {
               setMobileWarning(!v);
               setError("设置保存失败");
             });
-          }}
-          onClearRecent={() => {
-            void (async () => {
-              if (
-                await confirm(
-                  "清空最近观看？",
-                  "只删除观看记录，收藏与频道保留。",
-                  "清空",
-                )
-              ) {
-                await repo.clearRecent();
-                changed();
-              }
-            })().catch(() => setError("清理失败，请重试"));
           }}
           onClearAll={() => void clearAll()}
         />
@@ -659,27 +808,55 @@ export default function App() {
           contentContainerStyle={styles.content}
           ListHeaderComponent={
             <ChannelListHeader
+              key={listTab}
               tab={listTab}
               sources={sources}
               channelCount={channels.length}
-              resumable={resumable}
               search={search}
               sourceId={sourceId}
               group={group}
               groups={groups}
-              onResume={() => {
-                if (resumable) void play(resumable, recent);
+              recentBusy={recentBusy}
+              recentEditing={recentEditing}
+              recentCount={recent.length}
+              onToggleRecentEditing={() => {
+                if (recentBusy) return;
+                if (!recentEditing) {
+                  tabOffsets.current.recent = 0;
+                  restoreTab.current = "recent";
+                  setSearch("");
+                  setQuery("");
+                }
+                setRecentEditing((value) => !value);
               }}
-              onSearchChange={setSearch}
+              onClearRecent={() => {
+                setError("");
+                void clearRecent().catch(() =>
+                  setError("清空观看记录失败，请重试"),
+                );
+              }}
+              onSearchChange={(text) => {
+                tabOffsets.current[tab] = 0;
+                restoreTab.current = tab;
+                setSearch(text);
+              }}
               onClearSearch={() => {
+                tabOffsets.current[tab] = 0;
+                restoreTab.current = tab;
                 setSearch("");
                 setQuery("");
               }}
               onSourceChange={(id) => {
+                tabOffsets.current[tab] = 0;
+                restoreTab.current = tab;
                 setSourceId(id);
                 setGroup("");
               }}
-              onGroupChange={setGroup}
+              onGroupChange={(name) => {
+                tabOffsets.current[tab] = 0;
+                restoreTab.current = tab;
+                setGroup(name);
+              }}
             />
           }
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
@@ -688,6 +865,17 @@ export default function App() {
               channel={item}
               onPlay={() => void play(item)}
               onFavorite={() => void favorite(item)}
+              onRemoveRecent={
+                tab === "recent" && recentEditing
+                  ? () => {
+                      setError("");
+                      void removeRecent(item).catch(() =>
+                        setError("删除观看记录失败，请重试"),
+                      );
+                    }
+                  : undefined
+              }
+              recentBusy={recentBusy}
             />
           )}
           ListEmptyComponent={
@@ -701,24 +889,22 @@ export default function App() {
               onAddUrl={() => startForm("url")}
               onAddFile={() => startForm("file")}
               onShowAll={() => {
+                setRecentEditing(false);
                 setTab("all");
                 setSourceId("");
                 setGroup("");
                 setSearch("");
+                setQuery("");
               }}
             />
           }
         />
       )}
-      <BottomTabs
-        tab={tab}
-        onChange={(key) => {
-          restoreTab.current = key;
-          setTab(key);
-        }}
-      />
+      <BottomTabs tab={tab} onChange={changeTab} />
       <SourceManagerModal
         visible={manage}
+        error={error}
+        onDismissError={() => setError("")}
         sources={sources}
         check={check}
         summaries={checkSummaries}
@@ -732,6 +918,7 @@ export default function App() {
           void refresh(s);
         }}
         onRename={(s) => {
+          setError("");
           setRename(s);
           setRenameText(s.name);
           setManage(false);
@@ -742,9 +929,15 @@ export default function App() {
       />
       <RenameSourceModal
         source={rename}
+        error={error}
+        onDismissError={() => setError("")}
         text={renameText}
-        onChangeText={setRenameText}
+        onChangeText={(text) => {
+          setRenameText(text);
+          setError("");
+        }}
         onSave={() => {
+          setError("");
           if (rename)
             void repo
               .renameSource(rename.id, renameText.trim())
@@ -763,7 +956,7 @@ export default function App() {
       <SourceFormModal
         form={form}
         busy={busy}
-        error={formError}
+        error={formError || error}
         onUpdate={updateForm}
         onChooseFile={() => void chooseFile()}
         onPreview={() => void preview()}
@@ -784,7 +977,12 @@ export default function App() {
           <PlayerScreen
             channel={playing}
             channels={playQueue}
-            onSelect={setPlaying}
+            allChannels={allChannels}
+            recentChannels={recent}
+            onSelect={(channel, queue) => {
+              if (queue) setPlayQueue(queue);
+              setPlaying(channel);
+            }}
             onClose={() => setPlaying(null)}
             onFavorite={(c) => void favorite(c)}
             onStarted={(c) => {

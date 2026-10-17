@@ -12,10 +12,13 @@ import {
   AppState,
   BackHandler,
   FlatList,
+  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,10 +26,15 @@ import { StatusBar } from "expo-status-bar";
 import { NavigationBar } from "expo-navigation-bar";
 import * as Network from "expo-network";
 import * as Orientation from "expo-screen-orientation";
+import { GroupTabs } from "../../components/GroupTabs";
 import { Button, Heading } from "../../components/ui";
 import { colors, styles as theme } from "../../theme";
 import type { Channel } from "../../domain/types";
-import { channelTitle, displayGroups } from "../../domain/channelLabels";
+import {
+  channelTitle,
+  displayGroups,
+  splitGroups,
+} from "../../domain/channelLabels";
 import { NativeAttempt } from "./NativeAttempt";
 import {
   adjacentChannelIndex,
@@ -38,7 +46,11 @@ import {
 export interface PlayerScreenProps {
   channel: Channel;
   channels: Channel[];
-  onSelect: (channel: Channel) => void;
+  /** Full catalog for the channel sheet; channels remains the playback queue. */
+  allChannels?: Channel[];
+  /** SQLite history in most-recent-first order, including inactive channels. */
+  recentChannels?: Channel[];
+  onSelect: (channel: Channel, queue?: Channel[]) => void;
   onClose: () => void;
   onFavorite: (channel: Channel) => void;
   onStarted: (channel: Channel) => void;
@@ -83,7 +95,19 @@ export const CONTROLS_HIDE_MS = 4000;
 export function PlayerScreen(props: PlayerScreenProps) {
   const [fullscreen, setFullscreen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [scope, setScope] = useState<"all" | "favorites" | "recent">("all");
+  const [search, setSearch] = useState("");
+  const [group, setGroup] = useState<string | null>(null);
+  const [locateRequest, setLocateRequest] = useState(0);
+  const { width } = useWindowDimensions();
+  const channelList = useRef<FlatList<Channel>>(null);
+  const savedSheetPosition = useRef<{
+    range: string;
+    channelId: string;
+    offset: number;
+  } | null>(null);
+  const scrollRetry = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollTarget = useRef<{ index: number; retries: number } | null>(null);
   const [orientationError, setOrientationError] = useState(false);
   const originalLock = useRef<Orientation.OrientationLock>(
     Orientation.OrientationLock.DEFAULT,
@@ -141,9 +165,94 @@ export function PlayerScreen(props: PlayerScreenProps) {
     () => props.channels.filter((channel) => channel.active),
     [props.channels],
   );
-  const shownChannels = favoritesOnly
-    ? activeChannels.filter((channel) => channel.favorite)
-    : activeChannels;
+  const allActiveChannels = useMemo(
+    () =>
+      (props.allChannels ?? props.channels).filter((channel) => channel.active),
+    [props.allChannels, props.channels],
+  );
+  const scopeChannels = useMemo(
+    () =>
+      scope === "recent"
+        ? (props.recentChannels ?? [])
+        : scope === "favorites"
+          ? allActiveChannels.filter((channel) => channel.favorite)
+          : allActiveChannels,
+    [scope, props.recentChannels, allActiveChannels],
+  );
+  const groups = useMemo(
+    () => [
+      ...new Set(
+        allActiveChannels.flatMap((channel) => splitGroups(channel.groupName)),
+      ),
+    ],
+    [allActiveChannels],
+  );
+  const query = search.trim().toLocaleLowerCase();
+  const shownChannels = useMemo(
+    () =>
+      scopeChannels.filter(
+        (channel) =>
+          (scope !== "all" ||
+            !group ||
+            splitGroups(channel.groupName).includes(group)) &&
+          (!query ||
+            `${channel.name} ${displayGroups(channel.groupName)} ${channel.sourceName}`
+              .toLocaleLowerCase()
+              .includes(query)),
+      ),
+    [scopeChannels, scope, query, group],
+  );
+  const range = JSON.stringify([scope, query, group]);
+  const currentIndex = shownChannels.findIndex(
+    (channel) => channel.id === props.channel.id,
+  );
+  const currentInCatalog = allActiveChannels.some(
+    (channel) => channel.id === props.channel.id,
+  );
+  const lastLocateRequest = useRef(0);
+  const changeScope = (next: typeof scope) => {
+    if (next === scope) return;
+    Keyboard.dismiss();
+    setScope(next);
+    setSearch("");
+    setGroup(null);
+  };
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const previous = savedSheetPosition.current;
+    const forceLocate = lastLocateRequest.current !== locateRequest;
+    lastLocateRequest.current = locateRequest;
+    if (
+      !forceLocate &&
+      previous?.range === range &&
+      previous.channelId === props.channel.id
+    ) {
+      channelList.current?.scrollToOffset({
+        offset: previous.offset,
+        animated: false,
+      });
+    } else {
+      savedSheetPosition.current = {
+        range,
+        channelId: props.channel.id,
+        offset: 0,
+      };
+      if (currentIndex >= 0) {
+        scrollTarget.current = { index: currentIndex, retries: 2 };
+        channelList.current?.scrollToIndex({
+          index: currentIndex,
+          viewPosition: 0.35,
+          animated: false,
+        });
+      } else {
+        channelList.current?.scrollToOffset({ offset: 0, animated: false });
+      }
+    }
+    return () => {
+      if (scrollRetry.current !== null) clearTimeout(scrollRetry.current);
+      scrollTarget.current = null;
+    };
+  }, [sheetOpen, range, props.channel.id, currentIndex, locateRequest]);
   return (
     <SafeAreaView
       style={s.screen}
@@ -171,40 +280,164 @@ export function PlayerScreen(props: PlayerScreenProps) {
         <View style={s.sheetOverlay} accessibilityViewIsModal>
           <Pressable
             style={StyleSheet.absoluteFill}
-            accessibilityRole="button"
-            accessibilityLabel="关闭频道列表"
+            accessible={false}
+            importantForAccessibility="no"
             onPress={() => setSheetOpen(false)}
           />
-          <View style={[s.sheet, fullscreen && s.landscapeSheet]}>
-            <View style={s.sheetHandle} />
-            <Heading
-              title="选择频道"
-              subtitle={`当前 · ${channelTitle(props.channel.name).title}`}
-            />
-            <Text style={theme.muted}>点选立即换台 · 播放状态以播放器为准</Text>
-            <View style={s.row}>
+          <View
+            style={[
+              s.sheet,
+              fullscreen && s.landscapeSheet,
+              fullscreen && {
+                width: Math.min(width, Math.max(280, width * 0.4), 440),
+              },
+            ]}
+          >
+            <View style={s.sheetHeading}>
               <View style={s.flex}>
-                <Button
-                  label="全部频道"
-                  secondary={favoritesOnly}
-                  onPress={() => setFavoritesOnly(false)}
-                />
+                <Text accessibilityRole="header" style={theme.heading}>
+                  选择频道
+                </Text>
+                <Text numberOfLines={1} style={theme.muted}>
+                  当前 · {channelTitle(props.channel.name).title}
+                </Text>
               </View>
-              <View style={s.flex}>
-                <Button
-                  label="收藏频道"
-                  secondary={!favoritesOnly}
-                  onPress={() => setFavoritesOnly(true)}
-                />
-              </View>
+              <Pressable
+                style={s.favoriteHit}
+                accessibilityRole="button"
+                accessibilityLabel="定位当前频道"
+                accessibilityState={{ disabled: !currentInCatalog }}
+                disabled={!currentInCatalog}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  if (currentIndex < 0) {
+                    setScope("all");
+                    setSearch("");
+                    setGroup(null);
+                  }
+                  setLocateRequest((value) => value + 1);
+                }}
+              >
+                <Text style={s.sheetAction}>定位</Text>
+              </Pressable>
+              <Pressable
+                style={s.favoriteHit}
+                accessibilityRole="button"
+                accessibilityLabel="关闭频道列表"
+                onPress={() => setSheetOpen(false)}
+              >
+                <Text style={s.sheetAction}>关闭</Text>
+              </Pressable>
             </View>
+            <View style={s.sheetScopes} testID="player-scopes">
+              {(
+                [
+                  ["all", "频道"],
+                  ["favorites", "收藏"],
+                  ["recent", "最近"],
+                ] as const
+              ).map(([value, label]) => (
+                <View key={value} style={s.flex}>
+                  <Button
+                    label={label}
+                    secondary={scope !== value}
+                    selected={scope === value}
+                    style={s.sheetButton}
+                    onPress={() => changeScope(value)}
+                  />
+                </View>
+              ))}
+            </View>
+            <View style={s.searchRow}>
+              <TextInput
+                style={s.searchInput}
+                accessibilityLabel="搜索选台频道"
+                placeholder="搜索频道、分组或来源"
+                placeholderTextColor={colors.muted}
+                value={search}
+                onChangeText={setSearch}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                onSubmitEditing={Keyboard.dismiss}
+              />
+              {!!search && (
+                <Pressable
+                  style={s.favoriteHit}
+                  accessibilityRole="button"
+                  accessibilityLabel="清除选台搜索"
+                  onPress={() => setSearch("")}
+                >
+                  <Text style={s.sheetAction}>清除</Text>
+                </Pressable>
+              )}
+            </View>
+            {scope === "all" && (
+              <GroupTabs
+                groups={groups}
+                selected={group}
+                onChange={(nextGroup) => {
+                  Keyboard.dismiss();
+                  setGroup(nextGroup);
+                }}
+                buttonStyle={s.sheetButton}
+                testID="player-group-tabs"
+              />
+            )}
             <FlatList
+              ref={channelList}
+              testID="player-channel-list"
               data={shownChannels}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              onScroll={(event) => {
+                savedSheetPosition.current = {
+                  range,
+                  channelId: props.channel.id,
+                  offset: event.nativeEvent.contentOffset.y,
+                };
+              }}
+              scrollEventThrottle={32}
+              onScrollBeginDrag={() => {
+                if (scrollRetry.current !== null)
+                  clearTimeout(scrollRetry.current);
+                scrollTarget.current = null;
+              }}
+              onScrollToIndexFailed={({ index, averageItemLength }) => {
+                const target = scrollTarget.current;
+                if (!target || target.index !== index) return;
+                channelList.current?.scrollToOffset({
+                  offset: Math.max(0, averageItemLength * index),
+                  animated: false,
+                });
+                if (target.retries <= 0) return;
+                target.retries -= 1;
+                if (scrollRetry.current !== null)
+                  clearTimeout(scrollRetry.current);
+                scrollRetry.current = setTimeout(() => {
+                  scrollRetry.current = null;
+                  if (scrollTarget.current === target) {
+                    channelList.current?.scrollToIndex({
+                      index,
+                      viewPosition: 0.35,
+                      animated: false,
+                    });
+                  }
+                }, 100);
+              }}
               keyExtractor={(item) => item.id}
               style={s.channelList}
               contentContainerStyle={s.listContent}
               ListEmptyComponent={
-                <Text style={s.empty}>还没有收藏的可用频道</Text>
+                <Text style={s.empty}>
+                  {query || (scope === "all" && group)
+                    ? `没有匹配频道，试试清除搜索${scope === "all" ? "或切换分组" : ""}`
+                    : scope === "recent"
+                      ? "还没有最近观看记录"
+                      : scope === "favorites"
+                        ? "还没有收藏的可用频道"
+                        : "没有可用频道"}
+                </Text>
               }
               renderItem={({ item }) => (
                 <View
@@ -214,15 +447,20 @@ export function PlayerScreen(props: PlayerScreenProps) {
                   ]}
                 >
                   <Pressable
-                    style={s.channelSelect}
+                    style={[s.channelSelect, !item.active && s.inactiveChannel]}
                     accessibilityRole="button"
                     accessibilityLabel={`${channelTitle(item.name).title}，${item.sourceName}${item.id === props.channel.id ? "，当前频道" : ""}`}
                     accessibilityState={{
                       selected: item.id === props.channel.id,
+                      disabled: !item.active,
                     }}
+                    disabled={!item.active}
                     onPress={() => {
                       setSheetOpen(false);
-                      if (item.id !== props.channel.id) props.onSelect(item);
+                      props.onSelect(
+                        item,
+                        shownChannels.filter((channel) => channel.active),
+                      );
                     }}
                   >
                     <View style={s.channelMark}>
@@ -235,9 +473,11 @@ export function PlayerScreen(props: PlayerScreenProps) {
                         {channelTitle(item.name).title}
                       </Text>
                       <Text numberOfLines={1} style={theme.muted}>
-                        {item.id === props.channel.id
-                          ? "当前频道"
-                          : displayGroups(item.groupName)}{" "}
+                        {!item.active
+                          ? "已失效"
+                          : item.id === props.channel.id
+                            ? "当前频道"
+                            : displayGroups(item.groupName)}{" "}
                         · {item.sourceName}
                       </Text>
                     </View>
@@ -255,11 +495,6 @@ export function PlayerScreen(props: PlayerScreenProps) {
                   </Pressable>
                 </View>
               )}
-            />
-            <Button
-              label="关闭频道列表"
-              secondary
-              onPress={() => setSheetOpen(false)}
             />
           </View>
         </View>
@@ -413,6 +648,34 @@ function ChannelSession(props: SessionProps) {
     />
   );
 
+  const favoriteButton = (
+    <Pressable
+      style={props.fullscreen ? s.favoriteHit : s.quiet}
+      accessibilityRole="button"
+      accessibilityLabel={
+        props.channel.favorite ? "取消收藏当前频道" : "收藏当前频道"
+      }
+      accessibilityState={{ selected: props.channel.favorite }}
+      onPress={() => props.onFavorite(props.channel)}
+    >
+      <Text
+        style={
+          props.fullscreen
+            ? [s.star, props.channel.favorite && s.accent]
+            : s.quietText
+        }
+      >
+        {props.fullscreen
+          ? props.channel.favorite
+            ? "★"
+            : "☆"
+          : props.channel.favorite
+            ? "★ 已收藏"
+            : "☆ 收藏频道"}
+      </Text>
+    </Pressable>
+  );
+
   return (
     <ScrollView
       style={s.flex}
@@ -499,7 +762,7 @@ function ChannelSession(props: SessionProps) {
         <Text style={[theme.heading, s.flex]} numberOfLines={1}>
           {channelTitle(props.channel.name).title}
         </Text>
-        <Text style={theme.muted}>{description.title}</Text>
+        {props.fullscreen && favoriteButton}
       </View>
       <View style={props.fullscreen ? s.hidden : s.portraitControls}>
         <Text style={theme.muted}>
@@ -520,19 +783,7 @@ function ChannelSession(props: SessionProps) {
           <View style={s.flex}>{nextButton}</View>
         </View>
         <Button label="打开频道列表" secondary onPress={props.onOpenSheet} />
-        <Pressable
-          style={s.quiet}
-          accessibilityRole="button"
-          accessibilityLabel={
-            props.channel.favorite ? "取消收藏当前频道" : "收藏当前频道"
-          }
-          accessibilityState={{ selected: props.channel.favorite }}
-          onPress={() => props.onFavorite(props.channel)}
-        >
-          <Text style={s.quietText}>
-            {props.channel.favorite ? "★ 已收藏" : "☆ 收藏频道"}
-          </Text>
-        </Pressable>
+        {!props.fullscreen && favoriteButton}
         <Pressable
           style={s.quiet}
           accessibilityRole="button"
@@ -653,39 +904,54 @@ const s = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: "#00000088",
+    backgroundColor: "#00000033",
     justifyContent: "flex-end",
     alignItems: "flex-end",
   },
   sheet: {
     width: "100%",
-    height: "74%",
-    maxHeight: "94%",
-    padding: 20,
-    paddingBottom: 24,
-    gap: 12,
+    height: "86%",
+    maxHeight: "96%",
+    padding: 12,
+    paddingBottom: 16,
+    gap: 8,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     backgroundColor: colors.surface,
   },
   landscapeSheet: {
-    maxWidth: 560,
-    height: "94%",
-    paddingTop: 12,
-    paddingBottom: 12,
-    gap: 8,
+    height: "100%",
+    maxHeight: "100%",
+    paddingTop: 4,
+    paddingBottom: 8,
+    gap: 4,
+    borderTopRightRadius: 0,
+    borderTopLeftRadius: 16,
+    backgroundColor: "#131D23F2",
   },
-  sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: "center",
-    backgroundColor: colors.line,
+  sheetHeading: { flexDirection: "row", alignItems: "center", gap: 4 },
+  sheetAction: { color: colors.accent, fontSize: 13, lineHeight: 20 },
+  sheetScopes: { flexDirection: "row", alignItems: "center", gap: 8 },
+  sheetButton: { minHeight: 48, paddingVertical: 8, paddingHorizontal: 12 },
+  searchRow: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 12,
+    backgroundColor: colors.raised,
+  },
+  searchInput: {
+    flex: 1,
+    minHeight: 48,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    color: colors.text,
+    fontSize: 14,
   },
   channelList: { flex: 1 },
-  listContent: { gap: 8 },
+  listContent: { gap: 4 },
   channelRow: {
-    minHeight: 80,
+    minHeight: 66,
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 16,
@@ -694,16 +960,17 @@ const s = StyleSheet.create({
     borderColor: "transparent",
   },
   selectedRow: { borderColor: colors.line },
+  inactiveChannel: { opacity: 0.5 },
   channelSelect: {
     flex: 1,
-    minHeight: 78,
+    minHeight: 64,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 8,
   },
   channelMark: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",

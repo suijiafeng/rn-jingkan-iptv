@@ -12,7 +12,6 @@ interface Props {
   onRevoke: () => void;
   onAllowRemote: () => void;
   onMobileWarningChange: (value: boolean) => void;
-  onClearRecent: () => void;
   onClearAll: () => void;
 }
 
@@ -57,7 +56,6 @@ export function SettingsScreen(props: Props) {
           />
         </View>
       </Card>
-      <Button secondary label="清空最近观看" onPress={props.onClearRecent} />
       <Button
         secondary
         danger
