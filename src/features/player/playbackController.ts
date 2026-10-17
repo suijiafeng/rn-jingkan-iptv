@@ -1,0 +1,251 @@
+/** A source-free state machine: stream URLs and native errors never enter UI state. */
+export type PlaybackPhase =
+  | "paused"
+  | "checking"
+  | "connecting"
+  | "playing"
+  | "buffering"
+  | "cellular"
+  | "blocked"
+  | "offline"
+  | "timeout"
+  | "error"
+  | "ended";
+export type PauseReason =
+  "manual" | "background" | "interrupted" | "cellular-declined";
+export interface PlaybackSnapshot {
+  phase: PlaybackPhase;
+  attemptId: number | null;
+  pauseReason?: PauseReason;
+}
+export interface ConnectionState {
+  type?: string;
+  isConnected?: boolean;
+  isInternetReachable?: boolean;
+}
+interface ControllerOptions {
+  remoteAllowed: boolean;
+  mobileWarning: boolean;
+  checkNetwork: () => Promise<ConnectionState>;
+  isAppActive: () => boolean;
+  onStarted: () => void;
+}
+export const INITIAL_PLAY_TIMEOUT_MS = 30_000;
+const activePhases: PlaybackPhase[] = [
+  "checking",
+  "connecting",
+  "playing",
+  "buffering",
+];
+export const isOffline = (network: ConnectionState) =>
+  network.isConnected === false ||
+  network.isInternetReachable === false ||
+  network.type === "NONE";
+/** VPN/unknown transports cannot establish that playback is on unmetered Wi-Fi. */
+export const mightUseMobileData = (network: ConnectionState) =>
+  !["WIFI", "ETHERNET", "BLUETOOTH"].includes(network.type ?? "UNKNOWN");
+
+export class PlaybackController {
+  private options: ControllerOptions;
+  private snapshot: PlaybackSnapshot;
+  private listeners = new Set<() => void>();
+  private generation = 0;
+  private networkVersion = 0;
+  private latestNetwork: ConnectionState | undefined;
+  private timeout: ReturnType<typeof setTimeout> | undefined;
+  private startedAttempt: number | null = null;
+  private disposed = false;
+
+  constructor(options: ControllerOptions) {
+    this.options = options;
+    this.snapshot = {
+      phase: options.remoteAllowed ? "paused" : "blocked",
+      attemptId: null,
+    };
+  }
+  /** React development StrictMode may replay the owning effect. */
+  activate() {
+    this.disposed = false;
+  }
+  getSnapshot = () => this.snapshot;
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+  private publish(snapshot: PlaybackSnapshot) {
+    if (this.disposed) return;
+    this.snapshot = snapshot;
+    this.listeners.forEach((listener) => listener());
+  }
+  private clearTimer() {
+    if (this.timeout !== undefined) clearTimeout(this.timeout);
+    this.timeout = undefined;
+  }
+  private stop(phase: PlaybackPhase, pauseReason?: PauseReason) {
+    ++this.generation;
+    this.clearTimer();
+    this.publish({
+      phase,
+      attemptId: null,
+      ...(pauseReason ? { pauseReason } : {}),
+    });
+  }
+  setOnStarted(onStarted: () => void) {
+    this.options = { ...this.options, onStarted };
+  }
+  setPolicy(remoteAllowed: boolean, mobileWarning: boolean) {
+    const revoked = this.options.remoteAllowed && !remoteAllowed;
+    const newlyWarned = !this.options.mobileWarning && mobileWarning;
+    this.options = { ...this.options, remoteAllowed, mobileWarning };
+    if (!remoteAllowed) {
+      if (revoked || this.snapshot.phase !== "blocked") this.stop("blocked");
+    } else if (this.snapshot.phase === "blocked") {
+      // A settings change never secretly starts a stream.
+      this.stop("paused", "manual");
+    } else if (
+      newlyWarned &&
+      this.latestNetwork &&
+      mightUseMobileData(this.latestNetwork) &&
+      activePhases.includes(this.snapshot.phase)
+    ) {
+      this.stop("cellular");
+    }
+  }
+  async requestPlay(allowMobileForThisAttempt = false): Promise<void> {
+    if (this.disposed) return;
+    if (!this.options.remoteAllowed) {
+      this.stop("blocked");
+      return;
+    }
+    if (!this.options.isAppActive()) {
+      this.stop("paused", "background");
+      return;
+    }
+    this.clearTimer();
+    const token = ++this.generation;
+    const networkVersion = this.networkVersion;
+    this.publish({ phase: "checking", attemptId: null });
+    let network: ConnectionState;
+    try {
+      network = await this.options.checkNetwork();
+    } catch {
+      if (token === this.generation && !this.disposed) this.stop("error");
+      return;
+    }
+    if (this.disposed || token !== this.generation) return;
+    // A delayed network lookup must never overwrite a newer connectivity event.
+    if (networkVersion !== this.networkVersion && this.latestNetwork)
+      network = this.latestNetwork;
+    this.latestNetwork = network;
+    if (!this.options.remoteAllowed) {
+      this.stop("blocked");
+      return;
+    }
+    if (!this.options.isAppActive()) {
+      this.stop("paused", "background");
+      return;
+    }
+    if (isOffline(network)) {
+      this.stop("offline");
+      return;
+    }
+    if (
+      this.options.mobileWarning &&
+      mightUseMobileData(network) &&
+      !allowMobileForThisAttempt
+    ) {
+      this.stop("cellular");
+      return;
+    }
+    this.startedAttempt = null;
+    this.publish({ phase: "connecting", attemptId: token });
+    this.timeout = setTimeout(() => {
+      if (this.isCurrentAttempt(token) && this.startedAttempt !== token)
+        this.stop("timeout");
+    }, INITIAL_PLAY_TIMEOUT_MS);
+  }
+  pause(reason: PauseReason = "manual") {
+    this.stop(this.options.remoteAllowed ? "paused" : "blocked", reason);
+  }
+  appStateChanged(state: string) {
+    if (state !== "active") this.pause("background");
+    // Deliberately no automatic resume on foreground.
+  }
+  networkChanged(network: ConnectionState) {
+    if (this.disposed) return;
+    const previous = this.latestNetwork;
+    this.latestNetwork = network;
+    ++this.networkVersion;
+    if (!activePhases.includes(this.snapshot.phase)) return;
+    if (isOffline(network)) {
+      this.stop("offline");
+      return;
+    }
+    if (
+      this.options.mobileWarning &&
+      mightUseMobileData(network) &&
+      (!previous || !mightUseMobileData(previous))
+    ) {
+      // Removing the attempt unmounts/releases its decoder before confirmation.
+      this.stop("cellular");
+    }
+  }
+  isCurrentAttempt = (id: number) =>
+    !this.disposed &&
+    this.options.remoteAllowed &&
+    this.options.isAppActive() &&
+    this.snapshot.attemptId === id &&
+    activePhases.includes(this.snapshot.phase);
+  nativeStarted(id: number) {
+    if (!this.isCurrentAttempt(id)) return;
+    this.clearTimer();
+    this.publish({ phase: "playing", attemptId: id });
+    if (this.startedAttempt !== id) {
+      this.startedAttempt = id;
+      this.options.onStarted();
+    }
+  }
+  nativeStatus(id: number, status: string) {
+    if (!this.isCurrentAttempt(id)) return;
+    if (status === "error") this.stop("error");
+    else if (status === "loading")
+      this.publish({
+        phase: this.startedAttempt === id ? "buffering" : "connecting",
+        attemptId: id,
+      });
+    // readyToPlay is not evidence that media actually played.
+  }
+  nativeStopped(id: number) {
+    if (!this.isCurrentAttempt(id)) return;
+    // Buffering also emits isPlaying=false. Only a genuine ready-state pause is
+    // passed here by the native adapter; never infer audio-focus error strings.
+    if (this.startedAttempt === id) this.pause("interrupted");
+  }
+  nativeEnded(id: number) {
+    if (this.isCurrentAttempt(id)) this.stop("ended");
+  }
+  dispose() {
+    this.disposed = true;
+    ++this.generation;
+    this.clearTimer();
+    this.listeners.clear();
+  }
+}
+
+export function adjacentChannelIndex(
+  length: number,
+  currentIndex: number,
+  direction: -1 | 1,
+): number | null {
+  const target = currentIndex + direction;
+  return currentIndex < 0 || target < 0 || target >= length ? null : target;
+}
+
+export function backDestination(
+  sheetOpen: boolean,
+  fullscreen: boolean,
+): "sheet" | "fullscreen" | "close" {
+  return sheetOpen ? "sheet" : fullscreen ? "fullscreen" : "close";
+}

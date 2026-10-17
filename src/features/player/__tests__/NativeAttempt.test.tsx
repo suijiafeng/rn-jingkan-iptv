@@ -1,0 +1,187 @@
+import React from "react";
+import { AppState } from "react-native";
+import { act, render } from "@testing-library/react-native";
+import { NativeAttempt } from "../NativeAttempt";
+import { PlaybackController } from "../playbackController";
+
+type Handler = (payload?: Record<string, unknown>) => void;
+const mockPlayers: {
+  status: string;
+  handlers: Record<string, Handler>;
+  removed: jest.Mock[];
+  replaceAsync: jest.Mock;
+  play: jest.Mock;
+  pause: jest.Mock;
+  release: jest.Mock;
+  audioMixingMode?: string;
+  staysActiveInBackground?: boolean;
+}[] = [];
+let mockReplace: () => Promise<void> = () => Promise.resolve();
+jest.mock("expo-video", () => ({
+  createVideoPlayer: jest.fn((source: unknown) => {
+    if (source !== null) throw new Error("Players must be constructed empty");
+    const handlers: Record<string, Handler> = {};
+    const removed: jest.Mock[] = [];
+    const player = {
+      status: "readyToPlay",
+      handlers,
+      removed,
+      replaceAsync: jest.fn(() => mockReplace()),
+      play: jest.fn(),
+      pause: jest.fn(),
+      release: jest.fn(),
+      addListener: jest.fn((event: string, handler: Handler) => {
+        handlers[event] = handler;
+        const remove = jest.fn();
+        removed.push(remove);
+        return { remove };
+      }),
+    };
+    mockPlayers.push(player);
+    return player;
+  }),
+  VideoView: (props: Record<string, unknown>) => {
+    const { View } =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return <View {...props} />;
+  },
+}));
+
+async function readyController() {
+  const onStarted = jest.fn();
+  const controller = new PlaybackController({
+    remoteAllowed: true,
+    mobileWarning: true,
+    checkNetwork: async () => ({ type: "WIFI", isConnected: true }),
+    isAppActive: () => AppState.currentState === "active",
+    onStarted,
+  });
+  await controller.requestPlay();
+  return { controller, id: controller.getSnapshot().attemptId!, onStarted };
+}
+beforeEach(() => {
+  mockPlayers.length = 0;
+  mockReplace = () => Promise.resolve();
+  Object.defineProperty(AppState, "currentState", {
+    configurable: true,
+    writable: true,
+    value: "active",
+  });
+});
+
+test("constructs empty, configures safe native controls, and loads one HLS attempt", async () => {
+  const { controller, id, onStarted } = await readyController();
+  const ui = await render(
+    <NativeAttempt
+      uri="https://example.test/live.m3u8?token=private"
+      attemptId={id}
+      controller={controller}
+    />,
+  );
+  expect(mockPlayers).toHaveLength(1);
+  const native = mockPlayers[0];
+  expect(native.replaceAsync).toHaveBeenCalledWith({
+    uri: "https://example.test/live.m3u8?token=private",
+    useCaching: false,
+    contentType: "hls",
+  });
+  expect(native.audioMixingMode).toBe("doNotMix");
+  expect(native.staysActiveInBackground).toBe(false);
+  expect(native.play).toHaveBeenCalledTimes(1);
+  expect(onStarted).not.toHaveBeenCalled();
+  expect(ui.getByTestId("native-video-view").props).toMatchObject({
+    nativeControls: false,
+    fullscreenOptions: { enable: false },
+    allowsPictureInPicture: false,
+  });
+  await act(() => {
+    native.handlers.playingChange({ isPlaying: true });
+  });
+  expect(onStarted).toHaveBeenCalledTimes(1);
+  await act(() => {
+    ui.getByTestId("native-video-view").props.onFirstFrameRender();
+  });
+  expect(onStarted).toHaveBeenCalledTimes(1);
+  await ui.unmount();
+  expect(native.pause).toHaveBeenCalledTimes(1);
+  expect(native.release).toHaveBeenCalledTimes(1);
+  expect(native.removed.every((remove) => remove.mock.calls.length === 1)).toBe(
+    true,
+  );
+  controller.dispose();
+});
+
+test("late replacement and native callbacks after teardown cannot start or record history", async () => {
+  let resolve!: () => void;
+  mockReplace = () =>
+    new Promise<void>((done) => {
+      resolve = done;
+    });
+  const { controller, id, onStarted } = await readyController();
+  const ui = await render(
+    <NativeAttempt
+      uri="https://example.test/live"
+      attemptId={id}
+      controller={controller}
+    />,
+  );
+  const native = mockPlayers[0];
+  await ui.unmount();
+  await act(async () => {
+    resolve();
+    await Promise.resolve();
+    native.handlers.playingChange({ isPlaying: true });
+  });
+  expect(native.play).not.toHaveBeenCalled();
+  expect(onStarted).not.toHaveBeenCalled();
+  expect(native.release).toHaveBeenCalledTimes(1);
+  controller.dispose();
+});
+
+test("background arriving before replacement resolves prevents autoplay", async () => {
+  let resolve!: () => void;
+  mockReplace = () =>
+    new Promise<void>((done) => {
+      resolve = done;
+    });
+  const { controller, id } = await readyController();
+  const ui = await render(
+    <NativeAttempt
+      uri="https://example.test/live"
+      attemptId={id}
+      controller={controller}
+    />,
+  );
+  Object.defineProperty(AppState, "currentState", {
+    configurable: true,
+    value: "background",
+  });
+  controller.appStateChanged("background");
+  await act(async () => {
+    resolve();
+    await Promise.resolve();
+  });
+  expect(mockPlayers[0].play).not.toHaveBeenCalled();
+  await ui.unmount();
+  controller.dispose();
+});
+
+test("unstructured native 401 string remains an unknown error with no credentials exposed", async () => {
+  const { controller, id } = await readyController();
+  const ui = await render(
+    <NativeAttempt
+      uri="https://example.test/live?secret=123"
+      attemptId={id}
+      controller={controller}
+    />,
+  );
+  await act(() => {
+    mockPlayers[0].handlers.statusChange({
+      status: "error",
+      error: { message: "401 https://example.test/live?secret=123" },
+    });
+  });
+  expect(controller.getSnapshot()).toEqual({ phase: "error", attemptId: null });
+  await ui.unmount();
+  controller.dispose();
+});
