@@ -47,6 +47,16 @@ jest.mock("expo-video", () => ({
   },
 }));
 
+const mockResolveContentType = jest.fn();
+jest.mock("../streamFormat", () => {
+  const actual = jest.requireActual("../streamFormat");
+  return {
+    ...actual,
+    resolveContentType: async (uri: string, signal: AbortSignal) =>
+      actual.contentTypeFromPath(uri) ?? mockResolveContentType(uri, signal),
+  };
+});
+
 async function readyController() {
   const onStarted = jest.fn();
   const controller = new PlaybackController({
@@ -183,5 +193,54 @@ test("unstructured native 401 string remains an unknown error with no credential
   });
   expect(controller.getSnapshot()).toEqual({ phase: "error", attemptId: null });
   await ui.unmount();
+  controller.dispose();
+});
+
+test("suffix-less addresses are probed first and loaded with the detected type", async () => {
+  mockResolveContentType.mockResolvedValueOnce("hls");
+  const { controller, id } = await readyController();
+  const ui = await render(
+    <NativeAttempt
+      uri="https://cdn.example.test/163189/ch8"
+      attemptId={id}
+      controller={controller}
+    />,
+  );
+  expect(mockResolveContentType).toHaveBeenCalledWith(
+    "https://cdn.example.test/163189/ch8",
+    expect.anything(),
+  );
+  expect(mockPlayers[0].replaceAsync).toHaveBeenCalledWith({
+    uri: "https://cdn.example.test/163189/ch8",
+    useCaching: false,
+    contentType: "hls",
+  });
+  await ui.unmount();
+  controller.dispose();
+});
+
+test("a probe still pending at teardown is aborted and never loads a source", async () => {
+  let finish!: (type: string) => void;
+  let probeSignal: AbortSignal | undefined;
+  mockResolveContentType.mockImplementationOnce(
+    (_uri: string, signal: AbortSignal) => {
+      probeSignal = signal;
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    },
+  );
+  const { controller, id } = await readyController();
+  const ui = await render(
+    <NativeAttempt
+      uri="https://cdn.example.test/163189/chu"
+      attemptId={id}
+      controller={controller}
+    />,
+  );
+  await ui.unmount();
+  expect(probeSignal?.aborted).toBe(true);
+  await act(async () => finish("hls"));
+  expect(mockPlayers[0].replaceAsync).not.toHaveBeenCalled();
   controller.dispose();
 });

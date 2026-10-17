@@ -238,6 +238,9 @@ describe("remote URL input policy (not DNS or HLS-hop isolation)", () => {
     "https://user:pass@a.example.com/live",
     "http://a.example.com:22/live",
     "http://a.example.com:6379/live",
+    "http://a.example.com:25/live",
+    "http://a.example.com:445/live",
+    "http://a.example.com:554/live",
     "https://a.example.com/\nsecret",
     "https://a.example.com\\evil",
     "javascript:alert(1)",
@@ -250,6 +253,11 @@ describe("remote URL input policy (not DNS or HLS-hop isolation)", () => {
     "https://192.2.1.1/live",
     "https://8.8.8.8/live",
     "http://a.example.com:8080/live",
+    // Real public streaming servers use these non-standard low ports.
+    "http://a.example.com:81/live/cctv1.m3u8",
+    "http://a.example.com:82/live",
+    "http://a.example.com:85/live",
+    "http://a.example.com:98/live",
     "https://[2606:4700:4700::1111]/live",
   ])("permits ordinary public addresses %s", (url) => {
     expect(normalizeRemoteUrl(url)).toBe(url);

@@ -60,8 +60,19 @@ function unsafeIPv6(host: string): boolean {
   );
 }
 
+// Streaming servers commonly use non-standard low ports (81, 82, 85, 98...),
+// so only well-known non-HTTP service ports are refused: the WHATWG Fetch
+// "bad port" list plus common LAN/database/admin services.
 const BLOCKED_PORTS = new Set([
-  1900, 2049, 2375, 2376, 3306, 3389, 5432, 5353, 5900, 6379, 9200, 11211,
+  // WHATWG Fetch bad ports
+  1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79,
+  87, 95, 101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137,
+  139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515, 526, 530, 531, 532,
+  540, 548, 554, 556, 563, 587, 601, 636, 989, 990, 993, 995, 1719, 1720, 1723,
+  2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669,
+  6679, 6697, 10080,
+  // Additional LAN, container, database and remote-desktop services
+  445, 1900, 2375, 2376, 3306, 3389, 5353, 5432, 5900, 6379, 9200, 11211,
 ]);
 
 /** Input validation only: DNS answers, redirects and native HLS subrequests are not inspected. */
@@ -102,8 +113,7 @@ export function normalizeRemoteUrl(input: string, baseUrl?: string): string {
   if (host.includes(":") && unsafeIPv6(host))
     throw new UrlValidationError("unsafe_url");
   const port = Number(url.port || (url.protocol === "http:" ? 80 : 443));
-  if ((port < 1024 && port !== 80 && port !== 443) || BLOCKED_PORTS.has(port))
-    throw new UrlValidationError("unsafe_url");
+  if (BLOCKED_PORTS.has(port)) throw new UrlValidationError("unsafe_url");
   // WHATWG URL preserves query parameter order and token values. Do not use URLSearchParams.
   return url.toString();
 }

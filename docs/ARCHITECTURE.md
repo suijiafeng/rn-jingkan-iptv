@@ -3,11 +3,12 @@
 Expo Router 仅提供薄入口，src/App.tsx 维护四个底部页面和来源表单。使用 React 状态，不引入额外全局状态框架。底层状态只存 SQLite，UI 的结果快照由 revision 触发重查。
 
 - domain/m3u：异步解析、资源上限、重复/坏行统计；不自动探测频道。
-- domain/url：HTTP(S) 输入检查，只拒绝显式危险目标；不是 DNS/重定向/原生请求防火墙。
+- domain/url：HTTP(S) 输入检查，只拒绝显式危险目标（私网/本机地址、Fetch bad port 与常见局域网服务端口；81/82/85/98 等流媒体端口放行）；不是 DNS/重定向/原生请求防火墙。
 - data/importIO：expo/fetch 流式计数，2 MiB 解码输入上限；10 秒连接、15 秒停滞、60 秒总预算；AbortController 清理。UTF-8 严格解码。文件通过系统选择器缓存副本逐块读取，再删除该副本。
 - data/repository：SQLite 迁移，独占事务连接，显式启用 foreign_keys；保存文件源的文本到私有数据库；频道按每批 90 行多行 INSERT 写入。刷新 generation + revision 双重检查，删除不会被旧请求复活。保留被收藏/最近引用的失效条目。
 - features/player/playbackController：纯 TS 播放意图与会话控制；网络检查、移动数据确认、初始超时、后台暂停、手动重试。
-- features/player/NativeAttempt：每次尝试新建空 expo-video 实例，订阅事件后才附加来源。退出或换台释放，旧事件受 attempt guard 限制。
+- features/player/streamFormat：按后缀判定 hls/dash；后缀不明时在尝试内做一次 Range 0-1023、最多 1 KiB、8 秒的格式探测，失败回落 auto。
+- features/player/NativeAttempt：每次尝试新建空 expo-video 实例，订阅事件后才附加来源（先经 streamFormat 判定 contentType）。退出或换台释放，旧事件受 attempt guard 限制。
 - features/player/PlayerScreen：原生视频画面、自定义竖屏/全屏控件、频道面板、方向策略恢复、安全区；全屏沉浸式隐藏系统栏，轻触显隐控件，播放中 4 秒自动隐藏（TalkBack 时不隐藏）。
 - App：计费网络规则与播放共用 mightUseMobileData；一次确认保持到连回 Wi-Fi。收藏切换只局部更新列表；三个列表标签各自恢复滚动位置。
 

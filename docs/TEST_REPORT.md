@@ -1,5 +1,14 @@
 # 验证记录
 
+## 2026-10-18 · iptv-org 中文列表复验与端口/格式探测修订
+
+- 数据：https://iptv-org.github.io/iptv/languages/zho.m3u（216 条，2026-10-18 下载）。仅为公开列表的可用性观察，不是授权或受控验收基准。
+- 本机网络（与手机同 Wi-Fi 的 Mac）逐条请求清单：97 条返回有效清单；53 条 HTTP 错误（403×23、502×19 等）；60 条连接失败。对 97 条用 ffmpeg 解码 8 秒：67 条成功（HTTP 33、HTTPS 34），17 条失败，13 条超时。这不是 App 原生播放结果。
+- 修订前应用端口规则会拒绝其中 31 条地址，包括 24 条实测可解码的 CCTV 频道；修订后 216 条中 214 条可导入（剩余为 1 条 rtmp 与 1 条 10080 端口），67 条可解码频道全部可导入。
+- 两条无后缀地址（cdn.qd.je/163189/ch8、chu）以 Range 0-1023 请求实测返回 200、Content-Type application/vnd.apple.mpegurl、内容以 #EXTM3U 开头，探测会判定为 hls。
+- 新增测试：端口放行/拒绝用例；streamFormat 单元测试（后缀、内容头、Content-Type、错误回落、超时、取消）；NativeAttempt 无后缀地址探测后按探测类型加载、拆除时探测被中止且不加载来源。
+- 未运行：真机上上述频道的实际起播、无后缀 HLS 在 ExoPlayer 中的起播。
+
 ## 2026-10-18 · 审查后修订（分支 fix/review-followups）
 
 - 本机实际运行：npm ci、typecheck 通过、lint 通过、Jest 9 个套件 114 项通过、build:bundle 通过。

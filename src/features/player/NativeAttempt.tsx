@@ -7,6 +7,7 @@ import {
   type VideoSource,
 } from "expo-video";
 import { PlaybackController } from "./playbackController";
+import { resolveContentType } from "./streamFormat";
 
 interface Props {
   uri: string;
@@ -23,6 +24,7 @@ export function NativeAttempt({ uri, attemptId, controller }: Props) {
     alive.current = true;
     let live = true;
     let instance: VideoPlayer | undefined;
+    const sniff = new AbortController();
     const subscriptions: { remove: () => void }[] = [];
     const current = () =>
       live &&
@@ -64,17 +66,20 @@ export function NativeAttempt({ uri, attemptId, controller }: Props) {
       // during render. Publish its handle for the VideoView after construction.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setPlayer(ownedPlayer);
-      const pathname = new URL(uri).pathname.toLowerCase();
-      const source: VideoSource = {
-        uri,
-        useCaching: false,
-        ...(pathname.endsWith(".m3u8") ? { contentType: "hls" as const } : {}),
-      };
       if (current()) {
-        void ownedPlayer
-          .replaceAsync(source)
-          .then(() => {
-            if (current()) ownedPlayer.play();
+        // Suffix-less addresses get one bounded 1 KiB format probe first;
+        // without it ExoPlayer would open suffix-less HLS as a plain file.
+        void resolveContentType(uri, sniff.signal)
+          .then((contentType) => {
+            if (!current()) return;
+            const source: VideoSource = {
+              uri,
+              useCaching: false,
+              ...(contentType === "auto" ? {} : { contentType }),
+            };
+            return ownedPlayer.replaceAsync(source).then(() => {
+              if (current()) ownedPlayer.play();
+            });
           })
           .catch(() => {
             // Expo 58 provides only PlayerError.message; do not claim HTTP status,
@@ -88,6 +93,7 @@ export function NativeAttempt({ uri, attemptId, controller }: Props) {
     return () => {
       alive.current = false;
       live = false;
+      sniff.abort();
       currentInstance.current = null;
       subscriptions.forEach((subscription) => subscription.remove());
       if (instance) {
