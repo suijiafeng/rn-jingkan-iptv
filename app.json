@@ -48,7 +48,8 @@
           }
         }
       ],
-      "./plugins/withPrivacy"
+      "./plugins/withPrivacy",
+      "./plugins/withReleaseSigning"
     ],
     "experiments": {
       "typedRoutes": false
