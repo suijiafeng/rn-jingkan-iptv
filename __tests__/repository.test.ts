@@ -236,6 +236,44 @@ describe("SQLite repository with real SQLite", () => {
     expect(await repo.listChannels({ includeInactive: true })).toHaveLength(1);
   });
 
+  it("keeps channel identity and links when an exact playlist duplicate appears and disappears", async () => {
+    const source = await importInitial();
+    const [channel] = await repo.listChannels();
+    await repo.toggleFavorite(channel.id);
+    await repo.recordRecent(channel.id);
+    const entry = {
+      name: channel.name,
+      id: "news",
+      url: channel.streamUrl,
+    };
+    let revision = source.revision;
+    for (const entries of [[entry, entry], [entry]]) {
+      const replacement = content(entries);
+      const updated = await repo.refreshSource(
+        source.id,
+        revision,
+        await parseM3U(replacement),
+        { content: replacement },
+      );
+      revision = updated.revision;
+      expect(updated).toMatchObject({ channelCount: 1, favoriteCount: 1 });
+      expect(await repo.listChannels({ includeInactive: true })).toEqual([
+        expect.objectContaining({
+          id: channel.id,
+          identityKey: "id:news",
+          favorite: true,
+          active: true,
+        }),
+      ]);
+      expect(await repo.listFavorites()).toMatchObject([
+        { id: channel.id, active: true },
+      ]);
+      expect(await repo.listRecent()).toMatchObject([
+        { id: channel.id, active: true },
+      ]);
+    }
+  });
+
   it("rolls back a mid-refresh database failure without losing old source or links", async () => {
     const source = await importInitial();
     const [channel] = await repo.listChannels();
@@ -390,6 +428,41 @@ describe("SQLite repository with real SQLite", () => {
     expect(await db.getFirstAsync("PRAGMA user_version")).toEqual({
       user_version: 2,
     });
+  });
+
+  it("clears committed data successfully even when the WAL checkpoint fails", async () => {
+    const source = await importInitial();
+    const [channel] = await repo.listChannels();
+    await repo.toggleFavorite(channel.id);
+    await repo.recordRecent(channel.id);
+    await repo.setSetting("trustedRemoteAllowed", true);
+    const exec = jest.spyOn(db, "execAsync").mockImplementation(async (sql) => {
+      if (sql === "PRAGMA wal_checkpoint(TRUNCATE);")
+        throw new Error("simulated checkpoint failure");
+      db.native.exec(sql);
+    });
+
+    await expect(repo.clearAll()).resolves.toBeUndefined();
+
+    expect(exec).toHaveBeenCalledWith("PRAGMA wal_checkpoint(TRUNCATE);");
+    expect(await repo.listSources()).toEqual([]);
+    expect(await repo.listChannels({ includeInactive: true })).toEqual([]);
+    expect(await repo.listFavorites()).toEqual([]);
+    expect(await repo.listRecent()).toEqual([]);
+    expect(await repo.getSourceContent(source.id)).toBeNull();
+    expect(await repo.getSetting("trustedRemoteAllowed", false)).toBe(false);
+  });
+
+  it("rejects and rolls back when deleting private data fails", async () => {
+    const source = await importInitial();
+    await repo.setSetting("trustedRemoteAllowed", true);
+    db.failWhen = (sql) => sql === "DELETE FROM settings";
+
+    await expect(repo.clearAll()).rejects.toThrow("simulated disk failure");
+
+    expect(await repo.listSources()).toEqual([source]);
+    expect(await repo.listChannels()).toHaveLength(3);
+    expect(await repo.getSetting("trustedRemoteAllowed", false)).toBe(true);
   });
 
   it("serializes simultaneous writes without duplicate favorites", async () => {

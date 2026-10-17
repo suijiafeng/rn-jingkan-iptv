@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -82,6 +88,14 @@ const initialForm = (kind: SourceKind = "url"): Form => ({
 });
 export default function App() {
   const [repo, setRepo] = useState<Repository | null>(null),
+    [startupAttempt, setStartupAttempt] = useState(0),
+    [loadedRequest, setLoadedRequest] = useState<{
+      tab: Tab;
+      sourceId: string;
+      group: string;
+      query: string;
+    } | null>(null),
+    [listError, setListError] = useState(""),
     [error, setError] = useState(""),
     [sources, setSources] = useState<Source[]>([]),
     [channels, setChannels] = useState<Channel[]>([]),
@@ -93,6 +107,7 @@ export default function App() {
     [query, setQuery] = useState(""),
     [groups, setGroups] = useState<string[]>([]);
   const [remoteAllowed, setRemoteAllowed] = useState(false),
+    [revokePending, setRevokePending] = useState(false),
     [mobileWarning, setMobileWarning] = useState(true),
     // One confirmation covers this metered connection until Wi-Fi returns.
     [mobileAccepted, setMobileAccepted] = useState(false),
@@ -117,6 +132,16 @@ export default function App() {
     tabOffsets = useRef<Partial<Record<Tab, number>>>({}),
     restoreTab = useRef<Tab | null>(null);
   const changed = useCallback(() => setRevision((v) => v + 1), []);
+  const loadRequest = useMemo(
+    () => ({ repo, tab, sourceId, group, query, revision }),
+    [repo, tab, sourceId, group, query, revision],
+  );
+  const listLoading = loadedRequest !== loadRequest;
+  const hasCurrentList =
+    loadedRequest?.tab === tab &&
+    loadedRequest.sourceId === sourceId &&
+    loadedRequest.group === group &&
+    loadedRequest.query === query;
   const cancelTask = useCallback(() => {
     generation.current++;
     controller.current?.abort();
@@ -140,23 +165,21 @@ export default function App() {
         }
       })
       .catch(() => {
-        if (active)
-          setError(
-            "本地资料未能打开。请关闭应用后重新打开；不会自动清空数据。",
-          );
+        if (active) setError("本地资料未能打开。可以重试，不会自动清空数据。");
       });
     return () => {
       active = false;
       mounted.current = false;
       controller.current?.abort();
     };
-  }, []);
+  }, [startupAttempt]);
   useEffect(() => {
     const id = setTimeout(() => setQuery(search.trim()), 250);
     return () => clearTimeout(id);
   }, [search]);
   useEffect(() => {
     if (!repo) return;
+    let active = true;
     const id = ++loadGeneration.current;
     Promise.all([
       repo.listSources(),
@@ -170,7 +193,8 @@ export default function App() {
       repo.listChannels({ mode: "recent" }),
     ])
       .then(([s, c, g, r]) => {
-        if (id === loadGeneration.current) {
+        if (active && id === loadGeneration.current) {
+          setListError("");
           setSources(s);
           setChannels(c);
           setGroups(g);
@@ -184,8 +208,18 @@ export default function App() {
           }
         }
       })
-      .catch(() => setError("读取资料失败，请重试"));
-  }, [repo, tab, sourceId, group, query, revision]);
+      .catch(() => {
+        if (active && id === loadGeneration.current)
+          setListError("读取资料失败，你的频道与收藏仍保存在本机。");
+      })
+      .finally(() => {
+        if (active && id === loadGeneration.current)
+          setLoadedRequest(loadRequest);
+      });
+    return () => {
+      active = false;
+    };
+  }, [repo, tab, sourceId, group, query, revision, loadRequest]);
   useEffect(() => {
     const sub = Network.addNetworkStateListener((net) => {
       if (!isOffline(net) && !mightUseMobileData(net)) setMobileAccepted(false);
@@ -200,11 +234,21 @@ export default function App() {
   }, [cancelTask]);
   const guardRemote = async () => {
     if (remoteRef.current) return true;
+    if (revokePending) {
+      setError("联网许可撤销尚未保存，请先在设置中重试保存撤销。");
+      return false;
+    }
     const epoch = permissionEpoch.current;
     const ok = await confirm("允许访问节目来源？", RISK, "了解风险并允许");
     if (!ok || !repo || epoch !== permissionEpoch.current || !mounted.current)
       return false;
-    await repo.setSetting("remoteAllowed", true);
+    try {
+      await repo.setSetting("remoteAllowed", true);
+    } catch {
+      setError("无法保存网络许可，请重试");
+      return false;
+    }
+    if (epoch !== permissionEpoch.current || !mounted.current) return false;
     remoteRef.current = true;
     setRemoteAllowed(true);
     return true;
@@ -416,18 +460,10 @@ export default function App() {
       setPlaying((p) => (p ? patch(p) : p));
       setPlayQueue((q) => q.map(patch));
       setRecent((r) => r.map(patch));
-      if (tab === "favorites" && fav) {
-        // A channel newly favorited from the player belongs in this list.
-        changed();
-        return;
-      }
-      // Patch in place instead of re-querying thousands of rows per tap.
-      setChannels((list) =>
-        tab === "favorites"
-          ? list.filter((x) => x.id !== c.id)
-          : list.map(patch),
-      );
-      setSources(await repo.listSources());
+      setChannels((list) => list.map(patch));
+      // Re-read the current view after a write: the user may have switched tabs
+      // while SQLite was saving. Never filter using the initiating tab.
+      changed();
     } catch {
       setError("收藏未能保存，请重试");
     }
@@ -470,6 +506,7 @@ export default function App() {
   const revoke = async () => {
     if (!repo) return;
     if (
+      !revokePending &&
       !(await confirm(
         "撤销联网许可？",
         "将停止播放并取消导入。下次联网前会再次说明风险。",
@@ -478,12 +515,15 @@ export default function App() {
     )
       return;
     permissionEpoch.current++;
+    setError("");
     remoteRef.current = false;
     setRemoteAllowed(false);
+    setRevokePending(true);
     setPlaying(null);
     cancelTask();
     try {
       await repo.setSetting("remoteAllowed", false);
+      setRevokePending(false);
     } catch {
       setError("许可已在本次运行中撤销，但未能保存。请重试撤销。");
     }
@@ -501,10 +541,12 @@ export default function App() {
     permissionEpoch.current++;
     remoteRef.current = false;
     setRemoteAllowed(false);
+    setRevokePending(true);
     setPlaying(null);
     cancelTask();
     try {
       await repo.clearAll();
+      setRevokePending(false);
       setMobileWarning(true);
       setMobileAccepted(false);
       setSourceId("");
@@ -522,13 +564,23 @@ export default function App() {
         <View style={styles.content}>
           <Heading title="静看" subtitle="只留下你想看的频道" />
           {error ? (
-            <Notice title={error} error />
+            <>
+              <Notice title={error} error />
+              <Button
+                label="重新打开本地资料"
+                onPress={() => {
+                  setError("");
+                  setStartupAttempt((value) => value + 1);
+                }}
+              />
+            </>
           ) : (
             <ActivityIndicator color={colors.accent} />
           )}
         </View>
       </SafeAreaView>
     );
+  const resumable = recent.find((channel) => channel.active);
   const listHeader = (
     <View style={{ gap: 12, marginBottom: 12 }}>
       <Heading
@@ -543,7 +595,7 @@ export default function App() {
               : `${sources.length} 份节目单 · 当前 ${channels.length} 个频道`
         }
       />
-      {tab === "favorites" && recent[0]?.active && (
+      {tab === "favorites" && resumable && (
         <>
           <Image
             source={require("../assets/quiet-landscape.png")}
@@ -551,10 +603,10 @@ export default function App() {
             resizeMode="contain"
             accessibilityLabel="静看山景插画"
           />
-          <Text style={styles.heading}>上次看到 · {recent[0].name}</Text>
+          <Text style={styles.heading}>上次看到 · {resumable.name}</Text>
           <Button
             label="继续观看"
-            onPress={() => void play(recent[0], recent)}
+            onPress={() => void play(resumable, recent)}
           />
         </>
       )}
@@ -566,6 +618,16 @@ export default function App() {
         value={search}
         onChangeText={setSearch}
       />
+      {!!search && (
+        <Button
+          label="清除搜索"
+          secondary
+          onPress={() => {
+            setSearch("");
+            setQuery("");
+          }}
+        />
+      )}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -638,14 +700,24 @@ export default function App() {
           <Card>
             <Text style={styles.heading}>联网与 HTTP 许可</Text>
             <Text style={styles.body}>
-              {remoteAllowed
-                ? "已允许可信来源联网，可能包含明文内容"
-                : "未允许联网，频道资料仍可离线查看"}
+              {revokePending
+                ? "联网已停止，撤销尚未保存。请重试保存，避免重启后恢复旧许可。"
+                : remoteAllowed
+                  ? "已允许可信来源联网，可能包含明文内容"
+                  : "未允许联网，频道资料仍可离线查看"}
             </Text>
             <Button
               secondary
-              label={remoteAllowed ? "撤销联网许可" : "阅读风险并允许"}
-              onPress={() => void (remoteAllowed ? revoke() : guardRemote())}
+              label={
+                revokePending
+                  ? "重试保存撤销"
+                  : remoteAllowed
+                    ? "撤销联网许可"
+                    : "阅读风险并允许"
+              }
+              onPress={() =>
+                void (remoteAllowed || revokePending ? revoke() : guardRemote())
+              }
             />
           </Card>
           <Card>
@@ -698,9 +770,12 @@ export default function App() {
       ) : (
         <FlatList
           ref={listRef}
-          data={channels}
+          data={!hasCurrentList || listError ? [] : channels}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           onScroll={(e) => {
-            tabOffsets.current[tab] = e.nativeEvent.contentOffset.y;
+            if (!listLoading)
+              tabOffsets.current[tab] = e.nativeEvent.contentOffset.y;
           }}
           scrollEventThrottle={100}
           keyExtractor={(c) => c.id}
@@ -715,46 +790,63 @@ export default function App() {
             />
           )}
           ListEmptyComponent={
-            <View style={{ gap: 12 }}>
-              <Notice
-                title={
-                  !sources.length
-                    ? "从一份节目单开始"
-                    : query || sourceId || group
-                      ? "没有找到频道"
-                      : tab === "favorites"
-                        ? "还没有收藏"
-                        : tab === "recent"
-                          ? "还没有观看记录"
-                          : "没有可用频道"
-                }
-                body={
-                  !sources.length
-                    ? "添加你信任的 M3U 链接或本地文件。频道、收藏和最近观看保存在这台手机。"
-                    : "可以清空筛选，或去频道页看看。"
-                }
-              />
-              {!sources.length ? (
-                <>
-                  <Button label="添加节目单" onPress={() => startForm("url")} />
-                  <Button
-                    label="从文件导入"
-                    secondary
-                    onPress={() => startForm("file")}
-                  />
-                </>
-              ) : (
-                <Button
-                  label="查看全部频道"
-                  onPress={() => {
-                    setTab("all");
-                    setSourceId("");
-                    setGroup("");
-                    setSearch("");
-                  }}
+            listLoading ? (
+              <View style={{ gap: 12 }}>
+                <ActivityIndicator color={colors.accent} />
+                <Text style={styles.muted} accessibilityLiveRegion="polite">
+                  正在读取频道…
+                </Text>
+              </View>
+            ) : listError ? (
+              <View style={{ gap: 12 }}>
+                <Notice title={listError} error />
+                <Button label="重新读取频道" onPress={changed} />
+              </View>
+            ) : (
+              <View style={{ gap: 12 }}>
+                <Notice
+                  title={
+                    !sources.length
+                      ? "从一份节目单开始"
+                      : query || sourceId || group
+                        ? "没有找到频道"
+                        : tab === "favorites"
+                          ? "还没有收藏"
+                          : tab === "recent"
+                            ? "还没有观看记录"
+                            : "没有可用频道"
+                  }
+                  body={
+                    !sources.length
+                      ? "添加你信任的 M3U 链接或本地文件。频道、收藏和最近观看保存在这台手机。"
+                      : "可以清空筛选，或去频道页看看。"
+                  }
                 />
-              )}
-            </View>
+                {!sources.length ? (
+                  <>
+                    <Button
+                      label="添加节目单"
+                      onPress={() => startForm("url")}
+                    />
+                    <Button
+                      label="从文件导入"
+                      secondary
+                      onPress={() => startForm("file")}
+                    />
+                  </>
+                ) : (
+                  <Button
+                    label="查看全部频道"
+                    onPress={() => {
+                      setTab("all");
+                      setSourceId("");
+                      setGroup("");
+                      setSearch("");
+                    }}
+                  />
+                )}
+              </View>
+            )
           }
         />
       )}

@@ -44,13 +44,14 @@ describe("M3U bounded import parser", () => {
     const result = await parseM3U(
       m3u(
         line("甲", "https://a.example.com/one", 'tvg-id="same"'),
+        line("甲", "https://a.example.com/one", 'tvg-id="same"'),
         line("乙", "https://a.example.com/two", 'tvg-id="same"'),
         line("甲", "https://a.example.com/three"),
         line("重复", "https://a.example.com/three"),
         line("独立", "https://a.example.com/four", 'tvg-id="unique"'),
       ),
     );
-    expect(result.stats).toMatchObject({ valid: 4, duplicates: 1, total: 5 });
+    expect(result.stats).toMatchObject({ valid: 4, duplicates: 2, total: 6 });
     expect(result.channels.map((c) => c.identityKey)).toEqual([
       "url:https://a.example.com/one",
       "url:https://a.example.com/two",
@@ -58,6 +59,21 @@ describe("M3U bounded import parser", () => {
       "id:unique",
     ]);
     expect(result.channels[2].name).toBe("甲");
+  });
+
+  it("keeps a trusted tvg-id when its normalized URL is repeated", async () => {
+    const result = await parseM3U(
+      m3u(
+        line("新闻", "https://a.example.com/live", 'tvg-id="news"'),
+        line("新闻", "HTTPS://A.EXAMPLE.COM:443/live", 'tvg-id="news"'),
+      ),
+    );
+    expect(result.channels).toMatchObject([
+      { identityKey: "id:news", streamUrl: "https://a.example.com/live" },
+    ]);
+    expect(result.channels).toHaveLength(1);
+    expect(result.stats).toMatchObject({ valid: 1, duplicates: 1, total: 2 });
+    expect(result.issues).toEqual([{ line: 4, reason: "duplicate" }]);
   });
 
   it("supports HTTP only as metadata and reports how many accepted entries use it", async () => {

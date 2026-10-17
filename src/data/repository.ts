@@ -534,7 +534,11 @@ export class Repository {
         await tx.runAsync("DELETE FROM settings");
       });
       // Best-effort truncate WAL; secure_delete erases freed cells, not guaranteed physical sanitization.
-      await this.db.execAsync("PRAGMA wal_checkpoint(TRUNCATE);");
+      try {
+        await this.db.execAsync("PRAGMA wal_checkpoint(TRUNCATE);");
+      } catch {
+        // The deletion is already committed; checkpoint failure must not report it as failed.
+      }
     });
   }
 }

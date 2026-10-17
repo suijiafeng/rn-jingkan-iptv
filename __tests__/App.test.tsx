@@ -2,6 +2,7 @@ import React from "react";
 import { Alert } from "react-native";
 import {
   fireEvent,
+  act,
   render,
   screen,
   waitFor,
@@ -39,11 +40,228 @@ const repo = {
   setSetting: jest.fn(async () => {}),
   importSource: jest.fn(async () => ({ id: "s" })),
   cancelRefresh: jest.fn(),
+  toggleFavorite: jest.fn(),
 };
 beforeEach(() => {
   jest.clearAllMocks();
   repo.getSetting.mockImplementation(async (_k, fallback) => fallback);
+  repo.listChannels.mockImplementation(async () => []);
+  repo.listSources.mockImplementation(async () => []);
+  repo.setSetting.mockImplementation(async () => {});
+  repo.toggleFavorite.mockReset();
   (openRepository as jest.Mock).mockResolvedValue(repo);
+});
+test("startup failure can retry opening local data without restarting", async () => {
+  (openRepository as jest.Mock).mockRejectedValueOnce(new Error("unavailable"));
+  await render(<App />);
+  await waitFor(() =>
+    expect(screen.getByText("重新打开本地资料")).toBeTruthy(),
+  );
+  await fireEvent.press(screen.getByText("重新打开本地资料"));
+  await waitFor(() =>
+    expect(screen.getByText("从一份节目单开始")).toBeTruthy(),
+  );
+  expect(openRepository).toHaveBeenCalledTimes(2);
+});
+test("loading does not invite users to import before local data has loaded", async () => {
+  let finish!: (value: never[]) => void;
+  repo.listSources.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await render(<App />);
+  await waitFor(() => expect(screen.getByText("正在读取频道…")).toBeTruthy());
+  expect(screen.queryByText("从一份节目单开始")).toBeNull();
+  await act(async () => finish([]));
+  await waitFor(() =>
+    expect(screen.getByText("从一份节目单开始")).toBeTruthy(),
+  );
+});
+test("failed list reads have a working retry", async () => {
+  repo.listSources.mockRejectedValueOnce(new Error("read failed"));
+  await render(<App />);
+  await waitFor(() => expect(screen.getByText("重新读取频道")).toBeTruthy());
+  expect(screen.queryByText("从一份节目单开始")).toBeNull();
+  await fireEvent.press(screen.getByText("重新读取频道"));
+  await waitFor(() =>
+    expect(screen.getByText("从一份节目单开始")).toBeTruthy(),
+  );
+});
+test("an obsolete list failure cannot replace the current tab results", async () => {
+  let fail!: (error: Error) => void;
+  repo.listSources.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+  );
+  await render(<App />);
+  await waitFor(() => expect(screen.getByText("正在读取频道…")).toBeTruthy());
+  await fireEvent.press(screen.getByText("最近"));
+  await waitFor(() =>
+    expect(screen.getByText("从一份节目单开始")).toBeTruthy(),
+  );
+  await act(async () => fail(new Error("late failure")));
+  expect(screen.queryByText("重新读取频道")).toBeNull();
+});
+test("settings permission write failures are shown without granting access", async () => {
+  repo.setSetting.mockRejectedValueOnce(new Error("write failed"));
+  jest
+    .spyOn(Alert, "alert")
+    .mockImplementation((_t, _m, buttons) => buttons?.[1].onPress?.());
+  await render(<App />);
+  await waitFor(() =>
+    expect(screen.getByText("从一份节目单开始")).toBeTruthy(),
+  );
+  await fireEvent.press(screen.getByText("设置"));
+  await fireEvent.press(screen.getByText("阅读风险并允许"));
+  await waitFor(() =>
+    expect(screen.getByText("无法保存网络许可，请重试")).toBeTruthy(),
+  );
+  expect(screen.getByText("未允许联网，频道资料仍可离线查看")).toBeTruthy();
+  expect(downloadPlaylist).not.toHaveBeenCalled();
+});
+test("failed revocation stays blocked and can persist a retry without another consent prompt", async () => {
+  let persistedAllowed = true;
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" ? persistedAllowed : fallback,
+  );
+  (repo.setSetting as jest.Mock).mockImplementation(async (key, value) => {
+    if (key === "remoteAllowed") persistedAllowed = value;
+  });
+  repo.setSetting.mockRejectedValueOnce(new Error("disk unavailable"));
+  const alert = jest
+    .spyOn(Alert, "alert")
+    .mockImplementation((_t, _m, buttons) => buttons?.[1].onPress?.());
+  const ui = await render(<App />);
+  await waitFor(() =>
+    expect(screen.getByText("从一份节目单开始")).toBeTruthy(),
+  );
+  await fireEvent.press(screen.getByText("设置"));
+  await fireEvent.press(screen.getByText("撤销联网许可"));
+  await waitFor(() => expect(screen.getByText("重试保存撤销")).toBeTruthy());
+  expect(persistedAllowed).toBe(true);
+  expect(screen.queryByText("阅读风险并允许")).toBeNull();
+  expect(
+    screen.getByText(
+      "联网已停止，撤销尚未保存。请重试保存，避免重启后恢复旧许可。",
+    ),
+  ).toBeTruthy();
+  await fireEvent.press(screen.getByText("重试保存撤销"));
+  await waitFor(() => expect(screen.getByText("阅读风险并允许")).toBeTruthy());
+  expect(alert).toHaveBeenCalledTimes(1);
+  expect(persistedAllowed).toBe(false);
+  expect(repo.setSetting.mock.calls).toEqual([
+    ["remoteAllowed", false],
+    ["remoteAllowed", false],
+  ]);
+  expect(
+    screen.queryByText("许可已在本次运行中撤销，但未能保存。请重试撤销。"),
+  ).toBeNull();
+  await ui.unmount();
+  await render(<App />);
+  await waitFor(() =>
+    expect(screen.getByText("从一份节目单开始")).toBeTruthy(),
+  );
+  await fireEvent.press(screen.getByText("设置"));
+  expect(screen.getByText("未允许联网，频道资料仍可离线查看")).toBeTruthy();
+  expect(downloadPlaylist).not.toHaveBeenCalled();
+});
+test.each(["频道", "最近"])(
+  "a pending unfavorite cannot remove a channel after switching to %s",
+  async (destination) => {
+    const channel = {
+      id: "c",
+      name: "频道A",
+      sourceId: "s",
+      sourceName: "测试来源",
+      groupName: "未分组",
+      active: true,
+      favorite: true,
+    };
+    let favorite = true;
+    (repo.listChannels as jest.Mock).mockImplementation(async (query) =>
+      query?.mode === "favorites" && !favorite
+        ? []
+        : [{ ...channel, favorite }],
+    );
+    (repo.listSources as jest.Mock).mockResolvedValue([
+      { id: "s", name: "测试来源" },
+    ]);
+    let finish!: () => void;
+    repo.toggleFavorite.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = () => {
+            favorite = false;
+            resolve(false);
+          };
+        }),
+    );
+    await render(<App />);
+    await waitFor(() =>
+      expect(screen.getByLabelText("取消收藏频道A")).toBeTruthy(),
+    );
+    await fireEvent.press(screen.getByLabelText("取消收藏频道A"));
+    await fireEvent.press(screen.getByText(destination, { exact: true }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("频道A，播放")).toBeTruthy(),
+    );
+    await act(async () => finish());
+    await waitFor(() =>
+      expect(screen.getByLabelText("收藏频道A")).toBeTruthy(),
+    );
+    expect(screen.getByLabelText("频道A，播放")).toBeTruthy();
+    expect(screen.queryByText("没有可用频道")).toBeNull();
+    await fireEvent.press(screen.getByText("收藏", { exact: true }));
+    await waitFor(() => expect(screen.getByText("还没有收藏")).toBeTruthy());
+  },
+);
+test("continue watching skips an unavailable latest channel", async () => {
+  const available = {
+    id: "available",
+    name: "可用频道",
+    active: true,
+    favorite: true,
+    sourceName: "自己的来源",
+    groupName: "未分组",
+  };
+  const unavailable = {
+    ...available,
+    id: "gone",
+    name: "失效频道",
+    active: false,
+  };
+  (repo.listChannels as jest.Mock).mockImplementation(async (query) =>
+    query?.mode === "recent" ? [unavailable, available] : [available],
+  );
+  await render(<App />);
+  await waitFor(() =>
+    expect(screen.getByText("上次看到 · 可用频道")).toBeTruthy(),
+  );
+  expect(screen.getByText("继续观看")).toBeTruthy();
+  expect(screen.queryByText("上次看到 · 失效频道")).toBeNull();
+});
+test("clear search restores an unfiltered query", async () => {
+  await render(<App />);
+  await waitFor(() =>
+    expect(screen.getByText("从一份节目单开始")).toBeTruthy(),
+  );
+  await fireEvent.changeText(screen.getByLabelText("搜索频道名称"), "测试频道");
+  await waitFor(() =>
+    expect(repo.listChannels).toHaveBeenCalledWith(
+      expect.objectContaining({ search: "测试频道" }),
+    ),
+  );
+  await fireEvent.press(screen.getByText("清除搜索"));
+  expect(screen.getByLabelText("搜索频道名称").props.value).toBe("");
+  await waitFor(() =>
+    expect(repo.listChannels).toHaveBeenCalledWith(
+      expect.objectContaining({ search: "" }),
+    ),
+  );
 });
 async function openForm() {
   await render(<App />);
