@@ -45,12 +45,20 @@ import { SettingsScreen } from "./features/settings/SettingsScreen";
 import {
   BottomTabs,
   ChannelListEmpty,
-  ChannelListHeader,
+  ChannelFilterBar,
+  ChannelListTitle,
+  hasFilterBar,
+  type HeaderProps,
   ListTab,
   Tab,
 } from "./features/channel/ChannelListParts";
 
 type ListFilters = { sourceId: string; group: string; search: string };
+// Sentinel rows: the sticky filter bar and the empty state live inside the
+// list data so the one virtualized list keeps its header pinned.
+const FILTER_ROW = { kind: "filters" } as const;
+const EMPTY_ROW = { kind: "empty" } as const;
+type ListItem = Channel | typeof FILTER_ROW | typeof EMPTY_ROW;
 
 export default function App() {
   const [repo, setRepo] = useState<Repository | null>(null),
@@ -114,7 +122,7 @@ export default function App() {
     remoteRef = useRef(false),
     permissionEpoch = useRef(0);
   // Each bottom tab keeps its own scroll position across tab switches.
-  const listRef = useRef<FlatList<Channel>>(null),
+  const listRef = useRef<FlatList<ListItem>>(null),
     tabOffsets = useRef<Partial<Record<Tab, number>>>({}),
     tabFilters = useRef<Partial<Record<ListTab, ListFilters>>>({}),
     restoreTab = useRef<Tab | null>(null);
@@ -808,6 +816,60 @@ export default function App() {
       </SafeAreaView>
     );
   const listTab: ListTab = tab === "settings" ? "all" : tab;
+  const listHeaderProps: HeaderProps = {
+    tab: listTab,
+    sources,
+    channelCount: channels.length,
+    search,
+    sourceId,
+    group,
+    groups,
+    recentBusy,
+    recentEditing,
+    recentCount: recent.length,
+    onToggleRecentEditing: () => {
+      if (recentBusy) return;
+      if (!recentEditing) {
+        tabOffsets.current.recent = 0;
+        restoreTab.current = "recent";
+        setSearch("");
+        setQuery("");
+      }
+      setRecentEditing((value) => !value);
+    },
+    onClearRecent: () => {
+      setError("");
+      void clearRecent().catch(() => setError("清空观看记录失败，请重试"));
+    },
+    onSearchChange: (text) => {
+      tabOffsets.current[tab] = 0;
+      restoreTab.current = tab;
+      setSearch(text);
+    },
+    onClearSearch: () => {
+      tabOffsets.current[tab] = 0;
+      restoreTab.current = tab;
+      setSearch("");
+      setQuery("");
+    },
+    onSourceChange: (id) => {
+      tabOffsets.current[tab] = 0;
+      restoreTab.current = tab;
+      setSourceId(id);
+      setGroup("");
+    },
+    onGroupChange: (name) => {
+      tabOffsets.current[tab] = 0;
+      restoreTab.current = tab;
+      setGroup(name);
+    },
+  };
+  const rows = !hasCurrentList || listError ? [] : channels;
+  const showFilterBar = hasFilterBar({ tab: listTab, recentEditing });
+  const listData: ListItem[] = [
+    ...(showFilterBar ? [FILTER_ROW] : []),
+    ...(rows.length ? rows : [EMPTY_ROW]),
+  ];
   return (
     <SafeAreaView
       style={styles.screen}
@@ -862,9 +924,13 @@ export default function App() {
             onClearAll={() => void clearAll()}
           />
         ) : (
-          <FlatList
+          <FlatList<ListItem>
+            testID="channel-list"
             ref={listRef}
-            data={!hasCurrentList || listError ? [] : channels}
+            data={listData}
+            extraData={listHeaderProps}
+            // Index 0 is the title (ListHeaderComponent); 1 is the filter bar.
+            stickyHeaderIndices={showFilterBar ? [1] : undefined}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
             onScroll={(e) => {
@@ -872,100 +938,60 @@ export default function App() {
                 tabOffsets.current[tab] = e.nativeEvent.contentOffset.y;
             }}
             scrollEventThrottle={100}
-            keyExtractor={(c) => c.id}
+            keyExtractor={(item) =>
+              item === FILTER_ROW
+                ? "__filters__"
+                : item === EMPTY_ROW
+                  ? "__empty__"
+                  : (item as Channel).id
+            }
             contentContainerStyle={styles.content}
-            ListHeaderComponent={
-              <ChannelListHeader
-                key={listTab}
-                tab={listTab}
-                sources={sources}
-                channelCount={channels.length}
-                search={search}
-                sourceId={sourceId}
-                group={group}
-                groups={groups}
-                recentBusy={recentBusy}
-                recentEditing={recentEditing}
-                recentCount={recent.length}
-                onToggleRecentEditing={() => {
-                  if (recentBusy) return;
-                  if (!recentEditing) {
-                    tabOffsets.current.recent = 0;
-                    restoreTab.current = "recent";
-                    setSearch("");
-                    setQuery("");
-                  }
-                  setRecentEditing((value) => !value);
-                }}
-                onClearRecent={() => {
-                  setError("");
-                  void clearRecent().catch(() =>
-                    setError("清空观看记录失败，请重试"),
-                  );
-                }}
-                onSearchChange={(text) => {
-                  tabOffsets.current[tab] = 0;
-                  restoreTab.current = tab;
-                  setSearch(text);
-                }}
-                onClearSearch={() => {
-                  tabOffsets.current[tab] = 0;
-                  restoreTab.current = tab;
-                  setSearch("");
-                  setQuery("");
-                }}
-                onSourceChange={(id) => {
-                  tabOffsets.current[tab] = 0;
-                  restoreTab.current = tab;
-                  setSourceId(id);
-                  setGroup("");
-                }}
-                onGroupChange={(name) => {
-                  tabOffsets.current[tab] = 0;
-                  restoreTab.current = tab;
-                  setGroup(name);
-                }}
-              />
-            }
+            ListHeaderComponent={<ChannelListTitle {...listHeaderProps} />}
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-            renderItem={({ item }) => (
-              <ChannelRow
-                channel={item}
-                onPlay={() => void play(item)}
-                onFavorite={() => void favorite(item)}
-                onRemoveRecent={
-                  tab === "recent" && recentEditing
-                    ? () => {
-                        setError("");
-                        void removeRecent(item).catch(() =>
-                          setError("删除观看记录失败，请重试"),
-                        );
-                      }
-                    : undefined
-                }
-                recentBusy={recentBusy}
-              />
-            )}
-            ListEmptyComponent={
-              <ChannelListEmpty
-                tab={listTab}
-                loading={listLoading}
-                error={listError}
-                hasSources={sources.length > 0}
-                filtered={!!(query || sourceId || group)}
-                onRetry={changed}
-                onAddUrl={() => startForm("url")}
-                onAddFile={() => startForm("file")}
-                onShowAll={() => {
-                  setRecentEditing(false);
-                  setTab("all");
-                  setSourceId("");
-                  setGroup("");
-                  setSearch("");
-                  setQuery("");
-                }}
-              />
-            }
+            renderItem={({ item }) => {
+              if (item === FILTER_ROW)
+                return <ChannelFilterBar key={listTab} {...listHeaderProps} />;
+              if (item === EMPTY_ROW)
+                return (
+                  <ChannelListEmpty
+                    tab={listTab}
+                    loading={listLoading}
+                    error={listError}
+                    hasSources={sources.length > 0}
+                    filtered={!!(query || sourceId || group)}
+                    onRetry={changed}
+                    onAddUrl={() => startForm("url")}
+                    onAddFile={() => startForm("file")}
+                    onShowAll={() => {
+                      setRecentEditing(false);
+                      setTab("all");
+                      setSourceId("");
+                      setGroup("");
+                      setSearch("");
+                      setQuery("");
+                    }}
+                  />
+                );
+              const channel = item as Channel;
+              return (
+                <ChannelRow
+                  channel={channel}
+                  onPlay={() => void play(channel)}
+                  onFavorite={() => void favorite(channel)}
+                  onRemoveRecent={
+                    tab === "recent" && recentEditing
+                      ? () => {
+                          setError("");
+                          void removeRecent(channel).catch(() =>
+                            setError("删除观看记录失败，请重试"),
+                          );
+                        }
+                      : undefined
+                  }
+                  recentBusy={recentBusy}
+                />
+              );
+            }}
           />
         )}
         <BottomTabs tab={tab} onChange={changeTab} />

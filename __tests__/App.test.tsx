@@ -1148,3 +1148,32 @@ test("the player opens without waiting for the full catalog, which is loaded onc
   );
   expect(catalogCalls.filter((q) => q === undefined).length).toBe(loads);
 });
+
+test("the filter bar is pinned while the title scrolls away", async () => {
+  (repo.listSources as jest.Mock).mockImplementation(async () => [
+    { id: "s", name: "来源", channelCount: 1 },
+  ]);
+  (repo.listChannels as jest.Mock).mockImplementation(
+    async (query?: { mode?: string }) =>
+      query?.mode === "favorites" || query?.mode === "recent"
+        ? []
+        : [
+            {
+              id: "a",
+              name: "甲台",
+              active: true,
+              favorite: false,
+              sourceId: "s",
+              sourceName: "来源",
+              groupName: "新闻",
+            },
+          ],
+  );
+  await render(<App />);
+  await screen.findByLabelText("甲台，播放");
+  const list = screen.getByTestId("channel-list");
+  expect(list.props.stickyHeaderIndices).toEqual([1]);
+  // Row 0 of the data is the filter bar itself, so search stays reachable.
+  expect(list.props.data[0]).toEqual({ kind: "filters" });
+  expect(screen.getByLabelText("搜索频道名称")).toBeTruthy();
+});
