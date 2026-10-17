@@ -12,6 +12,8 @@ export const M3U_LIMITS = Object.freeze({
   maxEntries: 20_000,
   yieldEveryLines: 200,
 });
+const HLS_STRUCTURE_TAG =
+  /^#EXT-X-(?:TARGETDURATION|MEDIA-SEQUENCE|DISCONTINUITY-SEQUENCE|STREAM-INF|I-FRAME-STREAM-INF|MEDIA|KEY|MAP|BYTERANGE|PLAYLIST-TYPE|ENDLIST|PART-INF|PART|SERVER-CONTROL)(?=[:\s]|$)/i;
 export type M3UErrorCode =
   | "empty"
   | "missing_header"
@@ -189,7 +191,9 @@ export async function parseM3U(
       headerSeen = true;
       continue;
     }
-    if (/^#EXT-X-/i.test(line)) throw new M3UParseError("hls_playlist");
+    // Only tags that define an HLS media/master playlist reject the file;
+    // stray #EXT-X-* lines in hand-edited channel directories are ignored.
+    if (HLS_STRUCTURE_TAG.test(line)) throw new M3UParseError("hls_playlist");
     if (/^#EXTINF:/i.test(line)) {
       if (pending) addIssue(pending.line, "dangling_extinf");
       countEntry();

@@ -129,6 +129,13 @@ describe("M3U bounded import parser", () => {
     ).rejects.toMatchObject({ code: "hls_playlist" });
   });
 
+  it("ignores non-structural #EXT-X-* lines inside a channel directory", async () => {
+    const result = await parseM3U(
+      "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-APP-NOTE:x\n#EXTINF:-1,新闻\nhttps://a.example.com/news.m3u8",
+    );
+    expect(result.channels.map((c) => c.name)).toEqual(["新闻"]);
+  });
+
   it.each([
     ["", "empty"],
     ["<html>not a playlist</html>", "missing_header"],

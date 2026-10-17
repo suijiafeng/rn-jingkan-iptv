@@ -25,6 +25,7 @@ jest.mock("expo-network", () => ({
     isConnected: true,
     type: "WIFI",
   })),
+  addNetworkStateListener: jest.fn(() => ({ remove: jest.fn() })),
   NetworkStateType: { CELLULAR: "CELLULAR" },
 }));
 jest.mock("react-native-safe-area-context", () => ({

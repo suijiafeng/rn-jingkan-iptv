@@ -1,4 +1,13 @@
-# 验证记录 · 2026-10-17 UTC
+# 验证记录
+
+## 2026-10-18 · 审查后修订（分支 fix/review-followups）
+
+- 本机实际运行：npm ci、typecheck 通过、lint 通过、Jest 9 个套件 114 项通过、build:bundle 通过。
+- expo prebuild 后核对 AndroidManifest：allowBackup=false、dataExtractionRules=@xml/jingkan_data_extraction_rules、fullBackupContent=@xml/jingkan_backup_rules、usesCleartextTraffic=true；规则文件已生成。
+- 新增测试：250 个频道跨批次导入与刷新保持 ID 和顺序；非结构性 #EXT-X-* 行被忽略。失败注入测试改为在第一批频道写入时失败。
+- 未运行：APK 构建、模拟器、S25 Ultra 真机（沉浸式全屏、控件自动隐藏、Smart Switch 迁移排除、VPN 下计费提醒、换台耗时均待测）。全屏控件显隐与计费确认记忆暂无自动化测试。
+
+## 2026-10-17 UTC · 初版
 
 ## 已运行
 

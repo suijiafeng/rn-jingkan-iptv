@@ -97,6 +97,44 @@ afterEach(() => {
 });
 
 describe("SQLite repository with real SQLite", () => {
+  it("batches large imports across statement boundaries and keeps order and IDs on refresh", async () => {
+    const many = (prefix: string) =>
+      content(
+        Array.from({ length: 250 }, (_, i) => ({
+          name: `${prefix}${i}`,
+          id: `ch${i}`,
+          url: `https://a.example.com/${prefix}${i}`,
+        })),
+      );
+    const first = many("旧");
+    const source = await repo.importSource({
+      name: "大列表",
+      kind: "file",
+      location: "big.m3u",
+      content: first,
+      preview: await parseM3U(first),
+    });
+    const before = await repo.listChannels();
+    expect(before).toHaveLength(250);
+    expect(before.map((c) => c.sortIndex)).toEqual(
+      Array.from({ length: 250 }, (_, i) => i),
+    );
+    const token = await repo.beginRefresh(source.id);
+    const second = many("新");
+    await repo.refreshSource(
+      source.id,
+      token.revision,
+      await parseM3U(second),
+      {
+        generation: token.generation,
+        content: second,
+      },
+    );
+    const after = await repo.listChannels();
+    expect(after.map((c) => c.id)).toEqual(before.map((c) => c.id));
+    expect(after[249]).toMatchObject({ name: "新249", sortIndex: 249 });
+  });
+
   it("migrates once, stores file source privately and reopens without data loss", async () => {
     const source = await importInitial();
     expect(source).toMatchObject({
@@ -211,7 +249,9 @@ describe("SQLite repository with real SQLite", () => {
     );
     let writes = 0;
     db.failWhen = (sql) =>
-      sql.startsWith("INSERT INTO channels") && ++writes === 2;
+      // Channels are inserted in batches; fail the first batch, after earlier
+      // writes in the same transaction have already happened.
+      sql.startsWith("INSERT INTO channels") && ++writes === 1;
     await expect(repo.refreshSource(source.id, 1, replacement)).rejects.toThrow(
       "simulated disk failure",
     );
@@ -226,7 +266,9 @@ describe("SQLite repository with real SQLite", () => {
   it("rolls back all of a failed import", async () => {
     let writes = 0;
     db.failWhen = (sql) =>
-      sql.startsWith("INSERT INTO channels") && ++writes === 2;
+      // Channels are inserted in batches; fail the first batch, after earlier
+      // writes in the same transaction have already happened.
+      sql.startsWith("INSERT INTO channels") && ++writes === 1;
     await expect(importInitial()).rejects.toThrow("simulated disk failure");
     db.failWhen = undefined;
     expect(await repo.listSources()).toEqual([]);

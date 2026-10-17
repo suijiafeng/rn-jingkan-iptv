@@ -75,6 +75,7 @@ const CHANNEL_SELECT = `SELECT c.*, s.name AS sourceName,
   CASE WHEN f.channelId IS NOT NULL THEN 1 ELSE 0 END AS favorite,
   r.lastPlayedAt AS lastPlayedAt FROM channels c JOIN sources s ON s.id = c.sourceId
   LEFT JOIN favorites f ON f.channelId = c.id LEFT JOIN recents r ON r.channelId = c.id`;
+const INSERT_BATCH = 90;
 const CLEAN_UNREFERENCED = `DELETE FROM channels WHERE active = 0
   AND NOT EXISTS (SELECT 1 FROM favorites WHERE channelId = channels.id)
   AND NOT EXISTS (SELECT 1 FROM recents WHERE channelId = channels.id)`;
@@ -367,13 +368,17 @@ export class Repository {
     const identities = new Map(
       existing.map((row) => [row.identityKey, row.id]),
     );
-    for (const [index, channel] of preview.channels.entries()) {
-      await tx.runAsync(
-        `INSERT INTO channels(id,sourceId,identityKey,name,groupName,tvgId,logoUrl,streamUrl,sortIndex,active,lastSeenRevision)
-        VALUES(?,?,?,?,?,?,?,?,?,1,?) ON CONFLICT(sourceId, identityKey) DO UPDATE SET
-        name=excluded.name,groupName=excluded.groupName,tvgId=excluded.tvgId,logoUrl=excluded.logoUrl,
-        streamUrl=excluded.streamUrl,sortIndex=excluded.sortIndex,active=1,lastSeenRevision=excluded.lastSeenRevision`,
-        [
+    // Multi-row statements: one native round trip per batch instead of per
+    // channel. 10 bound values per row stays under SQLite's 999 default limit.
+    for (
+      let start = 0;
+      start < preview.channels.length;
+      start += INSERT_BATCH
+    ) {
+      const batch = preview.channels.slice(start, start + INSERT_BATCH);
+      const params: SqlValue[] = [];
+      batch.forEach((channel, offset) => {
+        params.push(
           identities.get(channel.identityKey) ?? this.makeId(),
           sourceId,
           channel.identityKey,
@@ -382,9 +387,16 @@ export class Repository {
           channel.tvgId,
           channel.logoUrl,
           channel.streamUrl,
-          index,
+          start + offset,
           revision,
-        ],
+        );
+      });
+      await tx.runAsync(
+        `INSERT INTO channels(id,sourceId,identityKey,name,groupName,tvgId,logoUrl,streamUrl,sortIndex,active,lastSeenRevision)
+        VALUES${batch.map(() => "(?,?,?,?,?,?,?,?,?,1,?)").join(",")} ON CONFLICT(sourceId, identityKey) DO UPDATE SET
+        name=excluded.name,groupName=excluded.groupName,tvgId=excluded.tvgId,logoUrl=excluded.logoUrl,
+        streamUrl=excluded.streamUrl,sortIndex=excluded.sortIndex,active=1,lastSeenRevision=excluded.lastSeenRevision`,
+        params,
       );
     }
   }

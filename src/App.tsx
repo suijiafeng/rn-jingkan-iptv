@@ -38,6 +38,10 @@ import { Button, Card, Heading, Notice } from "./components/ui";
 import { ChannelRow } from "./components/ChannelRow";
 import { colors, styles } from "./theme";
 import { PlayerScreen } from "./features/player/PlayerScreen";
+import {
+  isOffline,
+  mightUseMobileData,
+} from "./features/player/playbackController";
 
 const RISK =
   "本应用直接连接你选择的服务器，服务器会收到 IP 地址与访问请求。HTTP 内容可能被旁观或篡改；即使主链接为 HTTPS，直播子清单、分片、密钥或重定向也可能使用 HTTP。本版本没有完整的 DNS、重定向与内网隔离保护。仅使用你信任且有权观看的来源。允许后适用于所有联网导入和播放；可随时在设置撤销。";
@@ -90,6 +94,8 @@ export default function App() {
     [groups, setGroups] = useState<string[]>([]);
   const [remoteAllowed, setRemoteAllowed] = useState(false),
     [mobileWarning, setMobileWarning] = useState(true),
+    // One confirmation covers this metered connection until Wi-Fi returns.
+    [mobileAccepted, setMobileAccepted] = useState(false),
     [form, setForm] = useState<Form | null>(null),
     [busy, setBusy] = useState(false),
     [formError, setFormError] = useState(""),
@@ -106,6 +112,10 @@ export default function App() {
     mounted = useRef(true),
     remoteRef = useRef(false),
     permissionEpoch = useRef(0);
+  // Each bottom tab keeps its own scroll position across tab switches.
+  const listRef = useRef<FlatList<Channel>>(null),
+    tabOffsets = useRef<Partial<Record<Tab, number>>>({}),
+    restoreTab = useRef<Tab | null>(null);
   const changed = useCallback(() => setRevision((v) => v + 1), []);
   const cancelTask = useCallback(() => {
     generation.current++;
@@ -165,10 +175,23 @@ export default function App() {
           setChannels(c);
           setGroups(g);
           setRecent(r);
+          if (restoreTab.current === tab) {
+            restoreTab.current = null;
+            const offset = tabOffsets.current[tab] ?? 0;
+            requestAnimationFrame(() =>
+              listRef.current?.scrollToOffset({ offset, animated: false }),
+            );
+          }
         }
       })
       .catch(() => setError("读取资料失败，请重试"));
   }, [repo, tab, sourceId, group, query, revision]);
+  useEffect(() => {
+    const sub = Network.addNetworkStateListener((net) => {
+      if (!isOffline(net) && !mightUseMobileData(net)) setMobileAccepted(false);
+    });
+    return () => sub.remove();
+  }, []);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state !== "active" && controller.current) cancelTask();
@@ -188,14 +211,18 @@ export default function App() {
   };
   const checkNetwork = async () => {
     const net = await Network.getNetworkStateAsync();
-    if (net.isConnected === false || net.isInternetReachable === false)
+    if (isOffline(net))
       throw new ImportIOError("当前没有可用网络，请连接后重试");
-    if (mobileWarning && net.type === Network.NetworkStateType.CELLULAR)
-      return confirm(
-        "使用移动数据？",
-        "下载节目单或播放直播会消耗流量。此次是否继续？",
+    // Same rule as playback: VPN/unknown transports may be metered.
+    if (mobileWarning && !mobileAccepted && mightUseMobileData(net)) {
+      const ok = await confirm(
+        "可能使用移动数据？",
+        "下载节目单或播放直播会消耗流量。确认后，在连回 Wi-Fi 之前不再询问。",
         "继续",
       );
+      if (ok) setMobileAccepted(true);
+      return ok;
+    }
     return true;
   };
   const closeForm = async () => {
@@ -381,13 +408,26 @@ export default function App() {
     }
   };
   const favorite = async (c: Channel) => {
+    if (!repo) return;
     try {
-      await repo?.toggleFavorite(c.id);
-      setPlaying((p) => (p?.id === c.id ? { ...p, favorite: !p.favorite } : p));
-      setPlayQueue((q) =>
-        q.map((x) => (x.id === c.id ? { ...x, favorite: !x.favorite } : x)),
+      const fav = await repo.toggleFavorite(c.id);
+      const patch = (x: Channel) =>
+        x.id === c.id ? { ...x, favorite: fav } : x;
+      setPlaying((p) => (p ? patch(p) : p));
+      setPlayQueue((q) => q.map(patch));
+      setRecent((r) => r.map(patch));
+      if (tab === "favorites" && fav) {
+        // A channel newly favorited from the player belongs in this list.
+        changed();
+        return;
+      }
+      // Patch in place instead of re-querying thousands of rows per tap.
+      setChannels((list) =>
+        tab === "favorites"
+          ? list.filter((x) => x.id !== c.id)
+          : list.map(patch),
       );
-      changed();
+      setSources(await repo.listSources());
     } catch {
       setError("收藏未能保存，请重试");
     }
@@ -466,6 +506,7 @@ export default function App() {
     try {
       await repo.clearAll();
       setMobileWarning(true);
+      setMobileAccepted(false);
       setSourceId("");
       setGroup("");
       setSearch("");
@@ -656,7 +697,12 @@ export default function App() {
         </ScrollView>
       ) : (
         <FlatList
+          ref={listRef}
           data={channels}
+          onScroll={(e) => {
+            tabOffsets.current[tab] = e.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={100}
           keyExtractor={(c) => c.id}
           contentContainerStyle={styles.content}
           ListHeaderComponent={listHeader}
@@ -734,7 +780,11 @@ export default function App() {
             key={key}
             label={label}
             secondary={tab !== key}
-            onPress={() => setTab(key)}
+            onPress={() => {
+              if (key === tab) return;
+              restoreTab.current = key;
+              setTab(key);
+            }}
             style={{ flex: 1, paddingHorizontal: 4 }}
           />
         ))}
@@ -1039,7 +1089,8 @@ export default function App() {
                 .catch(() => setError("观看记录未能保存"));
             }}
             remoteAllowed={remoteAllowed}
-            mobileWarning={mobileWarning}
+            mobileWarning={mobileWarning && !mobileAccepted}
+            onMobileAccepted={() => setMobileAccepted(true)}
           />
         </View>
       )}

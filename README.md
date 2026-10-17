@@ -4,7 +4,7 @@
 
 ## 当前交付状态
 
-完整可构建的 Expo / React Native 源码。已经完成 TypeScript、ESLint、112 项自动测试、Android Hermes JS bundle 与 Android 原生工程生成检查。
+完整可构建的 Expo / React Native 源码。已经完成 TypeScript、ESLint、114 项自动测试、Android Hermes JS bundle 与 Android 原生工程生成检查。需求规格见 docs/DEV_SPEC.md（v0.2，含与 v0.1 的变更汇总）。
 
 **尚未生成 APK，也没有完成 Android 模拟器或 S25 Ultra 真机播放验收。** 当前云环境没有 Android SDK，安装前需接受 Google Android SDK 条款；不会代替你自动接受。JS bundle 成功不能替代 APK 编译或实际播放验证。
 
@@ -16,7 +16,9 @@
 - 来源/分组/中文名称筛选，独立收藏按钮，最近 100 个成功播放频道
 - SQLite 事务刷新，稳定频道 ID；消失的收藏保留为失效条目，旧任务不能覆盖新数据或复活已删除来源
 - expo-video 原生播放器、暂停/重新连接直播、上一台/下一台、底部选台、横屏全屏与返回优先级
-- 明确联网许可、移动数据提醒、后台停止/释放、30 秒初始等待预算、未知错误手动重试
+- 沉浸式全屏（隐藏状态栏与导航栏），轻触画面显隐控件，播放中 4 秒自动隐藏，TalkBack 下不自动隐藏
+- 明确联网许可、移动数据提醒（VPN/未知网络按可能计费，确认一次至连回 Wi-Fi）、后台停止/释放、30 秒初始等待预算、未知错误手动重试
+- 备份与换机迁移排除：allowBackup=false + dataExtractionRules（含 device-transfer）+ fullBackupContent
 - 来源改名/刷新/命名删除确认；清理观看记录/全部资料；深色薄荷绿界面，48 dp 触控目标
 
 不内置频道，不自动下载列表或台标；不提供版权破解、付费节目授权、录制、后台播放、EPG、投屏和电视端。
@@ -26,7 +28,7 @@
 版本来自 Expo 58.0.14 的 bundledNativeModules.json，精确依赖见 package.json，完整锁定见 package-lock.json。
 
 - Node 24.19.0 / npm 11.9.0
-- Expo 58.0.14 / React Native 0.88.0 / React 19.3.0
+- Expo 58.0.14 / React Native 0.88.0 / React 19.3.0 / expo-navigation-bar 58.0.4
 - expo-video 58.0.11 / expo-sqlite 58.0.13
 - TypeScript 6.0.3 / Jest 30.5.2 / jest-expo 58.0.11 / RNTL 14.1.0
 - 原生生成配置：Gradle 9.4.1、compileSdk 37、targetSdk 36、minSdk 24、NDK 27.1.12297006。手机实际 Android/One UI 版本仍待记录。
@@ -72,7 +74,7 @@ fixtures/example.m3u 是自有结构测试夹具，example.com 地址是占位�
 
 平台允许 HTTP；用户知情许可是整个应用的联网许可，**不是 HTTPS-only 开关**。HTTPS 主链接仍可能引用明文子清单、分片、密钥或重定向。expo-video 的原生 HLS 请求不经过 JS 下载函数，因此本版本不声称能够阻断所有 DNS/重定向/内网请求。只使用可信来源。TLS 证书验证没有关闭。
 
-撤销联网许可会取消本应用导入并释放播放实例，但仍需真机确认原生请求实际停止时序。应用不打印来源令牌或观看记录，无遥测，Android allowBackup=false；厂商迁移/备份仍列为真机验收项。
+撤销联网许可会取消本应用导入并释放播放实例，但仍需真机确认原生请求实际停止时序。应用不打印来源令牌或观看记录，无遥测，Android allowBackup=false，并通过 dataExtractionRules 排除云备份与设备间迁移（Android 12+ 的 Smart Switch 走这条路径）；仍需真机确认。
 
 ## 仍需真机验收
 

@@ -7,6 +7,7 @@ import React, {
   useSyncExternalStore,
 } from "react";
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   AppState,
   BackHandler,
@@ -19,6 +20,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import { NavigationBar } from "expo-navigation-bar";
 import * as Network from "expo-network";
 import * as Orientation from "expo-screen-orientation";
 import { Button, Heading } from "../../components/ui";
@@ -41,6 +43,8 @@ export interface PlayerScreenProps {
   onStarted: (channel: Channel) => void;
   remoteAllowed: boolean;
   mobileWarning: boolean;
+  /** The user chose to continue on a possibly metered network. */
+  onMobileAccepted?: () => void;
 }
 
 const descriptions: Record<
@@ -54,7 +58,7 @@ const descriptions: Record<
   buffering: { title: "正在缓冲", body: "等待节目源传送画面" },
   cellular: {
     title: "可能使用移动数据",
-    body: "当前网络可能产生流量费用。是否继续播放？",
+    body: "当前网络可能产生流量费用。继续后，连回 Wi-Fi 之前不再询问。",
   },
   blocked: {
     title: "外部连接已关闭",
@@ -71,6 +75,8 @@ const descriptions: Record<
   },
   ended: { title: "节目流已结束", body: "可以重试连接，或选择其他频道" },
 };
+
+export const CONTROLS_HIDE_MS = 4000;
 
 /** Fullscreen and sheet belong to the screen, not to the replaceable channel. */
 export function PlayerScreen(props: PlayerScreenProps) {
@@ -145,6 +151,8 @@ export function PlayerScreen(props: PlayerScreenProps) {
       }
     >
       <StatusBar style="light" hidden={fullscreen} />
+      {/* Immersive: system bars reappear transiently on an edge swipe. */}
+      <NavigationBar hidden={fullscreen} />
       <ChannelSession
         key={`${props.channel.id}:${props.channel.streamUrl}`}
         {...props}
@@ -306,6 +314,50 @@ function ChannelSession(props: SessionProps) {
     controller.setPolicy(props.remoteAllowed, props.mobileWarning);
   }, [controller, props.remoteAllowed, props.mobileWarning]);
 
+  // Fullscreen controls: tap the picture to toggle; they auto-hide only while
+  // actually playing, and never for screen-reader users.
+  const [controlsShown, setControlsShown] = useState(true);
+  const [screenReader, setScreenReader] = useState(false);
+  useEffect(() => {
+    let live = true;
+    AccessibilityInfo.isScreenReaderEnabled()
+      .then((enabled) => {
+        if (live) setScreenReader(enabled);
+      })
+      .catch(() => {});
+    const sub = AccessibilityInfo.addEventListener(
+      "screenReaderChanged",
+      setScreenReader,
+    );
+    return () => {
+      live = false;
+      sub.remove();
+    };
+  }, []);
+  const autoHide =
+    props.fullscreen &&
+    controlsShown &&
+    !props.sheetOpen &&
+    !screenReader &&
+    state.phase === "playing";
+  useEffect(() => {
+    if (!autoHide) return;
+    const timer = setTimeout(() => setControlsShown(false), CONTROLS_HIDE_MS);
+    return () => clearTimeout(timer);
+  }, [autoHide]);
+  const controlsVisible =
+    !props.fullscreen ||
+    controlsShown ||
+    props.sheetOpen ||
+    screenReader ||
+    state.phase !== "playing";
+  // Entering or leaving fullscreen always starts with the controls shown.
+  const [lastFullscreen, setLastFullscreen] = useState(props.fullscreen);
+  if (lastFullscreen !== props.fullscreen) {
+    setLastFullscreen(props.fullscreen);
+    setControlsShown(true);
+  }
+
   const busy = ["checking", "connecting", "playing", "buffering"].includes(
     state.phase,
   );
@@ -388,6 +440,17 @@ function ChannelSession(props: SessionProps) {
             controller={controller}
           />
         )}
+        {props.fullscreen && (
+          <Pressable
+            testID="fullscreen-toggle-controls"
+            style={StyleSheet.absoluteFill}
+            accessibilityRole="button"
+            accessibilityLabel={
+              controlsVisible ? "隐藏播放控件" : "显示播放控件"
+            }
+            onPress={() => setControlsShown(!controlsVisible)}
+          />
+        )}
         {state.phase !== "playing" && (
           <View style={s.videoNotice} accessibilityLiveRegion="polite">
             {waiting && <ActivityIndicator color={colors.accent} />}
@@ -408,6 +471,7 @@ function ChannelSession(props: SessionProps) {
                   <Button
                     label="继续播放"
                     onPress={() => {
+                      props.onMobileAccepted?.();
                       void controller.requestPlay(true);
                     }}
                   />
@@ -417,7 +481,9 @@ function ChannelSession(props: SessionProps) {
           </View>
         )}
       </View>
-      <View style={props.fullscreen ? s.fullscreenTop : s.hidden}>
+      <View
+        style={props.fullscreen && controlsVisible ? s.fullscreenTop : s.hidden}
+      >
         <Button label="退出全屏" secondary onPress={props.onToggleFullscreen} />
         <Text style={[theme.heading, s.flex]} numberOfLines={1}>
           {props.channel.name}
@@ -469,7 +535,11 @@ function ChannelSession(props: SessionProps) {
           </Text>
         )}
       </View>
-      <View style={props.fullscreen ? s.fullscreenBottom : s.hidden}>
+      <View
+        style={
+          props.fullscreen && controlsVisible ? s.fullscreenBottom : s.hidden
+        }
+      >
         <View style={s.flex}>{previousButton}</View>
         <View style={s.flex}>{playButton}</View>
         <View style={s.flex}>{nextButton}</View>
