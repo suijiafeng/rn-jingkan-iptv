@@ -1,5 +1,15 @@
 # 验证记录
 
+## 2026-10-18 · 首次 APK 与模拟器实测
+
+- 本机 Android SDK + Corretto JDK 21：expo prebuild 后 ./gradlew assembleRelease（仅 arm64-v8a，模板 debug 签名）成功，首次 19 分钟；APK 约 31 MB。
+- 模拟器 Medium_Phone（Android 16，arm64，Google APIs）：安装启动正常；导入 iptv-org 中文列表预览 214 可导入 / 2 忽略 / 126 HTTP，与电脑端解析一致；保存后 214 个频道。
+- 实测发现并修复两个仅在原生环境出现的问题：
+  1. 系统联网验证（Google connectivitycheck）在当前网络不可达，Android 标记 PARTIAL_CONNECTIVITY，expo-network 报 isInternetReachable=false，应用判定“没有可用网络”拒绝导入和播放。改为只有 isConnected=false 或类型 NONE 才算离线。
+  2. 空构造的 ExoPlayer 立即进入 ENDED 并发出 playToEnd，控制器显示“节目流已结束”并释放播放器（随后 VideoView 挂载报 “shared object already released”）。改为只有本次尝试已开始播放后才接受结束事件。
+- 修复后：CCTV-1 (720p)（HTTP、82 端口）约 3 秒内出画面并显示“正在播放”；横屏全屏进入后状态栏与导航栏隐藏，4 秒后控件自动隐藏。
+- 仍未验证：三星 S25 Ultra 真机、声音输出、长时间播放、换台耗时、无后缀 HLS 实际起播、Smart Switch 迁移排除。
+
 ## 2026-10-18 · iptv-org 中文列表复验与端口/格式探测修订
 
 - 数据：https://iptv-org.github.io/iptv/languages/zho.m3u（216 条，2026-10-18 下载）。仅为公开列表的可用性观察，不是授权或受控验收基准。

@@ -37,10 +37,14 @@ const activePhases: PlaybackPhase[] = [
   "playing",
   "buffering",
 ];
+/**
+ * Only a missing link counts as offline. isInternetReachable reflects Android's
+ * own validation probe (Google connectivitycheck), which fails on networks
+ * that block it, e.g. in mainland China, while the internet works; the real
+ * request decides there.
+ */
 export const isOffline = (network: ConnectionState) =>
-  network.isConnected === false ||
-  network.isInternetReachable === false ||
-  network.type === "NONE";
+  network.isConnected === false || network.type === "NONE";
 /** VPN/unknown transports cannot establish that playback is on unmetered Wi-Fi. */
 export const mightUseMobileData = (network: ConnectionState) =>
   !["WIFI", "ETHERNET", "BLUETOOTH"].includes(network.type ?? "UNKNOWN");
@@ -224,7 +228,11 @@ export class PlaybackController {
     if (this.startedAttempt === id) this.pause("interrupted");
   }
   nativeEnded(id: number) {
-    if (this.isCurrentAttempt(id)) this.stop("ended");
+    // An empty ExoPlayer (constructed with no source) reports ENDED at once.
+    // Only a stream that actually played can end; earlier "ends" are left to
+    // the initial timeout or a real error.
+    if (this.isCurrentAttempt(id) && this.startedAttempt === id)
+      this.stop("ended");
   }
   dispose() {
     this.disposed = true;

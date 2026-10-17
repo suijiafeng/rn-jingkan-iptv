@@ -2,6 +2,7 @@ import {
   adjacentChannelIndex,
   backDestination,
   INITIAL_PLAY_TIMEOUT_MS,
+  isOffline,
   PlaybackController,
 } from "../playbackController";
 const wifi = { type: "WIFI", isConnected: true, isInternetReachable: true };
@@ -153,7 +154,58 @@ describe("playback intent and source isolation", () => {
   });
 });
 
+describe("stream end", () => {
+  test("an end event before playback started is ignored; after start it ends", async () => {
+    const controller = new PlaybackController({
+      remoteAllowed: true,
+      mobileWarning: false,
+      checkNetwork: async () => ({ type: "WIFI", isConnected: true }),
+      isAppActive: () => true,
+      onStarted: () => {},
+    });
+    await controller.requestPlay();
+    const id = controller.getSnapshot().attemptId!;
+    // Empty native player emits ENDED before the source is attached.
+    controller.nativeEnded(id);
+    expect(controller.getSnapshot()).toMatchObject({
+      phase: "connecting",
+      attemptId: id,
+    });
+    controller.nativeStarted(id);
+    controller.nativeEnded(id);
+    expect(controller.getSnapshot().phase).toBe("ended");
+    controller.dispose();
+  });
+});
+
 describe("network safety", () => {
+  test("an unvalidated but connected network is not treated as offline", async () => {
+    // Android marks networks that block Google's connectivity check as
+    // not reachable even though the internet works (common in mainland China).
+    const controller = new PlaybackController({
+      remoteAllowed: true,
+      mobileWarning: true,
+      checkNetwork: async () => ({
+        type: "WIFI",
+        isConnected: true,
+        isInternetReachable: false,
+      }),
+      isAppActive: () => true,
+      onStarted: () => {},
+    });
+    await controller.requestPlay();
+    expect(controller.getSnapshot().phase).toBe("connecting");
+    controller.dispose();
+    expect(isOffline({ type: "NONE", isConnected: false })).toBe(true);
+    expect(
+      isOffline({
+        type: "WIFI",
+        isConnected: true,
+        isInternetReachable: false,
+      }),
+    ).toBe(false);
+  });
+
   test("cellular needs explicit continuation before any native source mounts", async () => {
     const { controller, checkNetwork } = setup();
     checkNetwork.mockResolvedValue(mobile);
