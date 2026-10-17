@@ -9,6 +9,7 @@ import {
 } from "../src/data/repository";
 import { parseM3U } from "../src/domain/m3u";
 import type { ImportPreview, Source } from "../src/domain/types";
+import { UNGROUPED } from "../src/domain/channelLabels";
 
 class TestDatabase implements SqlDatabase {
   readonly native = new DatabaseSync(":memory:");
@@ -152,7 +153,7 @@ describe("SQLite repository with real SQLite", () => {
       { id: channel.id, favorite: true },
     ]);
     expect(await db.getFirstAsync("PRAGMA user_version")).toEqual({
-      user_version: 1,
+      user_version: 2,
     });
   });
 
@@ -421,12 +422,119 @@ describe("SQLite repository with real SQLite", () => {
   });
 
   it("does not rewrite a database newer than this app", async () => {
-    await db.execAsync("PRAGMA user_version = 2");
+    await db.execAsync("PRAGMA user_version = 3");
     await expect(createRepository(db)).rejects.toMatchObject({
       code: "newer_schema",
     });
     expect(await db.getFirstAsync("PRAGMA user_version")).toEqual({
+      user_version: 3,
+    });
+  });
+
+  it("migrates a v1 database: translates/splits groups and adds check columns without losing favorites", async () => {
+    const legacy = new TestDatabase();
+    legacy.native.exec(`
+      CREATE TABLE sources (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL,
+        location TEXT NOT NULL, content TEXT, createdAt INTEGER NOT NULL, lastSuccessAt INTEGER NOT NULL,
+        lastErrorCategory TEXT, revision INTEGER NOT NULL DEFAULT 1);
+      CREATE TABLE channels (id TEXT PRIMARY KEY NOT NULL, sourceId TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+        identityKey TEXT NOT NULL, name TEXT NOT NULL, groupName TEXT NOT NULL, tvgId TEXT, logoUrl TEXT,
+        streamUrl TEXT NOT NULL, sortIndex INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1,
+        lastSeenRevision INTEGER NOT NULL, UNIQUE(sourceId, identityKey));
+      CREATE TABLE favorites (channelId TEXT PRIMARY KEY NOT NULL REFERENCES channels(id) ON DELETE CASCADE, createdAt INTEGER NOT NULL);
+      CREATE TABLE recents (channelId TEXT PRIMARY KEY NOT NULL REFERENCES channels(id) ON DELETE CASCADE, lastPlayedAt INTEGER NOT NULL);
+      CREATE TABLE settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
+      INSERT INTO sources VALUES ('s','旧来源','url','https://a.example.com/l.m3u',NULL,1,1,NULL,1);
+      INSERT INTO channels VALUES ('c1','s','url:1','纪实','Culture;Documentary;Travel',NULL,NULL,'https://a.example.com/1',0,1,1);
+      INSERT INTO channels VALUES ('c2','s','url:2','杂项','Undefined',NULL,NULL,'https://a.example.com/2',1,1,1);
+      INSERT INTO favorites VALUES ('c1', 5);
+      PRAGMA user_version = 1;
+    `);
+    const migrated = await createRepository(legacy);
+    expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
       user_version: 2,
+    });
+    expect(await migrated.listGroups()).toEqual(
+      ["纪录片", "旅游", "文化", UNGROUPED].sort((a, b) =>
+        a === UNGROUPED
+          ? 1
+          : b === UNGROUPED
+            ? -1
+            : a.localeCompare(b, "zh-Hans-CN"),
+      ),
+    );
+    expect(await migrated.listChannels({ groupName: "纪录片" })).toMatchObject([
+      {
+        id: "c1",
+        groupName: "文化;纪录片;旅游",
+        favorite: true,
+        checkStatus: null,
+      },
+    ]);
+    legacy.native.close();
+  });
+
+  it("filters by one member of a multi-group channel and treats wildcards literally", async () => {
+    const text = content([
+      { name: "甲", url: "https://a.example.com/a", group: "News;Kids" },
+      { name: "乙", url: "https://a.example.com/b", group: "Kids" },
+      { name: "丙", url: "https://a.example.com/c", group: "100%_x" },
+    ]);
+    await repo.importSource({
+      name: "多分组",
+      kind: "file",
+      location: "g.m3u",
+      content: text,
+      preview: await parseM3U(text),
+    });
+    expect(
+      (await repo.listChannels({ groupName: "少儿" })).map((c) => c.name),
+    ).toEqual(["甲", "乙"]);
+    expect(
+      (await repo.listChannels({ groupName: "新闻" })).map((c) => c.name),
+    ).toEqual(["甲"]);
+    expect(
+      (await repo.listChannels({ groupName: "100%_x" })).map((c) => c.name),
+    ).toEqual(["丙"]);
+    expect(await repo.listChannels({ groupName: "100" })).toEqual([]);
+  });
+
+  it("stores manual check results only for the URL that was checked, and clears them when the URL changes", async () => {
+    const source = await importInitial();
+    const [first, second] = await repo.listChannels();
+    await repo.saveCheckResults([
+      { channelId: first.id, streamUrl: first.streamUrl, ok: true },
+      {
+        channelId: second.id,
+        streamUrl: "https://stale.example.com/x",
+        ok: false,
+      },
+    ]);
+    const checked = await repo.listChannels();
+    expect(checked[0]).toMatchObject({ checkStatus: "ok" });
+    expect(checked[0].checkedAt).toEqual(expect.any(Number));
+    expect(checked[1]).toMatchObject({ checkStatus: null });
+    const token = await repo.beginRefresh(source.id);
+    const replacement = content([
+      {
+        name: "央视 新闻",
+        id: "news",
+        url: "https://a.example.com/live?token=new",
+      },
+    ]);
+    await repo.refreshSource(
+      source.id,
+      token.revision,
+      await parseM3U(replacement),
+      {
+        generation: token.generation,
+        content: replacement,
+      },
+    );
+    expect((await repo.listChannels())[0]).toMatchObject({
+      id: first.id,
+      checkStatus: null,
+      checkedAt: null,
     });
   });
 

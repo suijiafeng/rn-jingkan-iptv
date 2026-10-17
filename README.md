@@ -13,7 +13,8 @@
 ## 已实现
 
 - M3U HTTP(S) 链接或系统文件导入；2 MiB 实际字节限制、UTF-8 严格解析、统计预览后确认保存
-- 来源/分组/中文名称筛选，独立收藏按钮，最近 100 个成功播放频道
+- 来源/分组/中文名称筛选（分组按“;”拆分并中文化，[Geo-blocked] 等标记显示为标签），独立收藏按钮，最近 100 个成功播放频道
+- 来源管理中手动“检测可用性”（每频道 1 KiB 请求、8 秒、4 并发，可停止；结果只代表服务器有响应）
 - SQLite 事务刷新，稳定频道 ID；消失的收藏保留为失效条目，旧任务不能覆盖新数据或复活已删除来源
 - expo-video 原生播放器、暂停/重新连接直播、上一台/下一台、底部选台、横屏全屏与返回优先级
 - 沉浸式全屏（隐藏状态栏与导航栏），轻触画面显隐控件，播放中 4 秒自动隐藏，TalkBack 下不自动隐藏
@@ -60,6 +61,13 @@ cd android
 开发调试可用 npm run android（需要连接设备或模拟器，通常依赖 Metro）。不把 assembleDebug 的结果当作独立正式安装包。原生目录可重新生成，不纳入源码包；配置通过 app.json / plugins 管理。
 
 正式长期安装版需你自己保管 release keystore。密钥和密码不应发到聊天或提交 Git。更换签名不能保证原位升级，卸载会清空本地资料。
+
+```sh
+./scripts/create-release-keystore.sh      # 你自己运行，交互输入密码；写入 ~/.jingkan 与 ~/.gradle/gradle.properties
+cd android && ./gradlew assembleRelease -PjingkanRequireReleaseKey=true
+```
+
+未配置密钥时 release 包会用 debug 密钥签名并在构建日志警告；加 `-PjingkanRequireReleaseKey=true` 时缺少密钥直接失败。请备份 keystore 和密码。
 
 ## 第一次使用
 

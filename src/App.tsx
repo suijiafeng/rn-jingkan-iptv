@@ -7,40 +7,23 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
-  Alert,
   AppState,
   BackHandler,
   FlatList,
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  Switch,
-  Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as DocumentPicker from "expo-document-picker";
 import * as Network from "expo-network";
 import { openRepository, Repository } from "./data/repository";
-import {
-  Channel,
-  ImportPreview,
-  Source,
-  SourceKind,
-  RefreshToken,
-  IMPORT_ISSUE_LABELS,
-  ImportIssueReason,
-} from "./domain/types";
+import { Channel, Source, SourceKind } from "./domain/types";
 import { parseM3U } from "./domain/m3u";
 import {
   downloadPlaylist,
   ImportIOError,
   readPickedFile,
 } from "./data/importIO";
-import { Button, Card, Heading, Notice } from "./components/ui";
+import { Button, Heading, Notice } from "./components/ui";
 import { ChannelRow } from "./components/ChannelRow";
 import { colors, styles } from "./theme";
 import { PlayerScreen } from "./features/player/PlayerScreen";
@@ -48,44 +31,25 @@ import {
   isOffline,
   mightUseMobileData,
 } from "./features/player/playbackController";
+import { confirm, RISK } from "./features/common/confirm";
+import { initialForm, SourceFormState } from "./features/source/form";
+import { SourceFormModal } from "./features/source/SourceFormModal";
+import {
+  CheckProgress,
+  CheckSummary,
+  RenameSourceModal,
+  SourceManagerModal,
+} from "./features/source/SourceManagerModal";
+import { checkChannels } from "./features/source/availability";
+import { SettingsScreen } from "./features/settings/SettingsScreen";
+import {
+  BottomTabs,
+  ChannelListEmpty,
+  ChannelListHeader,
+  ListTab,
+  Tab,
+} from "./features/channel/ChannelListParts";
 
-const RISK =
-  "本应用直接连接你选择的服务器，服务器会收到 IP 地址与访问请求。HTTP 内容可能被旁观或篡改；即使主链接为 HTTPS，直播子清单、分片、密钥或重定向也可能使用 HTTP。本版本没有完整的 DNS、重定向与内网隔离保护。仅使用你信任且有权观看的来源。允许后适用于所有联网导入和播放；可随时在设置撤销。";
-const confirm = (
-  title: string,
-  message: string,
-  action = "确认",
-): Promise<boolean> =>
-  new Promise((resolve) =>
-    Alert.alert(
-      title,
-      message,
-      [
-        { text: "取消", style: "cancel", onPress: () => resolve(false) },
-        { text: action, onPress: () => resolve(true) },
-      ],
-      { cancelable: true, onDismiss: () => resolve(false) },
-    ),
-  );
-type Tab = "all" | "favorites" | "recent" | "settings";
-type Form = {
-  kind: SourceKind;
-  name: string;
-  url: string;
-  fileName: string;
-  content: string;
-  preview: ImportPreview | null;
-  refresh: RefreshToken | null;
-};
-const initialForm = (kind: SourceKind = "url"): Form => ({
-  kind,
-  name: "",
-  url: "",
-  fileName: "",
-  content: "",
-  preview: null,
-  refresh: null,
-});
 export default function App() {
   const [repo, setRepo] = useState<Repository | null>(null),
     [startupAttempt, setStartupAttempt] = useState(0),
@@ -111,7 +75,7 @@ export default function App() {
     [mobileWarning, setMobileWarning] = useState(true),
     // One confirmation covers this metered connection until Wi-Fi returns.
     [mobileAccepted, setMobileAccepted] = useState(false),
-    [form, setForm] = useState<Form | null>(null),
+    [form, setForm] = useState<SourceFormState | null>(null),
     [busy, setBusy] = useState(false),
     [formError, setFormError] = useState(""),
     [manage, setManage] = useState(false),
@@ -120,7 +84,12 @@ export default function App() {
   const [playing, setPlaying] = useState<Channel | null>(null),
     [playQueue, setPlayQueue] = useState<Channel[]>([]),
     [revision, setRevision] = useState(0);
+  const [check, setCheck] = useState<CheckProgress | null>(null),
+    [checkSummaries, setCheckSummaries] = useState<
+      Record<string, CheckSummary>
+    >({});
   const controller = useRef<AbortController | null>(null),
+    checkController = useRef<AbortController | null>(null),
     generation = useRef(0),
     saving = useRef(false),
     loadGeneration = useRef(0),
@@ -148,6 +117,10 @@ export default function App() {
     controller.current = null;
     setBusy(false);
   }, []);
+  const stopCheck = useCallback(() => {
+    checkController.current?.abort();
+    checkController.current = null;
+  }, []);
   useEffect(() => {
     mounted.current = true;
     let active = true;
@@ -171,6 +144,7 @@ export default function App() {
       active = false;
       mounted.current = false;
       controller.current?.abort();
+      checkController.current?.abort();
     };
   }, [startupAttempt]);
   useEffect(() => {
@@ -228,10 +202,12 @@ export default function App() {
   }, []);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state !== "active" && controller.current) cancelTask();
+      if (state === "active") return;
+      if (controller.current) cancelTask();
+      stopCheck();
     });
     return () => sub.remove();
-  }, [cancelTask]);
+  }, [cancelTask, stopCheck]);
   const guardRemote = async () => {
     if (remoteRef.current) return true;
     if (revokePending) {
@@ -309,7 +285,7 @@ export default function App() {
     setForm(initialForm(kind));
     setFormError("");
   };
-  const updateForm = (patch: Partial<Form>) =>
+  const updateForm = (patch: Partial<SourceFormState>) =>
     setForm((f) => (f ? { ...f, ...patch, preview: null } : f));
   const chooseFile = async () => {
     if (busy) return;
@@ -451,6 +427,46 @@ export default function App() {
       setError("这个来源正在刷新或已经被删除");
     }
   };
+  /** Manual, user-started availability sweep of one source's channels. */
+  const runCheck = async (s: Source) => {
+    if (!repo || checkController.current) return;
+    try {
+      if (!(await guardRemote())) return;
+      if (!(await checkNetwork())) return;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "无法开始检测，请重试");
+      return;
+    }
+    const c = new AbortController();
+    checkController.current = c;
+    const epoch = permissionEpoch.current;
+    try {
+      const targets = await repo.listChannels({ sourceId: s.id });
+      setCheck({ sourceId: s.id, done: 0, total: targets.length });
+      const results = await checkChannels(targets, {
+        signal: c.signal,
+        onProgress: (done, total) => setCheck({ sourceId: s.id, done, total }),
+      });
+      // Revoked consent discards results gathered under the old permission.
+      if (epoch !== permissionEpoch.current) return;
+      await repo.saveCheckResults(results);
+      const ok = results.filter((r) => r.ok).length;
+      setCheckSummaries((all) => ({
+        ...all,
+        [s.id]: {
+          ok,
+          unreachable: results.length - ok,
+          stopped: c.signal.aborted,
+        },
+      }));
+      changed();
+    } catch {
+      setError("检测结果未能保存，请重试");
+    } finally {
+      if (checkController.current === c) checkController.current = null;
+      setCheck(null);
+    }
+  };
   const favorite = async (c: Channel) => {
     if (!repo) return;
     try {
@@ -490,6 +506,7 @@ export default function App() {
     )
       return;
     cancelTask();
+    if (check?.sourceId === s.id) stopCheck();
     if (playing?.sourceId === s.id) setPlaying(null);
     repo.cancelRefresh(s.id);
     try {
@@ -521,6 +538,7 @@ export default function App() {
     setRevokePending(true);
     setPlaying(null);
     cancelTask();
+    stopCheck();
     try {
       await repo.setSetting("remoteAllowed", false);
       setRevokePending(false);
@@ -544,11 +562,13 @@ export default function App() {
     setRevokePending(true);
     setPlaying(null);
     cancelTask();
+    stopCheck();
     try {
       await repo.clearAll();
       setRevokePending(false);
       setMobileWarning(true);
       setMobileAccepted(false);
+      setCheckSummaries({});
       setSourceId("");
       setGroup("");
       setSearch("");
@@ -581,103 +601,7 @@ export default function App() {
       </SafeAreaView>
     );
   const resumable = recent.find((channel) => channel.active);
-  const listHeader = (
-    <View style={{ gap: 12, marginBottom: 12 }}>
-      <Heading
-        title={
-          tab === "all" ? "全部频道" : tab === "favorites" ? "收藏" : "最近观看"
-        }
-        subtitle={
-          tab === "favorites"
-            ? "随手打开，都是常看的"
-            : tab === "recent"
-              ? "只记录成功播放的频道"
-              : `${sources.length} 份节目单 · 当前 ${channels.length} 个频道`
-        }
-      />
-      {tab === "favorites" && resumable && (
-        <>
-          <Image
-            source={require("../assets/quiet-landscape.png")}
-            style={{ width: "100%", height: 170 }}
-            resizeMode="contain"
-            accessibilityLabel="静看山景插画"
-          />
-          <Text style={styles.heading}>上次看到 · {resumable.name}</Text>
-          <Button
-            label="继续观看"
-            onPress={() => void play(resumable, recent)}
-          />
-        </>
-      )}
-      <TextInput
-        accessibilityLabel="搜索频道名称"
-        style={styles.input}
-        placeholder="搜索频道名称…"
-        placeholderTextColor={colors.muted}
-        value={search}
-        onChangeText={setSearch}
-      />
-      {!!search && (
-        <Button
-          label="清除搜索"
-          secondary
-          onPress={() => {
-            setSearch("");
-            setQuery("");
-          }}
-        />
-      )}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8 }}
-      >
-        <Button
-          label="所有来源"
-          secondary={!!sourceId}
-          onPress={() => {
-            setSourceId("");
-            setGroup("");
-          }}
-        />
-        {sources.map((s) => (
-          <Button
-            key={s.id}
-            label={s.name}
-            secondary={sourceId !== s.id}
-            onPress={() => {
-              setSourceId(s.id);
-              setGroup("");
-            }}
-          />
-        ))}
-      </ScrollView>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8 }}
-      >
-        <Button
-          label="全部分组"
-          secondary={!!group}
-          onPress={() => setGroup("")}
-        />
-        {groups.map((g) => (
-          <Button
-            key={g}
-            label={g}
-            secondary={g !== group}
-            onPress={() => setGroup(g)}
-          />
-        ))}
-      </ScrollView>
-      <Text style={styles.muted}>
-        范围：{sources.find((s) => s.id === sourceId)?.name || "所有来源"} ·{" "}
-        {group || "全部分组"}
-      </Text>
-    </View>
-  );
+  const listTab: ListTab = tab === "settings" ? "all" : tab;
   return (
     <SafeAreaView
       style={styles.screen}
@@ -690,83 +614,36 @@ export default function App() {
         </View>
       )}
       {tab === "settings" ? (
-        <ScrollView contentContainerStyle={styles.content}>
-          <Heading title="设置" subtitle="简单一点，安静地看" />
-          <Button
-            label="管理节目来源"
-            secondary
-            onPress={() => setManage(true)}
-          />
-          <Card>
-            <Text style={styles.heading}>联网与 HTTP 许可</Text>
-            <Text style={styles.body}>
-              {revokePending
-                ? "联网已停止，撤销尚未保存。请重试保存，避免重启后恢复旧许可。"
-                : remoteAllowed
-                  ? "已允许可信来源联网，可能包含明文内容"
-                  : "未允许联网，频道资料仍可离线查看"}
-            </Text>
-            <Button
-              secondary
-              label={
-                revokePending
-                  ? "重试保存撤销"
-                  : remoteAllowed
-                    ? "撤销联网许可"
-                    : "阅读风险并允许"
+        <SettingsScreen
+          remoteAllowed={remoteAllowed}
+          revokePending={revokePending}
+          mobileWarning={mobileWarning}
+          onManageSources={() => setManage(true)}
+          onRevoke={() => void revoke()}
+          onAllowRemote={() => void guardRemote()}
+          onMobileWarningChange={(v) => {
+            setMobileWarning(v);
+            void repo.setSetting("mobileWarning", v).catch(() => {
+              setMobileWarning(!v);
+              setError("设置保存失败");
+            });
+          }}
+          onClearRecent={() => {
+            void (async () => {
+              if (
+                await confirm(
+                  "清空最近观看？",
+                  "只删除观看记录，收藏与频道保留。",
+                  "清空",
+                )
+              ) {
+                await repo.clearRecent();
+                changed();
               }
-              onPress={() =>
-                void (remoteAllowed || revokePending ? revoke() : guardRemote())
-              }
-            />
-          </Card>
-          <Card>
-            <View style={styles.row}>
-              <Text style={[styles.body, { flex: 1 }]}>移动网络提醒</Text>
-              <Switch
-                accessibilityLabel="移动网络提醒"
-                value={mobileWarning}
-                trackColor={{ true: colors.accent }}
-                onValueChange={(v) => {
-                  setMobileWarning(v);
-                  void repo.setSetting("mobileWarning", v).catch(() => {
-                    setMobileWarning(!v);
-                    setError("设置保存失败");
-                  });
-                }}
-              />
-            </View>
-          </Card>
-          <Button
-            secondary
-            label="清空最近观看"
-            onPress={() => {
-              void (async () => {
-                if (
-                  await confirm(
-                    "清空最近观看？",
-                    "只删除观看记录，收藏与频道保留。",
-                    "清空",
-                  )
-                ) {
-                  await repo.clearRecent();
-                  changed();
-                }
-              })().catch(() => setError("清理失败，请重试"));
-            }}
-          />
-          <Button
-            secondary
-            danger
-            label="清空全部本地资料"
-            onPress={() => void clearAll()}
-          />
-          <Notice
-            title="静看 0.1.0 · 个人测试版"
-            body="无广告、无账号、无统计。资料只保存在本机。直播源本身可能含广告。只观看你有权访问的内容。"
-          />
-          <Text style={styles.muted}>{RISK}</Text>
-        </ScrollView>
+            })().catch(() => setError("清理失败，请重试"));
+          }}
+          onClearAll={() => void clearAll()}
+        />
       ) : (
         <FlatList
           ref={listRef}
@@ -780,7 +657,31 @@ export default function App() {
           scrollEventThrottle={100}
           keyExtractor={(c) => c.id}
           contentContainerStyle={styles.content}
-          ListHeaderComponent={listHeader}
+          ListHeaderComponent={
+            <ChannelListHeader
+              tab={listTab}
+              sources={sources}
+              channelCount={channels.length}
+              resumable={resumable}
+              search={search}
+              sourceId={sourceId}
+              group={group}
+              groups={groups}
+              onResume={() => {
+                if (resumable) void play(resumable, recent);
+              }}
+              onSearchChange={setSearch}
+              onClearSearch={() => {
+                setSearch("");
+                setQuery("");
+              }}
+              onSourceChange={(id) => {
+                setSourceId(id);
+                setGroup("");
+              }}
+              onGroupChange={setGroup}
+            />
+          }
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
           renderItem={({ item }) => (
             <ChannelRow
@@ -790,373 +691,85 @@ export default function App() {
             />
           )}
           ListEmptyComponent={
-            listLoading ? (
-              <View style={{ gap: 12 }}>
-                <ActivityIndicator color={colors.accent} />
-                <Text style={styles.muted} accessibilityLiveRegion="polite">
-                  正在读取频道…
-                </Text>
-              </View>
-            ) : listError ? (
-              <View style={{ gap: 12 }}>
-                <Notice title={listError} error />
-                <Button label="重新读取频道" onPress={changed} />
-              </View>
-            ) : (
-              <View style={{ gap: 12 }}>
-                <Notice
-                  title={
-                    !sources.length
-                      ? "从一份节目单开始"
-                      : query || sourceId || group
-                        ? "没有找到频道"
-                        : tab === "favorites"
-                          ? "还没有收藏"
-                          : tab === "recent"
-                            ? "还没有观看记录"
-                            : "没有可用频道"
-                  }
-                  body={
-                    !sources.length
-                      ? "添加你信任的 M3U 链接或本地文件。频道、收藏和最近观看保存在这台手机。"
-                      : "可以清空筛选，或去频道页看看。"
-                  }
-                />
-                {!sources.length ? (
-                  <>
-                    <Button
-                      label="添加节目单"
-                      onPress={() => startForm("url")}
-                    />
-                    <Button
-                      label="从文件导入"
-                      secondary
-                      onPress={() => startForm("file")}
-                    />
-                  </>
-                ) : (
-                  <Button
-                    label="查看全部频道"
-                    onPress={() => {
-                      setTab("all");
-                      setSourceId("");
-                      setGroup("");
-                      setSearch("");
-                    }}
-                  />
-                )}
-              </View>
-            )
+            <ChannelListEmpty
+              tab={listTab}
+              loading={listLoading}
+              error={listError}
+              hasSources={sources.length > 0}
+              filtered={!!(query || sourceId || group)}
+              onRetry={changed}
+              onAddUrl={() => startForm("url")}
+              onAddFile={() => startForm("file")}
+              onShowAll={() => {
+                setTab("all");
+                setSourceId("");
+                setGroup("");
+                setSearch("");
+              }}
+            />
           }
         />
       )}
-      <View
-        style={{
-          flexDirection: "row",
-          gap: 6,
-          paddingHorizontal: 20,
-          paddingVertical: 12,
-          borderTopWidth: 1,
-          borderColor: colors.line,
+      <BottomTabs
+        tab={tab}
+        onChange={(key) => {
+          restoreTab.current = key;
+          setTab(key);
         }}
-      >
-        {(
-          [
-            ["favorites", "收藏"],
-            ["all", "频道"],
-            ["recent", "最近"],
-            ["settings", "设置"],
-          ] as const
-        ).map(([key, label]) => (
-          <Button
-            key={key}
-            label={label}
-            secondary={tab !== key}
-            onPress={() => {
-              if (key === tab) return;
-              restoreTab.current = key;
-              setTab(key);
-            }}
-            style={{ flex: 1, paddingHorizontal: 4 }}
-          />
-        ))}
-      </View>
-      <Modal
+      />
+      <SourceManagerModal
         visible={manage}
-        animationType="slide"
-        onRequestClose={() => setManage(false)}
-      >
-        <SafeAreaView style={styles.screen}>
-          <ScrollView contentContainerStyle={styles.content}>
-            <Heading
-              title="管理节目来源"
-              subtitle={`${sources.length} 份节目单 · 手动刷新，不自动联网`}
-            />
-            <Button
-              label="添加节目单"
-              onPress={() => {
-                setManage(false);
-                startForm("url");
-              }}
-            />
-            <Button
-              label="从文件导入"
-              secondary
-              onPress={() => {
-                setManage(false);
-                startForm("file");
-              }}
-            />
-            {sources.map((s) => (
-              <Card key={s.id}>
-                <Text style={styles.heading}>{s.name}</Text>
-                <Text style={styles.muted}>
-                  {s.channelCount} 个频道 · {s.favoriteCount} 个收藏
-                  {String.fromCharCode(10)}上次更新{" "}
-                  {new Date(s.lastSuccessAt).toLocaleString()}
-                </Text>
-                {s.lastErrorCategory && (
-                  <Text style={{ color: colors.warn }}>
-                    上次刷新未完成，旧频道已保留。
-                  </Text>
-                )}
-                <Button
-                  label={
-                    s.kind === "file" ? "重新解析 / 更换文件" : "刷新并预览"
-                  }
-                  secondary
-                  onPress={() => {
-                    setManage(false);
-                    void refresh(s);
-                  }}
-                />
-                <View style={styles.row}>
-                  <Button
-                    label="改名"
-                    secondary
-                    style={{ flex: 1 }}
-                    onPress={() => {
-                      setRename(s);
-                      setRenameText(s.name);
-                      setManage(false);
-                    }}
-                  />
-                  <Button
-                    label="删除"
-                    secondary
-                    danger
-                    style={{ flex: 1 }}
-                    onPress={() => void remove(s)}
-                  />
-                </View>
-              </Card>
-            ))}
-            <Button secondary label="返回" onPress={() => setManage(false)} />
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-      <Modal
-        visible={!!rename}
-        animationType="slide"
-        onRequestClose={() => setRename(null)}
-      >
-        <SafeAreaView style={styles.screen}>
-          <View style={styles.content}>
-            <Heading title="来源改名" />
-            <TextInput
-              accessibilityLabel="来源名称"
-              style={styles.input}
-              value={renameText}
-              onChangeText={setRenameText}
-              maxLength={100}
-            />
-            <Button
-              label="保存名称"
-              disabled={!renameText.trim()}
-              onPress={() => {
-                if (rename)
-                  void repo
-                    .renameSource(rename.id, renameText.trim())
-                    .then(() => {
-                      setRename(null);
-                      setManage(true);
-                      changed();
-                    })
-                    .catch(() => setError("改名失败"));
-              }}
-            />
-            <Button
-              label="取消"
-              secondary
-              onPress={() => {
+        sources={sources}
+        check={check}
+        summaries={checkSummaries}
+        onClose={() => setManage(false)}
+        onAdd={(kind) => {
+          setManage(false);
+          startForm(kind);
+        }}
+        onRefresh={(s) => {
+          setManage(false);
+          void refresh(s);
+        }}
+        onRename={(s) => {
+          setRename(s);
+          setRenameText(s.name);
+          setManage(false);
+        }}
+        onRemove={(s) => void remove(s)}
+        onCheck={(s) => void runCheck(s)}
+        onStopCheck={stopCheck}
+      />
+      <RenameSourceModal
+        source={rename}
+        text={renameText}
+        onChangeText={setRenameText}
+        onSave={() => {
+          if (rename)
+            void repo
+              .renameSource(rename.id, renameText.trim())
+              .then(() => {
                 setRename(null);
                 setManage(true);
-              }}
-            />
-          </View>
-        </SafeAreaView>
-      </Modal>
-      <Modal
-        visible={!!form}
-        animationType="slide"
-        onRequestClose={() => void closeForm()}
-      >
-        <SafeAreaView style={styles.screen}>
-          <KeyboardAvoidingView
-            style={{ flex: 1 }}
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-          >
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={styles.content}
-            >
-              {form && (
-                <>
-                  <Heading
-                    title={
-                      form.preview
-                        ? "确认导入"
-                        : form.refresh
-                          ? "刷新节目单"
-                          : "添加节目单"
-                    }
-                    subtitle={
-                      form.preview
-                        ? "确认后才保存，已有资料不会提前改动"
-                        : "仅使用你信任且有权访问的来源"
-                    }
-                  />
-                  {formError && (
-                    <Notice
-                      title={formError}
-                      error
-                      body="你的输入已保留。没有提前修改频道。"
-                    />
-                  )}
-                  {!form.preview ? (
-                    <>
-                      <Text style={styles.body}>来源名称</Text>
-                      <TextInput
-                        accessibilityLabel="来源名称"
-                        editable={!busy && !form.refresh}
-                        style={styles.input}
-                        value={form.name}
-                        maxLength={100}
-                        placeholder="可留空，使用主机或文件名"
-                        placeholderTextColor={colors.muted}
-                        onChangeText={(v) => updateForm({ name: v })}
-                      />
-                      {!form.refresh && (
-                        <View style={styles.row}>
-                          <Button
-                            style={{ flex: 1 }}
-                            secondary={form.kind !== "url"}
-                            label="链接"
-                            disabled={busy}
-                            onPress={() => updateForm({ kind: "url" })}
-                          />
-                          <Button
-                            style={{ flex: 1 }}
-                            secondary={form.kind !== "file"}
-                            label="文件"
-                            disabled={busy}
-                            onPress={() => updateForm({ kind: "file" })}
-                          />
-                        </View>
-                      )}
-                      {form.kind === "url" ? (
-                        <>
-                          <Text style={styles.body}>节目单链接</Text>
-                          <TextInput
-                            accessibilityLabel="节目单链接"
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                            keyboardType="url"
-                            editable={!busy && !form.refresh}
-                            style={styles.input}
-                            value={form.url}
-                            onChangeText={(v) => updateForm({ url: v })}
-                            placeholder="https://example.com/channels.m3u"
-                            placeholderTextColor={colors.muted}
-                          />
-                        </>
-                      ) : (
-                        <>
-                          <Notice
-                            title={form.fileName || "选择 M3U 文件"}
-                            body="使用系统文件选择器，仅读取你选中的文件。上限 2 MiB，UTF-8 编码。"
-                          />
-                          <Button
-                            label="选择 / 更换文件"
-                            secondary
-                            disabled={busy}
-                            onPress={() => void chooseFile()}
-                          />
-                        </>
-                      )}
-                      <Notice
-                        title="只导入你信任的来源"
-                        body="来源服务器会收到 IP 地址与请求。HTTP 可能泄露或被篡改；首次联网前需要明确同意。"
-                      />
-                      <Button
-                        label={busy ? "正在读取与解析…" : "解析并预览"}
-                        disabled={busy}
-                        onPress={() => void preview()}
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <Notice
-                        title={`${form.preview.stats.valid} 个可导入频道`}
-                        body={`${form.preview.stats.duplicates} 条重复 · ${form.preview.stats.ignored} 条忽略 · ${form.preview.stats.http} 个 HTTP 频道`}
-                      />
-                      {Object.entries(form.preview.issueCounts).map(
-                        ([reason, count]) => (
-                          <Text key={reason} style={styles.muted}>
-                            {IMPORT_ISSUE_LABELS[reason as ImportIssueReason]}：
-                            {count}
-                          </Text>
-                        ),
-                      )}
-                      {form.preview.channels.slice(0, 5).map((c) => (
-                        <Card key={c.identityKey}>
-                          <Text style={styles.heading}>{c.name}</Text>
-                          <Text style={styles.muted}>{c.groupName}</Text>
-                        </Card>
-                      ))}
-                      <Text style={styles.muted}>
-                        仅展示前 5 项。导入成功不代表每个频道可播放。
-                      </Text>
-                      <Button
-                        label={
-                          busy
-                            ? "正在保存…"
-                            : `确认保存 ${form.preview.stats.valid} 个频道`
-                        }
-                        disabled={busy || !form.preview.stats.valid}
-                        onPress={() => void save()}
-                      />
-                      <Button
-                        label="返回修改"
-                        secondary
-                        disabled={busy}
-                        onPress={() => updateForm({ preview: null })}
-                      />
-                    </>
-                  )}
-                  {busy && <ActivityIndicator color={colors.accent} />}
-                  <Button
-                    label="取消并返回"
-                    secondary
-                    disabled={busy && !!form.preview}
-                    onPress={() => void closeForm()}
-                  />
-                </>
-              )}
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </Modal>
+                changed();
+              })
+              .catch(() => setError("改名失败"));
+        }}
+        onCancel={() => {
+          setRename(null);
+          setManage(true);
+        }}
+      />
+      <SourceFormModal
+        form={form}
+        busy={busy}
+        error={formError}
+        onUpdate={updateForm}
+        onChooseFile={() => void chooseFile()}
+        onPreview={() => void preview()}
+        onSave={() => void save()}
+        onClose={() => void closeForm()}
+      />
       {playing && (
         <View
           style={{

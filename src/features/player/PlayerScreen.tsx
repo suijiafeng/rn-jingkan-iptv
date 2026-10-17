@@ -26,6 +26,7 @@ import * as Orientation from "expo-screen-orientation";
 import { Button, Heading } from "../../components/ui";
 import { colors, styles as theme } from "../../theme";
 import type { Channel } from "../../domain/types";
+import { channelTitle, displayGroups } from "../../domain/channelLabels";
 import { NativeAttempt } from "./NativeAttempt";
 import {
   adjacentChannelIndex,
@@ -67,11 +68,11 @@ const descriptions: Record<
   offline: { title: "网络未连接", body: "检查网络连接，然后手动重试" },
   timeout: {
     title: "连接超时",
-    body: "30 秒内未开始播放。可以重试或换一个频道",
+    body: "30 秒内未开始播放。节目源可能已失效、受地区限制或暂时不可用。可以重试、换台，或在来源管理中检测可用性",
   },
   error: {
     title: "暂时无法播放",
-    body: "原因未确定，播放器未提供可靠的细分原因。请重试或联系节目源提供方",
+    body: "原因未确定（播放器没有提供可靠的细分原因）。常见情况：地址失效、地区限制、服务器拒绝或格式不支持。可以重试、换台，或在来源管理中检测可用性",
   },
   ended: { title: "节目流已结束", body: "可以重试连接，或选择其他频道" },
 };
@@ -178,7 +179,7 @@ export function PlayerScreen(props: PlayerScreenProps) {
             <View style={s.sheetHandle} />
             <Heading
               title="选择频道"
-              subtitle={`当前 · ${props.channel.name}`}
+              subtitle={`当前 · ${channelTitle(props.channel.name).title}`}
             />
             <Text style={theme.muted}>点选立即换台 · 播放状态以播放器为准</Text>
             <View style={s.row}>
@@ -215,7 +216,7 @@ export function PlayerScreen(props: PlayerScreenProps) {
                   <Pressable
                     style={s.channelSelect}
                     accessibilityRole="button"
-                    accessibilityLabel={`${item.name}，${item.sourceName}${item.id === props.channel.id ? "，当前频道" : ""}`}
+                    accessibilityLabel={`${channelTitle(item.name).title}，${item.sourceName}${item.id === props.channel.id ? "，当前频道" : ""}`}
                     accessibilityState={{
                       selected: item.id === props.channel.id,
                     }}
@@ -226,17 +227,17 @@ export function PlayerScreen(props: PlayerScreenProps) {
                   >
                     <View style={s.channelMark}>
                       <Text style={s.markText}>
-                        {Array.from(item.name)[0] || "台"}
+                        {Array.from(channelTitle(item.name).title)[0] || "台"}
                       </Text>
                     </View>
                     <View style={s.flex}>
                       <Text numberOfLines={1} style={theme.heading}>
-                        {item.name}
+                        {channelTitle(item.name).title}
                       </Text>
                       <Text numberOfLines={1} style={theme.muted}>
                         {item.id === props.channel.id
                           ? "当前频道"
-                          : item.groupName || "未分组"}{" "}
+                          : displayGroups(item.groupName)}{" "}
                         · {item.sourceName}
                       </Text>
                     </View>
@@ -244,7 +245,7 @@ export function PlayerScreen(props: PlayerScreenProps) {
                   <Pressable
                     style={s.favoriteHit}
                     accessibilityRole="button"
-                    accessibilityLabel={`${item.favorite ? "取消收藏" : "收藏"}${item.name}`}
+                    accessibilityLabel={`${item.favorite ? "取消收藏" : "收藏"}${channelTitle(item.name).title}`}
                     accessibilityState={{ selected: item.favorite }}
                     onPress={() => props.onFavorite(item)}
                   >
@@ -427,8 +428,12 @@ function ChannelSession(props: SessionProps) {
     >
       <View style={props.fullscreen ? s.hidden : undefined}>
         <Heading
-          title={props.channel.name}
-          subtitle={`${props.channel.sourceName} · ${props.channel.groupName || "未分组"}`}
+          title={channelTitle(props.channel.name).title}
+          subtitle={[
+            props.channel.sourceName,
+            displayGroups(props.channel.groupName),
+            ...channelTitle(props.channel.name).tags,
+          ].join(" · ")}
         />
       </View>
       <View style={[s.videoStage, props.fullscreen && s.fullscreenVideo]}>
@@ -458,6 +463,12 @@ function ChannelSession(props: SessionProps) {
             <Text style={s.noticeBody}>
               {state.phase === "paused" ? pausedBody : description.body}
             </Text>
+            {(state.phase === "timeout" || state.phase === "error") &&
+              props.channel.checkStatus === "unreachable" && (
+                <Text style={s.noticeBody}>
+                  上次可用性检测时，这个地址也没有响应。
+                </Text>
+              )}
             {state.phase === "cellular" && (
               <View style={s.row}>
                 <View style={s.flex}>
@@ -486,7 +497,7 @@ function ChannelSession(props: SessionProps) {
       >
         <Button label="退出全屏" secondary onPress={props.onToggleFullscreen} />
         <Text style={[theme.heading, s.flex]} numberOfLines={1}>
-          {props.channel.name}
+          {channelTitle(props.channel.name).title}
         </Text>
         <Text style={theme.muted}>{description.title}</Text>
       </View>

@@ -18,6 +18,8 @@ const channel: Channel = {
   lastSeenRevision: 1,
   favorite: false,
   lastPlayedAt: null,
+  checkStatus: null,
+  checkedAt: null,
 };
 test("disabled submit cannot run and retains clear accessibility state", async () => {
   const run = jest.fn();

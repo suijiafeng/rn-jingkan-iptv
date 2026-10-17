@@ -33,6 +33,9 @@ export interface Channel extends ParsedChannel {
   lastSeenRevision: number;
   favorite: boolean;
   lastPlayedAt: number | null;
+  /** Manual availability check: the address answered (not proof it plays). */
+  checkStatus: "ok" | "unreachable" | null;
+  checkedAt: number | null;
 }
 
 export type ImportIssueReason =

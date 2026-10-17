@@ -50,6 +50,8 @@ const first: Channel = {
   active: true,
   lastSeenRevision: 1,
   lastPlayedAt: null,
+  checkStatus: null,
+  checkedAt: null,
   name: "山野纪实",
   groupName: "纪录片",
   streamUrl: "https://example.test/one.m3u8",

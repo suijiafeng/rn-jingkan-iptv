@@ -5,6 +5,7 @@ import type {
   ParsedChannel,
 } from "./types";
 import { normalizeRemoteUrl, UrlValidationError } from "./url";
+import { normalizeGroups } from "./channelLabels";
 
 export const M3U_LIMITS = Object.freeze({
   maxBytes: 2 * 1024 * 1024,
@@ -115,7 +116,7 @@ function parseExtinf(line: string, lineNumber: number): PendingChannel | null {
   return {
     name:
       line.slice(comma + 1).trim() || attributes["tvg-name"] || "未命名频道",
-    groupName: attributes["group-title"] || "未分组",
+    groupName: normalizeGroups(attributes["group-title"]),
     tvgId: attributes["tvg-id"] || null,
     // Remote logos are metadata only; the application does not request them.
     logoUrl: attributes["tvg-logo"] || null,

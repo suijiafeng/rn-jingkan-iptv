@@ -1,5 +1,15 @@
 # 验证记录
 
+## 2026-10-18 · 分组/标记/可用性检测/签名与 App 拆分
+
+- 本机运行：typecheck、lint 通过；Jest 12 个套件 157 项通过；release 构建成功。
+- 签名插件三种模式实测：未配置密钥 → 构建成功并警告使用 debug 密钥；-PjingkanRequireReleaseKey=true 且无密钥 → 构建失败并提示；配置临时测试密钥 → apksigner 显示该测试证书（测试密钥用后已删除）。
+- 模拟器原位升级安装：已有 v1 数据库（iptv-org 214 个频道）迁移到 v2，频道保留，分组显示为中文（财经、电影、动画……）。
+- 模拟器手动可用性检测 214 个频道：可访问 89、不可达 125，约 2.5 分钟完成。
+- 模拟器换台（下一台）6 次：可播频道约 5 秒进入“正在播放”（界面轮询测量，误差约 1 秒）；失效频道 3 秒报错或等待到 30 秒超时。
+- ESLint 10.13.0 试升级失败（eslint-plugin-react 不兼容），已回退 9.39.5。
+- 仍未验证：S25 Ultra 真机、声音输出、长时间播放、Smart Switch 迁移排除。
+
 ## 2026-10-18 · 首次 APK 与模拟器实测
 
 - 本机 Android SDK + Corretto JDK 21：expo prebuild 后 ./gradlew assembleRelease（仅 arm64-v8a，模板 debug 签名）成功，首次 19 分钟；APK 约 31 MB。

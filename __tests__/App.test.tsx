@@ -11,6 +11,7 @@ import App from "../src/App";
 import { openRepository } from "../src/data/repository";
 import * as DocumentPicker from "expo-document-picker";
 import { downloadPlaylist, readPickedFile } from "../src/data/importIO";
+import { checkChannels } from "../src/features/source/availability";
 jest.mock("../src/data/repository", () => ({ openRepository: jest.fn() }));
 jest.mock("../src/data/importIO", () => ({
   downloadPlaylist: jest.fn(),
@@ -21,6 +22,9 @@ jest.mock("../src/features/player/PlayerScreen", () => ({
   PlayerScreen: () => null,
 }));
 jest.mock("expo-document-picker", () => ({ getDocumentAsync: jest.fn() }));
+jest.mock("../src/features/source/availability", () => ({
+  checkChannels: jest.fn(),
+}));
 jest.mock("expo-network", () => ({
   getNetworkStateAsync: jest.fn(async () => ({
     isConnected: true,
@@ -41,7 +45,28 @@ const repo = {
   importSource: jest.fn(async () => ({ id: "s" })),
   cancelRefresh: jest.fn(),
   toggleFavorite: jest.fn(),
+  saveCheckResults: jest.fn(async () => {}),
 };
+const checkSource = {
+  id: "s1",
+  name: "公开列表",
+  kind: "url",
+  location: "https://a.example.com/list.m3u",
+  createdAt: 1,
+  lastSuccessAt: 1,
+  lastErrorCategory: null,
+  revision: 1,
+  channelCount: 2,
+  favoriteCount: 0,
+};
+async function openSourceManager() {
+  repo.listSources.mockImplementation(async () => [checkSource] as never[]);
+  await render(<App />);
+  await waitFor(() => expect(screen.getByText("设置")).toBeTruthy());
+  await fireEvent.press(screen.getByText("设置"));
+  await fireEvent.press(await screen.findByText("管理节目来源"));
+  await waitFor(() => expect(screen.getByText("检测可用性")).toBeTruthy());
+}
 beforeEach(() => {
   jest.clearAllMocks();
   repo.getSetting.mockImplementation(async (_k, fallback) => fallback);
@@ -393,5 +418,57 @@ test("URL preview cannot overwrite the previously selected local file content", 
         location: "自己的文件.m3u",
       }),
     ),
+  );
+});
+
+test("availability check never sends requests without network consent", async () => {
+  jest
+    .spyOn(Alert, "alert")
+    .mockImplementation((_t, _m, buttons) => buttons?.[0]?.onPress?.());
+  await openSourceManager();
+  await fireEvent.press(screen.getByText("检测可用性"));
+  await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+  expect(checkChannels).not.toHaveBeenCalled();
+  expect(repo.saveCheckResults).not.toHaveBeenCalled();
+});
+
+test("availability check shows progress, can be stopped, and saves finished results", async () => {
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" ? true : fallback,
+  );
+  const channels = [
+    { id: "a", streamUrl: "https://a.example.com/a" },
+    { id: "b", streamUrl: "https://a.example.com/b" },
+  ];
+  repo.listChannels.mockImplementation(async (q?: { sourceId?: string }) =>
+    q?.sourceId ? (channels as never[]) : [],
+  );
+  let finish!: () => void;
+  (checkChannels as jest.Mock).mockImplementation(
+    (_targets, options: { signal: AbortSignal; onProgress: Function }) =>
+      new Promise((resolve) => {
+        options.onProgress(1, 2);
+        finish = () =>
+          resolve([
+            { channelId: "a", streamUrl: "https://a.example.com/a", ok: true },
+          ]);
+        options.signal.addEventListener("abort", finish);
+      }),
+  );
+  await openSourceManager();
+  await fireEvent.press(screen.getByText("检测可用性"));
+  await waitFor(() =>
+    expect(screen.getByText("正在检测可用性 1/2")).toBeTruthy(),
+  );
+  await fireEvent.press(screen.getByText("停止检测"));
+  await waitFor(() =>
+    expect(repo.saveCheckResults).toHaveBeenCalledWith([
+      { channelId: "a", streamUrl: "https://a.example.com/a", ok: true },
+    ]),
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByText(/检测已停止。可访问 1 个，不可达 0 个/),
+    ).toBeTruthy(),
   );
 });

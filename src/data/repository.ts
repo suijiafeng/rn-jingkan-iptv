@@ -8,6 +8,13 @@ import type {
   Source,
 } from "../domain/types";
 import { normalizeRemoteUrl } from "../domain/url";
+import {
+  normalizeGroups,
+  splitGroups,
+  UNGROUPED,
+} from "../domain/channelLabels";
+
+export const SCHEMA_VERSION = 2;
 
 export type SqlValue = string | number | null;
 export interface SqlExecutor {
@@ -138,10 +145,18 @@ export class Repository {
         const version = await tx.getFirstAsync<{ user_version: number }>(
           "PRAGMA user_version",
         );
-        if ((version?.user_version ?? 0) > 1)
-          throw new RepositoryError("newer_schema");
-        if (version?.user_version === 1) return;
-        await tx.execAsync(`
+        const current = version?.user_version ?? 0;
+        if (current > SCHEMA_VERSION) throw new RepositoryError("newer_schema");
+        if (current === SCHEMA_VERSION) return;
+        if (current < 1) await this.createV1(tx);
+        if (current < 2) await this.migrateV2(tx);
+        await tx.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
+      });
+    });
+  }
+
+  private async createV1(tx: SqlExecutor): Promise<void> {
+    await tx.execAsync(`
           CREATE TABLE sources (
             id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('url','file')),
             location TEXT NOT NULL, content TEXT, createdAt INTEGER NOT NULL, lastSuccessAt INTEGER NOT NULL,
@@ -159,10 +174,26 @@ export class Repository {
           CREATE TABLE recents (channelId TEXT PRIMARY KEY NOT NULL REFERENCES channels(id) ON DELETE CASCADE, lastPlayedAt INTEGER NOT NULL);
           CREATE INDEX recents_time ON recents(lastPlayedAt DESC);
           CREATE TABLE settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
-          PRAGMA user_version = 1;
         `);
-      });
-    });
+  }
+
+  /** v2: manual availability check columns; groups translated and split by ";". */
+  private async migrateV2(tx: SqlExecutor): Promise<void> {
+    await tx.execAsync(`
+      ALTER TABLE channels ADD COLUMN checkStatus TEXT CHECK(checkStatus IN ('ok','unreachable'));
+      ALTER TABLE channels ADD COLUMN checkedAt INTEGER;
+    `);
+    const groups = await tx.getAllAsync<{ groupName: string }>(
+      "SELECT DISTINCT groupName FROM channels",
+    );
+    for (const { groupName } of groups) {
+      const normalized = normalizeGroups(groupName);
+      if (normalized !== groupName)
+        await tx.runAsync(
+          "UPDATE channels SET groupName = ? WHERE groupName = ?",
+          [normalized, groupName],
+        );
+    }
   }
 
   async listSources(): Promise<Source[]> {
@@ -199,8 +230,9 @@ export class Repository {
       params.push(query.sourceId);
     }
     if (query.groupName) {
-      where.push("c.groupName = ?");
-      params.push(query.groupName);
+      // groupName holds a ";"-joined list; match one whole member.
+      where.push("(';' || c.groupName || ';') LIKE ? ESCAPE '\\'");
+      params.push(`%;${query.groupName.replace(/[\\%_]/g, "\\$&")};%`);
     }
     if (query.search?.trim()) {
       where.push("c.name LIKE ? ESCAPE '\\' COLLATE NOCASE");
@@ -234,10 +266,13 @@ export class Repository {
 
   async listGroups(sourceId?: string): Promise<string[]> {
     const rows = await this.db.getAllAsync<{ groupName: string }>(
-      `SELECT DISTINCT groupName FROM channels WHERE active = 1${sourceId ? " AND sourceId = ?" : ""} ORDER BY groupName`,
+      `SELECT DISTINCT groupName FROM channels WHERE active = 1${sourceId ? " AND sourceId = ?" : ""}`,
       sourceId ? [sourceId] : [],
     );
-    return rows.map((row) => row.groupName);
+    const groups = new Set(rows.flatMap((row) => splitGroups(row.groupName)));
+    const ungrouped = groups.delete(UNGROUPED);
+    const sorted = [...groups].sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+    return ungrouped ? [...sorted, UNGROUPED] : sorted;
   }
 
   async importSource(input: ImportSourceInput): Promise<Source> {
@@ -395,10 +430,37 @@ export class Repository {
         `INSERT INTO channels(id,sourceId,identityKey,name,groupName,tvgId,logoUrl,streamUrl,sortIndex,active,lastSeenRevision)
         VALUES${batch.map(() => "(?,?,?,?,?,?,?,?,?,1,?)").join(",")} ON CONFLICT(sourceId, identityKey) DO UPDATE SET
         name=excluded.name,groupName=excluded.groupName,tvgId=excluded.tvgId,logoUrl=excluded.logoUrl,
+        checkStatus=CASE WHEN channels.streamUrl=excluded.streamUrl THEN channels.checkStatus END,
+        checkedAt=CASE WHEN channels.streamUrl=excluded.streamUrl THEN channels.checkedAt END,
         streamUrl=excluded.streamUrl,sortIndex=excluded.sortIndex,active=1,lastSeenRevision=excluded.lastSeenRevision`,
         params,
       );
     }
+  }
+
+  /**
+   * Stores manual availability results. A result only applies while the
+   * channel still has the URL that was checked (a refresh may replace it).
+   */
+  async saveCheckResults(
+    results: { channelId: string; streamUrl: string; ok: boolean }[],
+  ): Promise<void> {
+    if (!results.length) return;
+    await this.serialize(async () => {
+      await this.db.withExclusiveTransactionAsync(async (tx) => {
+        const now = this.now();
+        for (const result of results)
+          await tx.runAsync(
+            "UPDATE channels SET checkStatus = ?, checkedAt = ? WHERE id = ? AND streamUrl = ?",
+            [
+              result.ok ? "ok" : "unreachable",
+              now,
+              result.channelId,
+              result.streamUrl,
+            ],
+          );
+      });
+    });
   }
 
   async renameSource(sourceId: string, name: string): Promise<void> {
