@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { channelArtworkUrl } from "../domain/channelArtwork";
-import { colors, styles } from "../theme";
+import { colors, sizes, styles } from "../theme";
 
 export interface ChannelLogoProps {
   uri: string | null | undefined;
@@ -14,7 +14,7 @@ export function ChannelLogo({
   uri,
   title,
   enabled,
-  size = 36,
+  size = sizes.logo,
 }: ChannelLogoProps) {
   const safeUri = enabled ? channelArtworkUrl(uri) : null;
   return (

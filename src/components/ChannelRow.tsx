@@ -2,7 +2,7 @@ import React, { memo, useMemo } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Channel } from "../domain/types";
 import { channelTitle, displayGroups } from "../domain/channelLabels";
-import { colors, styles } from "../theme";
+import { colors, sizes, styles, type } from "../theme";
 import { ChannelLogo } from "./ChannelLogo";
 /**
  * Memoized: with 10k+ rows the list re-renders cells on every parent update,
@@ -16,7 +16,6 @@ export const ChannelRow = memo(function ChannelRow({
   onRemoveRecent,
   recentBusy = false,
   artworkEnabled = false,
-  flat = false,
 }: {
   channel: Channel;
   onPlay: (channel: Channel) => void;
@@ -25,8 +24,6 @@ export const ChannelRow = memo(function ChannelRow({
   onRemoveRecent?: (channel: Channel) => void;
   recentBusy?: boolean;
   artworkEnabled?: boolean;
-  /** On a surface already (the player sheet): no own background. */
-  flat?: boolean;
 }) {
   const { title, tags } = useMemo(
     () => channelTitle(channel.name),
@@ -37,13 +34,7 @@ export const ChannelRow = memo(function ChannelRow({
   const editingRecent = !!onRemoveRecent;
   const playbackDisabled = !channel.active || editingRecent;
   return (
-    <View
-      style={[
-        s.row,
-        flat && s.flat,
-        current && !flat && { borderColor: colors.accent, borderWidth: 1 },
-      ]}
-    >
+    <View style={s.row}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={
@@ -60,16 +51,12 @@ export const ChannelRow = memo(function ChannelRow({
           uri={channel.logoUrl}
           title={title}
           enabled={artworkEnabled}
-          size={flat ? 44 : 36}
+          size={sizes.logo}
         />
         <View style={{ flex: 1, gap: 3 }}>
           <Text
             numberOfLines={2}
-            style={[
-              styles.heading,
-              flat && s.flatTitle,
-              current && flat && s.flatCurrent,
-            ]}
+            style={[s.title, current && s.currentTitle]}
           >
             {title}
           </Text>
@@ -87,7 +74,7 @@ export const ChannelRow = memo(function ChannelRow({
           )}
           {/* No source name: the row stands for a logical channel, and the
               source that actually plays is chosen at playback time. */}
-          <Text numberOfLines={2} style={[styles.muted, flat && s.flatMeta]}>
+          <Text numberOfLines={2} style={styles.caption}>
             {channel.active
               ? displayGroups(channel.groupName)
               : "节目单里已没有这个频道"}
@@ -119,12 +106,8 @@ export const ChannelRow = memo(function ChannelRow({
         >
           <Text
             style={{
-              fontSize: flat ? 20 : 24,
-              color: channel.favorite
-                ? colors.warn
-                : flat
-                  ? "#A6B6BD99"
-                  : colors.muted,
+              fontSize: 20,
+              color: channel.favorite ? colors.warn : colors.mutedFaint,
             }}
           >
             {channel.favorite ? "★" : "☆"}
@@ -135,31 +118,27 @@ export const ChannelRow = memo(function ChannelRow({
   );
 });
 const s = StyleSheet.create({
+  // No own background: rows sit directly on the page and the player sheet.
   row: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 72,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
+    minHeight: sizes.row,
     paddingLeft: 12,
     paddingRight: 4,
   },
-  flat: { backgroundColor: "transparent", minHeight: 62 },
-  flatTitle: { fontSize: 15, lineHeight: 20, fontWeight: "500" },
-  flatCurrent: { color: colors.accent, fontWeight: "600" },
-  flatMeta: { fontSize: 11, lineHeight: 16 },
+  title: { ...type.rowTitle, color: colors.text },
+  currentTitle: { color: colors.accent, fontWeight: "600" },
   main: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     paddingVertical: 12,
-    minHeight: 72,
+    minHeight: sizes.row,
   },
   tags: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tag: {
-    fontSize: 12,
-    lineHeight: 18,
+    ...type.muted,
     color: colors.warn,
     backgroundColor: colors.raised,
     borderRadius: 6,
@@ -168,17 +147,17 @@ const s = StyleSheet.create({
   },
   badTag: { color: colors.bad },
   star: {
-    minWidth: 52,
-    minHeight: 52,
+    minWidth: sizes.touch,
+    minHeight: sizes.touch,
     alignItems: "center",
     justifyContent: "center",
   },
   removeRecent: {
-    minWidth: 48,
-    minHeight: 48,
+    minWidth: sizes.touch,
+    minHeight: sizes.touch,
     paddingHorizontal: 4,
     alignItems: "center",
     justifyContent: "center",
   },
-  removeRecentText: { color: colors.bad, fontSize: 14, lineHeight: 21 },
+  removeRecentText: { ...type.body, color: colors.bad },
 });

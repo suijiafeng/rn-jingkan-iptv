@@ -15,7 +15,7 @@ import {
   type ChannelFacetSelection,
   type FacetKind,
 } from "../domain/channelFacets";
-import { colors } from "../theme";
+import { colors, sizes, type } from "../theme";
 import { UNGROUPED } from "../domain/channelLabels";
 import { GroupTabs } from "./GroupTabs";
 
@@ -27,8 +27,6 @@ export interface FacetFiltersProps {
   countryHint?: string;
   /** Content categories as one-tap tabs instead of a third menu. */
   contentAsTabs?: boolean;
-  /** Dense sizes inside the player (40dp triggers, chip tabs). */
-  compact?: boolean;
   /** Only the content tabs; the country/language triggers stay folded. */
   tabsOnly?: boolean;
   testID?: string;
@@ -48,7 +46,6 @@ export function FacetFilters({
   selected,
   onChange,
   contentAsTabs = false,
-  compact = false,
   tabsOnly = false,
   testID = "facet-filters",
 }: FacetFiltersProps) {
@@ -121,14 +118,13 @@ export function FacetFilters({
             onPress={() => toggle(kind)}
             style={({ pressed }) => [
               s.trigger,
-              compact && s.triggerCompact,
               selected[kind] !== null && s.selectedTrigger,
               pressed && { opacity: 0.7 },
             ]}
           >
             <Text numberOfLines={1} style={s.triggerText}>
               <Text style={s.dimension}>{LABELS[kind]} </Text>
-              <Text style={[s.value, compact && s.valueCompact]}>
+              <Text style={s.value}>
                 {facetLabel(kind, selected[kind])}
               </Text>
             </Text>
@@ -222,7 +218,6 @@ export function FacetFilters({
             )
           }
           testID={`${testID}-content-tabs`}
-          compact={compact}
         />
       )}
     </View>
@@ -236,10 +231,10 @@ const s = StyleSheet.create({
   trigger: {
     flex: 1,
     minWidth: 0,
-    minHeight: 48,
-    borderRadius: 12,
+    minHeight: sizes.field,
+    borderRadius: 999,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 6,
     backgroundColor: colors.raised,
     flexDirection: "row",
     alignItems: "center",
@@ -247,18 +242,11 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "transparent",
   },
-  triggerCompact: { minHeight: 40, paddingVertical: 6, borderRadius: 999 },
   selectedTrigger: { borderColor: colors.accent },
-  valueCompact: { fontSize: 13, lineHeight: 20 },
   triggerText: { flex: 1, minWidth: 0 },
-  dimension: { color: colors.muted, fontSize: 11, lineHeight: 16 },
-  value: {
-    color: colors.text,
-    fontSize: 14,
-    lineHeight: 21,
-    fontWeight: "600",
-  },
-  arrow: { color: colors.accent, fontSize: 14 },
+  dimension: { ...type.caption, color: colors.muted },
+  value: { ...type.chip, color: colors.text, fontWeight: "600" },
+  arrow: { color: colors.accent, fontSize: type.body.fontSize },
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.42)" },
   panel: {
     position: "absolute",
@@ -269,27 +257,11 @@ const s = StyleSheet.create({
     overflow: "hidden",
     elevation: 8,
   },
-  menuHeading: {
-    paddingLeft: 16,
-    paddingRight: 4,
-    minHeight: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  close: {
-    minWidth: 52,
-    minHeight: 48,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  closeText: { color: colors.accent, fontSize: 14, lineHeight: 21 },
   menuContent: { padding: 8, gap: 4 },
-  hint: { color: colors.muted, fontSize: 12, lineHeight: 18, padding: 8 },
-  autoOption: { minHeight: 52, padding: 10, gap: 2 },
   option: {
-    minHeight: 48,
-    padding: 12,
+    minHeight: sizes.button,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 10,
     flexDirection: "row",
     alignItems: "center",
@@ -297,6 +269,6 @@ const s = StyleSheet.create({
     gap: 8,
   },
   chosenOption: { backgroundColor: colors.raised },
-  optionText: { flex: 1, color: colors.text, fontSize: 15, lineHeight: 23 },
+  optionText: { ...type.body, flex: 1, color: colors.text },
   chosenText: { color: colors.accent, fontWeight: "600" },
 });

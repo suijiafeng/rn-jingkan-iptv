@@ -16,7 +16,7 @@ import type {
   FacetKind,
 } from "../../domain/channelFacets";
 import type { Source } from "../../domain/types";
-import { colors, styles } from "../../theme";
+import { colors, sizes, styles, type } from "../../theme";
 
 export type Tab = "all" | "favorites" | "recent" | "settings";
 export type ListTab = Exclude<Tab, "settings">;
@@ -149,7 +149,7 @@ export function ChannelFilterBar(
         <View style={[s.searchRow, { flex: 1 }]}>
           <TextInput
             accessibilityLabel="搜索频道名称"
-            style={[s.searchInput, props.compact && s.searchInputCompact]}
+            style={s.searchInput}
             placeholder="搜索频道名称…"
             placeholderTextColor={colors.muted}
             value={props.search}
@@ -224,7 +224,6 @@ export function ChannelFilterBar(
           onChange={props.onFacetChange}
           countryHint={props.countryHint}
           contentAsTabs
-          compact={props.compact}
           tabsOnly={props.foldTriggers}
           testID={`${idPrefix}-facet-filters`}
         />
@@ -386,25 +385,25 @@ const s = StyleSheet.create({
   searchLine: { flexDirection: "row", alignItems: "center", gap: 8 },
   topRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   sourceToggle: {
-    minWidth: 48,
-    minHeight: 48,
+    minWidth: sizes.field,
+    minHeight: sizes.field,
     maxWidth: 144,
     paddingHorizontal: 12,
     justifyContent: "center",
     borderRadius: 12,
     backgroundColor: colors.raised,
   },
-  sourceText: { color: colors.accent, fontSize: 14, lineHeight: 21 },
+  sourceText: { ...type.body, color: colors.accent },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 4 },
   headerAction: {
-    minHeight: 48,
-    minWidth: 48,
+    minHeight: sizes.touch,
+    minWidth: sizes.touch,
     paddingHorizontal: 8,
     alignItems: "center",
     justifyContent: "center",
   },
-  actionText: { color: colors.accent, fontSize: 14, lineHeight: 21 },
-  dangerText: { color: colors.bad, fontSize: 14, lineHeight: 21 },
+  actionText: { ...type.body, color: colors.accent },
+  dangerText: { ...type.body, color: colors.bad },
   searchRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -414,26 +413,25 @@ const s = StyleSheet.create({
   searchInput: {
     flex: 1,
     minWidth: 0,
-    minHeight: 52,
+    minHeight: sizes.field,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 8,
     color: colors.text,
-    fontSize: 15,
+    fontSize: type.body.fontSize,
   },
-  searchInputCompact: { minHeight: 40, paddingVertical: 8, fontSize: 14 },
   clearSearch: {
-    minWidth: 48,
-    minHeight: 48,
+    minWidth: sizes.field,
+    minHeight: sizes.field,
     paddingHorizontal: 12,
     alignItems: "center",
     justifyContent: "center",
   },
-  clearText: { color: colors.accent, fontSize: 12, lineHeight: 18 },
+  clearText: { ...type.muted, color: colors.accent },
   checkRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   scopeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   reset: {
-    minHeight: 48,
-    minWidth: 48,
+    minHeight: sizes.touch,
+    minWidth: sizes.touch,
     paddingHorizontal: 8,
     justifyContent: "center",
   },

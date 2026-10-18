@@ -236,7 +236,6 @@ export function ChannelPanel(props: ChannelPanelProps) {
             onPlay={selectRow}
             onFavorite={props.onFavorite}
             artworkEnabled={props.artworkEnabled}
-            flat
           />
         )}
       />

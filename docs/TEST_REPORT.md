@@ -9,6 +9,15 @@
 - 为保持单文件 500 行以内，ChannelSession 的样式表移至 channelSessionStyles.ts，无样式改动。
 - 未验证：Android 原生构建与 S25 Ultra 真机未运行；错误分类仅按 ExoPlayer 常见消息模式单元测试，真实设备上 expo-video 58 返回的消息文本未实测，分类不中时退化为“未知→手动重试”，不会误切。
 
+## 2026-10-19 · 全应用统一字号与控件尺度、设置页改为分组列表（分支 claude/dreamy-mayer-d87e9a）
+
+- 尺度：src/theme.ts 新增 `type`（title 22/28、heading 16/22、body 14/20、muted 12/18、caption 11/16、chip 13/20、rowTitle 15/20）与 `sizes`（button 44、chip 34、field 40、touch 48、logo 44、row 72）。Button 默认 44dp/14px（compact 仍 34dp/13px）；GroupTabs、FacetFilters 触发器与 ChannelRow 不再区分 compact/flat，默认即播放器尺度；搜索框 40dp/14px；来源切换 40dp；底部导航随 Button 变为 44dp；频道页行间距 12→4，与播放器选台面板一致。
+- 播放器外观核对（按源码）：选台面板的分类标签、国家/语言触发器、搜索框、频道行与此前 compact/flat 分支数值一致（行可点区域此前实际为 72dp，保持 72）；仅“关闭选台提示”按钮随默认 Button 由 52dp 变为 44dp。
+- 设置页按原型改为分组列表（SettingRows.tsx：区块标题、行、状态胶囊、文字操作）：节目来源（带节目单数量与箭头）、联网与隐私（联网状态胶囊 + 撤销/允许/重试、台标开关、移动网络提醒、国家/地区识别）、播放（换台反转、跳过不可达）、本机资料（清空）；版本与风险说明作页脚。功能与回调不变；联网行标题改为“节目来源联网”、未联网说明改为“频道资料仍可离线查看”，App.test 中对应 4 处断言随文案更新，其余断言未改。
+- 本机：typecheck、lint、Jest 24 个套件 342 项通过（根目录 jest.config 忽略 `/.claude/` 路径，worktree 内以 `--testPathIgnorePatterns /node_modules/ /android/` 运行）。`expo export --platform android` 成功；`expo prebuild` 后 `./gradlew assembleRelease --offline -PreactNativeArchitectures=arm64-v8a` 成功（首次 6 分 16 秒，增量 25 秒）。APK 33,291,084 字节，SHA-256 34bd84290671e7c2e9b19b4dbf4f488b21b5c000001af996ed054c5d2d4a8312，仍为 Android Debug 测试签名。
+- 模拟器（Medium_Phone，emulator-5554，arm64 release 包原位升级，保留已导入数据）：频道页与播放页截图对比，uiautomator 边界换算：两处行标题文本 20dp 行高、分组 16dp、分类标签文本 20dp、页面搜索框 40dp，底部导航四个 tab 等宽 44dp；播放页选台面板与频道页的标签、行、台标尺寸一致。首次截图曾被主工作目录另一 `expo run:android`（debug 包）覆盖安装，重新安装后复测。
+- 未验证：三星真机；设置页仅做源码与构建核对，模拟器截图未逐项核对各状态（撤销未保存、台标重试等）。
+
 ## 2026-10-18 · 分类交互精简、切换时自动检测、用词调整
 
 - 本机：typecheck、lint、Jest 23 个套件 326 项通过（新增自动检测 hook 与“不可用排末尾”排序测试；按新交互改写了 13 项依赖旧菜单的测试）。

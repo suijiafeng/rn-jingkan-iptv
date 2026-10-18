@@ -7,7 +7,7 @@ import {
   ViewStyle,
   type AccessibilityRole,
 } from "react-native";
-import { colors, styles } from "../theme";
+import { colors, sizes, styles, type } from "../theme";
 export function Button({
   label,
   onPress,
@@ -30,7 +30,7 @@ export function Button({
   /** Spoken label when the visible text is abbreviated; defaults to label. */
   accessibilityLabel?: string;
   style?: ViewStyle;
-  /** Chip-sized (34dp, 13px) for dense rows such as the player's filters. */
+  /** Chip-sized (34dp, 13px) for filter tabs and dense rows. */
   compact?: boolean;
 }) {
   return (
@@ -125,24 +125,19 @@ export function Notice({
 }
 const s = StyleSheet.create({
   button: {
-    minHeight: 52,
-    borderRadius: 14,
-    paddingVertical: 14,
+    minHeight: sizes.button,
+    borderRadius: 12,
+    paddingVertical: 10,
     paddingHorizontal: 16,
     alignItems: "center",
     justifyContent: "center",
   },
   buttonCompact: {
-    minHeight: 34,
+    minHeight: sizes.chip,
     borderRadius: 999,
     paddingVertical: 7,
     paddingHorizontal: 14,
   },
-  label: {
-    fontSize: 14,
-    lineHeight: 21,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  labelCompact: { fontSize: 13, lineHeight: 20, fontWeight: "500" },
+  label: { ...type.body, fontWeight: "600", textAlign: "center" },
+  labelCompact: type.chip,
 });
