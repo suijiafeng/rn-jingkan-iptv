@@ -1,5 +1,14 @@
 # 验证记录
 
+## 2026-10-19 · 合并后的 release 包与模拟器自动换源验收
+
+- 构建：main（ff0610a）`expo prebuild` 后 `./gradlew assembleRelease --offline -PreactNativeArchitectures=arm64-v8a` 通过（6 分 59 秒；prebuild 会重置 android/local.properties，需设置 ANDROID_HOME）。APK 33,298,904 字节，SHA-256 36b794f9567aac0d2f06a83203588cf14120a0aea828c19e82f9d27613e64572，仍为 Android Debug 测试签名；另存 Downloads/jingkan-iptv-test-20261019-36b794f9.apk。
+- 模拟器 Medium_Phone（emulator-5554，arm64）：原位升级安装后启动正常，iptv-org 全量列表与播放正常；此前已播的新疆卫视 8、CCTV-10 等照常起播。
+- 事故：验收中 `adb shell input keyevent` 卡死后 adbd 离线，重启模拟器时它从 3 月的快照启动（AVD 为 fastboot，之前的进程以 -no-snapshot-save 运行），应用与此前导入的 iptv-org 节目单一并丢失。已重新安装本包并从文件导入小节目单复验；需要大列表的验收要重新导入。
+- 自动换源（文件导入的 3 路同 tvg-id 节目单：404 地址 → 不存在域名 → 可用测试流）：起播 404 地址后约 2 秒，ExoPlayer 报 Response code: 404，状态栏变为“来源 2/3 连接中”，logcat 顺序为旧实例 Release 后新实例 Init；第 2 路 UnknownHostException 后约 4 秒切到“来源 3/3 连接中”，第 3 路起播出画面并显示时间轴。来源芯片随切换显示 标清→高清→1080p。整个过程没有手动操作、没有出现“暂时无法播放”。
+- 对照：iptv-org 的 CCTV-1 两路地址在模拟器网络里第一路就能播（本机 curl 10 秒内连不上，但 ExoPlayer 能起播），所以不会触发换源，不计为换源证据。
+- 未验证：三星真机；“全部失败后回到手动重试”和“未知错误不切换”在设备上未构造出来，只有自动化覆盖；深处滚动恢复因列表丢失未在设备上复验。
+
 ## 2026-10-19 · 列表固定行高、模块拆分到 500 行以内、禁用单字母标识符（分支 refactor/split-modules）
 
 - 快速滚动空白：频道行改为统一高度（标签与标题同一行、分组说明一行，随字体缩放），主列表与选台列表提供 getItemLayout，不再依赖逐行测量。新增行高与偏移单元测试 3 项。真机快速滑动尚未复测。
