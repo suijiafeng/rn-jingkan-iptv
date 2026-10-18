@@ -58,18 +58,18 @@ export const descriptions: Record<
 > = {
   paused: { title: "已暂停", body: "" },
   checking: { title: "正在检查网络", body: "" },
-  connecting: { title: "正在连接", body: "最多等 30 秒" },
+  connecting: { title: "正在连接", body: "" },
   playing: { title: "正在播放", body: "" },
   buffering: { title: "正在缓冲", body: "" },
   cellular: {
-    title: "可能使用移动数据",
-    body: "继续后，连回 Wi-Fi 前不再询问",
+    title: "正在用移动数据",
+    body: "本次不再提醒，连回 Wi-Fi 后重置",
   },
-  blocked: { title: "未允许联网", body: "到设置里允许节目来源联网" },
-  offline: { title: "网络未连接", body: "连上网络后再试" },
-  timeout: { title: "连接超时", body: "30 秒内没有画面" },
-  error: { title: "暂时无法播放", body: "原因未知，可以重试或换台" },
-  ended: { title: "节目流已结束", body: "可以重试或换台" },
+  blocked: { title: "还没允许联网", body: "去设置里允许后再播放" },
+  offline: { title: "没有网络", body: "连上后再试" },
+  timeout: { title: "连接超时", body: "" },
+  error: { title: "暂时无法播放", body: "原因未知" },
+  ended: { title: "直播已结束", body: "" },
 };
 
 export const CONTROLS_HIDE_MS = 4000;

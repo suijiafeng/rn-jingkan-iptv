@@ -218,7 +218,9 @@ test("the video is edge-to-edge and alternative sources can be selected", async 
   );
   // Portrait: the source chip opens a bottom sheet; choosing closes it.
   await fireEvent.press(
-    ui.getByRole("button", { name: "切换来源，当前标清，我的节目单，共 2 个" }),
+    ui.getByRole("button", {
+      name: "来源：标清 · 我的节目单，共 2 个，点击切换",
+    }),
   );
   expect(ui.getByTestId("source-sheet")).toBeTruthy();
   await fireEvent.press(
@@ -306,7 +308,7 @@ test("fullscreen media stays edge-to-edge while controls and sheets respect disp
 
   await fireEvent.press(
     ui.getByRole("button", {
-      name: "切换来源，当前未知清晰度，我的节目单，共 2 个",
+      name: "来源：未知清晰度 · 我的节目单，共 2 个，点击切换",
     }),
   );
   expect(
@@ -346,13 +348,17 @@ test("the sheet shows the page's result in its order; the visible playable rows 
   });
   expect(
     within(ui.getByTestId("player-channel-list"))
-      .getAllByRole("button", { name: /，(播放|来源已不再提供)$/ })
+      .getAllByRole("button", { name: /，(播放|节目单里已没有这个频道)$/ })
       .map((item) => item.props.accessibilityLabel),
-  ).toEqual(["深夜电影，播放", "山野纪实，播放", "失效频道，来源已不再提供"]);
+  ).toEqual([
+    "深夜电影，播放",
+    "山野纪实，播放",
+    "失效频道，节目单里已没有这个频道",
+  ]);
   const current = ui.getByRole("button", { name: "山野纪实，播放" });
   expect(current.props.accessibilityState.selected).toBe(true);
   await fireEvent.press(
-    ui.getByRole("button", { name: "失效频道，来源已不再提供" }),
+    ui.getByRole("button", { name: "失效频道，节目单里已没有这个频道" }),
   );
   expect(options.onSelect).not.toHaveBeenCalled();
   await fireEvent.press(ui.getByRole("button", { name: "取消收藏深夜电影" }));
@@ -825,7 +831,7 @@ describe("waiting and failure", () => {
     await seconds(30);
     expect(ui.getByText("连接超时")).toBeTruthy();
     const mountsBefore = mockMounts.mock.calls.length;
-    await fireEvent.press(ui.getByRole("button", { name: "重试播放" }));
+    await fireEvent.press(ui.getByRole("button", { name: "重试" }));
     await act(async () => {
       await Promise.resolve();
     });
@@ -864,7 +870,7 @@ describe("one overlay instead of native controls", () => {
     expect(bottom.getByLabelText("直播，不可回看")).toBeTruthy();
     expect(
       bottom.getByRole("button", {
-        name: "切换来源，当前未知清晰度，我的节目单，共 2 个",
+        name: "来源：未知清晰度 · 我的节目单，共 2 个，点击切换",
       }),
     ).toBeTruthy();
     expect(bottom.getByRole("button", { name: "频道列表" })).toBeTruthy();
@@ -892,7 +898,7 @@ describe("one overlay instead of native controls", () => {
     await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
     await start();
     expect(ui.getByTestId("media-timeline")).toBeTruthy();
-    expect(ui.getByText("-30:00")).toBeTruthy();
+    expect(ui.getByText("落后 30:00")).toBeTruthy();
     await fireEvent.press(ui.getByRole("button", { name: "回到直播" }));
     expect(mockNative.currentTime).toBe(3590);
     await fireEvent.press(ui.getByTestId("center-play-pause"));
@@ -949,10 +955,10 @@ describe("portrait layout", () => {
       }),
     ).toBeTruthy();
     expect(
-      ui.getByRole("button", { name: "来源：未知清晰度，我的节目单" }).props
+      ui.getByRole("button", { name: "来源：未知清晰度 · 我的节目单" }).props
         .accessibilityState.disabled,
     ).toBe(true);
-    await fireEvent.press(ui.getByRole("button", { name: "返回频道" }));
+    await fireEvent.press(ui.getByRole("button", { name: "收起播放器" }));
     expect(options.onClose).toHaveBeenCalledTimes(1);
     await ui.unmount();
   });
@@ -972,7 +978,7 @@ describe("portrait layout", () => {
     const ui = await render(<PlayerScreen {...options} />);
     await fireEvent.press(
       ui.getByRole("button", {
-        name: "切换来源，当前未知清晰度，我的节目单，共 2 个",
+        name: "来源：未知清晰度 · 我的节目单，共 2 个，点击切换",
       }),
     );
     expect(ui.getByTestId("source-sheet")).toBeTruthy();
@@ -1081,7 +1087,7 @@ describe("one round primary control", () => {
         jest.advanceTimersByTime(1000);
       });
     expect(ui.getByText("连接超时")).toBeTruthy();
-    expect(round().props.accessibilityLabel).toBe("重试播放");
+    expect(round().props.accessibilityLabel).toBe("重试");
     expect(within(round()).getByText("↻")).toBeTruthy();
     await fireEvent.press(round());
     await act(async () => {
@@ -1096,7 +1102,7 @@ describe("one round primary control", () => {
     expect(ui.queryByText("已暂停")).toBeNull(); // plain pause: dimmed picture and ▶ only
     expect(round().props.accessibilityLabel).toBe("播放");
     expect(within(round()).getByText("▶")).toBeTruthy();
-    expect(ui.queryByRole("button", { name: "重试播放" })).toBeNull();
+    expect(ui.queryByRole("button", { name: "重试" })).toBeNull();
     await ui.unmount();
   });
 });

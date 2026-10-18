@@ -49,7 +49,7 @@ export const ChannelRow = memo(function ChannelRow({
         accessibilityLabel={
           editingRecent
             ? `${title}，观看记录`
-            : `${title}${labels.length ? `，${labels.join("，")}` : ""}，${channel.active ? "播放" : "来源已不再提供"}`
+            : `${title}${labels.length ? `，${labels.join("，")}` : ""}，${channel.active ? "播放" : "节目单里已没有这个频道"}`
         }
         accessibilityState={{ disabled: playbackDisabled, selected: current }}
         onPress={() => onPlay(channel)}
@@ -90,7 +90,7 @@ export const ChannelRow = memo(function ChannelRow({
           <Text numberOfLines={2} style={[styles.muted, flat && s.flatMeta]}>
             {channel.active
               ? displayGroups(channel.groupName)
-              : "来源已不再提供"}
+              : "节目单里已没有这个频道"}
           </Text>
         </View>
       </Pressable>

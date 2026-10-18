@@ -146,7 +146,7 @@ export function useChannelSession(props: SessionProps) {
         : busy
           ? "暂停"
           : canRetry
-            ? "重试播放"
+            ? "重试"
             : "播放";
   const primaryAction = () => {
     // On a possibly metered network ▶ is the explicit "continue" answer.
@@ -215,12 +215,10 @@ export function useChannelSession(props: SessionProps) {
   const description = descriptions[state.phase];
   const pausedBody =
     state.pauseReason === "background"
-      ? "离开应用后暂停"
+      ? "切到后台时暂停"
       : state.pauseReason === "interrupted"
-        ? "被系统暂停"
-        : state.pauseReason === "cellular-declined"
-          ? "已停止，可手动播放"
-          : "";
+        ? "被其他应用打断"
+        : "";
   // One round control for the primary action in every state, so cancel,
   // retry, pause and resume all look alike: ■ while connecting, ↻ after a
   // failure, ▶ when paused or stopped, ❚❚ while playing.
@@ -282,8 +280,8 @@ export function useChannelSession(props: SessionProps) {
       count={props.sources.length}
       accessibilityLabel={
         props.sources.length > 1
-          ? `切换来源，当前${qualityName(props.channel)}，${props.channel.sourceName}，共 ${props.sources.length} 个`
-          : `来源：${qualityName(props.channel)}，${props.channel.sourceName}`
+          ? `来源：${qualityName(props.channel)} · ${props.channel.sourceName}，共 ${props.sources.length} 个，点击切换`
+          : `来源：${qualityName(props.channel)} · ${props.channel.sourceName}`
       }
       solid={!props.fullscreen}
       disabled={props.sources.length < 2}

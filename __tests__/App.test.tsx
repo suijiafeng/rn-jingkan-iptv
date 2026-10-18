@@ -406,7 +406,9 @@ test("favorites has no duplicate continue-watching shortcut and recent keeps una
   expect(screen.queryByText("继续观看")).toBeNull();
   expect(screen.queryByTestId("channel-facet-filters")).toBeNull();
   await fireEvent.press(screen.getByRole("tab", { name: "最近" }));
-  expect(await screen.findByLabelText("失效频道，来源已不再提供")).toBeTruthy();
+  expect(
+    await screen.findByLabelText("失效频道，节目单里已没有这个频道"),
+  ).toBeTruthy();
   expect(screen.queryByLabelText("删除失效频道的观看记录")).toBeNull();
 });
 test("clear search restores an unfiltered query", async () => {
@@ -850,7 +852,7 @@ test("deleting one playback source refreshes alternatives and switches off the d
   ] as never[]);
   (repo.listChannels as jest.Mock).mockImplementation(
     async (query?: ChannelQuery) =>
-    query?.mode === "recent" ? [] : ([primary] as never[]),
+      query?.mode === "recent" ? [] : ([primary] as never[]),
   );
   repo.getChannel.mockImplementation(async (id) =>
     id === primary.id && !deleted ? primary : id === backup.id ? backup : null,
@@ -1177,7 +1179,9 @@ test("navigation separates types from history and restores channel filters witho
   expect(screen.queryByRole("button", { name: "最近" })).toBeNull();
   await fireEvent.press(screen.getByRole("tab", { name: "最近" }));
   await waitFor(() =>
-    expect(screen.getByLabelText("旧频道，来源已不再提供")).toBeTruthy(),
+    expect(
+      screen.getByLabelText("旧频道，节目单里已没有这个频道"),
+    ).toBeTruthy(),
   );
   expect(screen.getByLabelText("搜索频道名称").props.value).toBe("");
   expect(screen.getByLabelText("最新新闻台，播放")).toBeTruthy();

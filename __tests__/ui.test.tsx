@@ -52,8 +52,10 @@ test("inactive favorite never plays a same-name replacement", async () => {
       onFavorite={() => {}}
     />,
   );
-  expect(screen.getByText("来源已不再提供")).toBeTruthy();
-  await fireEvent.press(screen.getByLabelText("山野纪实，来源已不再提供"));
+  expect(screen.getByText("节目单里已没有这个频道")).toBeTruthy();
+  await fireEvent.press(
+    screen.getByLabelText("山野纪实，节目单里已没有这个频道"),
+  );
   expect(play).not.toHaveBeenCalled();
 });
 
