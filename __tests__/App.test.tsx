@@ -859,7 +859,7 @@ test("rename failure remains visible with the input and a working retry", async 
   expect(repo.renameSource).toHaveBeenCalledTimes(2);
 });
 
-test("playback receives the complete catalog when opened from favorites", async () => {
+test("the sheet shows the page's list, and switching its tab switches the page", async () => {
   const favorite = {
     id: "fav",
     name: "收藏台",
@@ -883,19 +883,38 @@ test("playback receives the complete catalog when opened from favorites", async 
   await render(<App />);
   await fireEvent.press(await screen.findByLabelText("收藏台，播放"));
   await waitFor(() => expect(mockPlayerProps).toHaveBeenCalled());
-  // The full catalog arrives after the player has already opened.
+  const props = mockPlayerProps.mock.calls.at(-1)![0];
+  expect(props.channels).toEqual([favorite]);
+  expect(props.sheet.filters.tab).toBe("favorites");
+  expect(props.sheet.channels).toEqual([favorite]);
+  await act(async () => props.sheet.onTabChange("all"));
   await waitFor(() =>
-    expect(mockPlayerProps.mock.calls.at(-1)![0].allChannels).toEqual([
+    expect(mockPlayerProps.mock.calls.at(-1)![0].sheet.channels).toEqual([
       favorite,
       other,
     ]),
   );
-  const props = mockPlayerProps.mock.calls.at(-1)![0];
-  expect(props.channels).toEqual([favorite]);
-  await act(async () => props.onSelect(other, props.allChannels));
+  const sheet = mockPlayerProps.mock.calls.at(-1)![0].sheet;
+  expect(sheet.filters.tab).toBe("all");
+  expect(sheet.rangeKey).not.toBeNull();
+  await act(async () =>
+    mockPlayerProps.mock.calls.at(-1)![0].onSelect(other, sheet.channels),
+  );
   const selected = mockPlayerProps.mock.calls.at(-1)![0];
   expect(selected.channel.id).toBe("other");
   expect(selected.channels).toEqual([favorite, other]);
+  // The whole catalog is never read for the sheet.
+  // The sheet reads no catalog of its own: every list read is a page query
+  // (the empty call is this file's getChannel mock).
+  expect(
+    (repo.listChannels as jest.Mock).mock.calls.filter(
+      ([query]) => query && !query.mode,
+    ),
+  ).toEqual([]);
+  await act(async () => selected.onClose());
+  expect(
+    screen.getByRole("tab", { name: "频道" }).props.accessibilityState.selected,
+  ).toBe(true);
 });
 
 test("a long list shows its first page at once and still queues every row", async () => {
@@ -1216,18 +1235,24 @@ test("clearing recent supports cancellation and failure retry while preserving f
   alert.mockRestore();
 });
 
-test("player receives history for quick tuning without duplicate history-management callbacks", async () => {
+test("the sheet's recent tab is the page's history without history-management actions", async () => {
   const { unavailable } = setupRecentHistory();
   await render(<App />);
   await fireEvent.press(await screen.findByLabelText("最新新闻台，播放"));
   await waitFor(() => expect(mockPlayerProps).toHaveBeenCalled());
   const player = mockPlayerProps.mock.calls.at(-1)![0];
-  expect(
-    player.recentChannels.map((item: { id: string }) => item.id),
-  ).toContain(unavailable.id);
-  expect(player.onRemoveRecent).toBeUndefined();
-  expect(player.onClearRecent).toBeUndefined();
-  expect(player.recentBusy).toBeUndefined();
+  await act(async () => player.sheet.onTabChange("recent"));
+  await waitFor(() =>
+    expect(
+      mockPlayerProps.mock.calls
+        .at(-1)![0]
+        .sheet.channels.map((item: { id: string }) => item.id),
+    ).toContain(unavailable.id),
+  );
+  const latest = mockPlayerProps.mock.calls.at(-1)![0];
+  expect(latest.sheet.filters.recentEditing).toBe(false);
+  expect(latest.onRemoveRecent).toBeUndefined();
+  expect(latest.onClearRecent).toBeUndefined();
   expect(repo.recordRecent).not.toHaveBeenCalled();
 });
 
@@ -1284,49 +1309,86 @@ test("Android back exits history management before leaving the screen", async ()
   }
 });
 
-test("the player opens without waiting for the full catalog, which is loaded once and reused", async () => {
-  const one = {
-    id: "one",
-    name: "第一台",
-    active: true,
-    favorite: false,
-    sourceId: "s",
-    sourceName: "来源",
-    groupName: "新闻",
-  };
+test("filters chosen in the sheet are the channel page's filters", async () => {
+  setupFacetCatalog();
   repo.getSetting.mockImplementation(async (key, fallback) =>
     key === "remoteAllowed" ? true : fallback,
   );
-  let releaseCatalog!: () => void;
-  const catalogCalls: unknown[] = [];
-  (repo.listChannels as jest.Mock).mockImplementation(async (query) => {
-    if (query?.mode) return query.mode === "recent" ? [] : [one];
-    if (query && (query.search !== undefined || query.sourceId !== undefined))
-      return [one];
-    catalogCalls.push(query);
-    // The player's catalog request (no filters at all) stalls until released.
-    if (catalogCalls.length > 0 && query === undefined)
-      await new Promise<void>((resolve) => {
-        releaseCatalog = resolve;
-      });
-    return [one];
-  });
-  (repo.getChannel as jest.Mock).mockImplementation(async () => one);
   await render(<App />);
-  await fireEvent.press(await screen.findByLabelText("第一台，播放"));
+  await fireEvent.press(await screen.findByLabelText("中文新闻，播放"));
   await waitFor(() => expect(mockPlayerProps).toHaveBeenCalled());
-  expect(mockPlayerProps.mock.calls.at(-1)![0].allChannels).toBeUndefined();
-  await act(async () => releaseCatalog());
-  await waitFor(() =>
-    expect(mockPlayerProps.mock.calls.at(-1)![0].allChannels).toEqual([one]),
+  const { sheet } = mockPlayerProps.mock.calls.at(-1)![0];
+  await act(async () =>
+    sheet.filters.onFacetChange(
+      { ...sheet.filters.facetSelection, language: "en" },
+      "language",
+    ),
   );
-  const loads = catalogCalls.filter((q) => q === undefined).length;
+  await waitFor(() =>
+    expect(
+      mockPlayerProps.mock.calls
+        .at(-1)![0]
+        .sheet.channels.map((c: Channel) => c.name),
+    ).toEqual(["英语体育", "美国英语"]),
+  );
+  await act(async () =>
+    mockPlayerProps.mock.calls.at(-1)![0].sheet.filters.onSearchChange("美国"),
+  );
   await act(async () => mockPlayerProps.mock.calls.at(-1)![0].onClose());
-  await fireEvent.press(await screen.findByLabelText("第一台，播放"));
+  expect(screen.getByRole("button", { name: "语言：英语" })).toBeTruthy();
+  expect(screen.getByLabelText("搜索频道名称").props.value).toBe("美国");
+  // Search settles after the page's usual 250 ms debounce.
   await waitFor(() =>
-    expect(mockPlayerProps.mock.calls.at(-1)![0].channel.id).toBe("one"),
+    expect(screen.queryByLabelText("英语体育，播放")).toBeNull(),
   );
-  expect(catalogCalls.filter((q) => q === undefined).length).toBe(loads);
+  expect(screen.getByLabelText("美国英语，播放")).toBeTruthy();
+});
+
+test("locating from the sheet shows every country without changing the saved choice", async () => {
+  setupFacetCatalog();
+  let preference: unknown;
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed"
+      ? true
+      : key === "countryPreference" && preference
+        ? preference
+        : fallback,
+  );
+  (repo.setSetting as jest.Mock).mockImplementation(async (key, value) => {
+    if (key === "countryPreference") preference = value;
+  });
+  await render(<App />);
+  await chooseFacet("国家/地区", "美国");
+  await fireEvent.press(await screen.findByLabelText("美国中文，播放"));
+  await waitFor(() => expect(mockPlayerProps).toHaveBeenCalled());
+  const saved = preference;
+  await act(async () => mockPlayerProps.mock.calls.at(-1)![0].sheet.onLocate());
+  await waitFor(() =>
+    expect(
+      mockPlayerProps.mock.calls
+        .at(-1)![0]
+        .sheet.channels.map((c: Channel) => c.name),
+    ).toContain("中文新闻"),
+  );
+  expect(
+    mockPlayerProps.mock.calls.at(-1)![0].sheet.filters.facetSelection.country,
+  ).toBeNull();
+  expect(preference).toBe(saved);
+  // Choosing a country again ends the bypass.
+  await act(async () => {
+    const { filters } = mockPlayerProps.mock.calls.at(-1)![0].sheet;
+    filters.onFacetChange(
+      { ...filters.facetSelection, country: "US" },
+      "country",
+    );
+  });
+  await waitFor(() =>
+    expect(
+      mockPlayerProps.mock.calls
+        .at(-1)![0]
+        .sheet.channels.map((c: Channel) => c.name),
+    ).not.toContain("中文新闻"),
+  );
 });
 
 test("the title and filters live in an overlay above the list, not inside it", async () => {

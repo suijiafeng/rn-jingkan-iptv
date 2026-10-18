@@ -13,6 +13,7 @@ import {
   BackHandler,
   FlatList,
   View,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as DocumentPicker from "expo-document-picker";
@@ -54,6 +55,7 @@ import {
 } from "./features/source/SourceManagerModal";
 import { checkChannels } from "./features/source/availability";
 import { useAutoAvailabilityCheck } from "./features/channel/useAutoAvailabilityCheck";
+import { useChannelFilters } from "./features/channel/useChannelFilters";
 import { lookupIptvOrgLanguages } from "./features/source/iptvOrgLanguages";
 import { isIptvOrgId } from "./domain/channelFacets";
 import { SettingsScreen } from "./features/settings/SettingsScreen";
@@ -67,12 +69,6 @@ import {
   Tab,
 } from "./features/channel/ChannelListParts";
 
-type ListFilters = {
-  sourceId: string;
-  group: string | null;
-  language: string | null;
-  search: string;
-};
 // The empty state is a sentinel row so it renders below the header overlay.
 const EMPTY_ROW = { kind: "empty" } as const;
 type ListItem = Channel | typeof EMPTY_ROW;
@@ -92,6 +88,7 @@ export default function App() {
       group: string | null;
       language: string | null;
       countryKey: string;
+      countryBypassed: boolean;
       query: string;
     } | null>(null),
     [listError, setListError] = useState(""),
@@ -102,23 +99,21 @@ export default function App() {
     [channelTotal, setChannelTotal] = useState<number | null>(null),
     [recent, setRecent] = useState<Channel[]>([]);
   const [tab, setTab] = useState<Tab>("all"),
-    [sourceId, setSourceId] = useState(""),
-    [group, setGroup] = useState<string | null>(null),
-    [language, setLanguage] = useState<string | null>(null),
-    [search, setSearch] = useState(""),
-    [query, setQuery] = useState(""),
     [facets, setFacets] = useState<ChannelFacetOptions>(EMPTY_FACET_OPTIONS);
+  // One filter state for the channel page and the player's channel sheet.
+  const filters = useChannelFilters();
+  const { sourceId, group, language, search, query } = filters;
   const region = useRegionPreference(repo, setError);
-  const country = effectiveCountry(
-    region.preference,
-    region.result,
-    facets.countries,
-  );
   const countryKey = JSON.stringify([
     region.preference.mode,
     region.preference.countryCode,
     region.result.countryCode,
   ]);
+  // "定位当前频道" shows every country until the preference changes.
+  const countryBypassed = filters.countryBypass === countryKey;
+  const country = countryBypassed
+    ? null
+    : effectiveCountry(region.preference, region.result, facets.countries);
   const [remoteAllowed, setRemoteAllowed] = useState(false),
     [revokePending, setRevokePending] = useState(false),
     [mobileWarning, setMobileWarning] = useState(true),
@@ -143,7 +138,6 @@ export default function App() {
     // For "回到上一个频道": the channel watched before the current one.
     [previousChannel, setPreviousChannel] = useState<Channel | null>(null),
     [playQueue, setPlayQueue] = useState<Channel[]>([]),
-    [allChannels, setAllChannels] = useState<Channel[]>([]),
     [revision, setRevision] = useState(0);
   const [recentBusy, setRecentBusy] = useState(false),
     [recentEditing, setRecentEditing] = useState(false);
@@ -164,10 +158,6 @@ export default function App() {
     checkGeneration = useRef(0),
     playGeneration = useRef(0),
     lastWatched = useRef<Channel | null>(null),
-    // The full catalog (thousands of rows) is cached for the channel sheet and
-    // only re-read after imports, refreshes, deletions or clearing.
-    catalogStale = useRef(true),
-    catalogLoad = useRef(0),
     saving = useRef(false),
     loadGeneration = useRef(0),
     mounted = useRef(true),
@@ -177,7 +167,6 @@ export default function App() {
   // Each bottom tab keeps its own scroll position across tab switches.
   const listRef = useRef<FlatList<ListItem>>(null),
     tabOffsets = useRef<Partial<Record<Tab, number>>>({}),
-    tabFilters = useRef<Partial<Record<ListTab, ListFilters>>>({}),
     restoreTab = useRef<Tab | null>(null),
     // Resolves to the complete current list (the play queue) once loaded.
     fullList = useRef<Promise<Channel[]>>(Promise.resolve([])),
@@ -211,10 +200,21 @@ export default function App() {
       group,
       language,
       countryKey,
+      countryBypassed,
       query,
       revision,
     }),
-    [repo, tab, sourceId, group, language, countryKey, query, revision],
+    [
+      repo,
+      tab,
+      sourceId,
+      group,
+      language,
+      countryKey,
+      countryBypassed,
+      query,
+      revision,
+    ],
   );
   const listLoading = loadedRequest !== loadRequest;
 
@@ -232,6 +232,7 @@ export default function App() {
     loadedRequest.group === group &&
     loadedRequest.language === language &&
     loadedRequest.countryKey === countryKey &&
+    loadedRequest.countryBypassed === countryBypassed &&
     loadedRequest.query === query;
   // Background check of the shown channels after a category switch.
   const { progress: autoCheck, cancel: cancelAutoCheck } =
@@ -303,10 +304,6 @@ export default function App() {
     };
   }, [startupAttempt]);
   useEffect(() => {
-    const id = setTimeout(() => setQuery(search.trim()), 250);
-    return () => clearTimeout(id);
-  }, [search]);
-  useEffect(() => {
     if (!repo || !region.ready) return;
     let active = true;
     const id = ++loadGeneration.current;
@@ -324,11 +321,13 @@ export default function App() {
       if (!current()) return;
       const baseFacets =
         tab === "all" ? buildFacetOptions(facetRows) : EMPTY_FACET_OPTIONS;
-      const selectedCountry = effectiveCountry(
-        region.preference,
-        region.result,
-        baseFacets.countries,
-      );
+      const selectedCountry = countryBypassed
+        ? null
+        : effectiveCountry(
+            region.preference,
+            region.result,
+            baseFacets.countries,
+          );
       const nextFacets =
         tab === "all"
           ? {
@@ -405,6 +404,7 @@ export default function App() {
     sourceId,
     group,
     language,
+    countryBypassed,
     query,
     revision,
     loadRequest,
@@ -632,15 +632,10 @@ export default function App() {
           content: f.kind === "file" ? f.content : undefined,
         });
       }
-      invalidateCatalog();
       setForm(null);
       setTab("all");
       setRecentEditing(false);
-      setSourceId("");
-      setGroup(null);
-      setLanguage(null);
-      setSearch("");
-      setQuery("");
+      filters.reset();
       changed();
     } catch {
       setFormError("保存失败，旧数据未改变。请重试；刷新冲突时请重新刷新。");
@@ -712,7 +707,6 @@ export default function App() {
         }),
       );
       say(`已补全 ${changedCount} 个频道的语言`);
-      invalidateCatalog();
       changed();
     } catch (e) {
       if (mounted.current && epoch === permissionEpoch.current)
@@ -806,7 +800,6 @@ export default function App() {
         x.id === c.id ? { ...x, favorite: fav } : x;
       setPlaying((p) => (p ? patch(p) : p));
       setPlayQueue((q) => q.map(patch));
-      setAllChannels((q) => q.map(patch));
       setRecent((r) => r.map(patch));
       setChannels((list) => list.map(patch));
       // The patch is enough for lists that keep the row. Re-read only the
@@ -836,7 +829,6 @@ export default function App() {
       channelId ? items.filter((item) => item.id !== channelId) : [],
     );
     setChannels((items) => items.map(patch));
-    setAllChannels((items) => items.map(patch));
     setPlayQueue((items) => items.map(patch));
     setPlaying((current) => (current ? patch(current) : current));
     changed();
@@ -876,26 +868,6 @@ export default function App() {
       if (mounted.current) setRecentBusy(false);
     }
   };
-  /** Background catalog load for the sheet; the sheet uses the queue until then. */
-  const loadCatalog = () => {
-    if (!repo || !catalogStale.current) return;
-    catalogStale.current = false;
-    const load = ++catalogLoad.current;
-    repo
-      .listChannels()
-      .then((catalog) => {
-        if (mounted.current && load === catalogLoad.current)
-          setAllChannels(catalog.filter((channel) => channel.active));
-      })
-      .catch(() => {
-        if (load === catalogLoad.current) catalogStale.current = true;
-      });
-  };
-  const invalidateCatalog = () => {
-    catalogStale.current = true;
-    catalogLoad.current += 1;
-    setAllChannels([]);
-  };
   const play = async (c: Channel, queueFrom?: Channel[]) => {
     if (!repo || !c.active) return;
     const task = ++playGeneration.current;
@@ -919,7 +891,6 @@ export default function App() {
         setError("频道已不可用，请重新读取频道后重试");
         return;
       }
-      loadCatalog();
       setPlayQueue(queue.filter((x) => x.active));
       const from = playing ?? lastWatched.current;
       if (from && from.id !== selected.id) setPreviousChannel(from);
@@ -953,22 +924,7 @@ export default function App() {
     setError("");
     try {
       await repo.deleteSource(s.id);
-      invalidateCatalog();
-      for (const key of ["all", "favorites", "recent"] as const) {
-        const saved = tabFilters.current[key];
-        if (saved?.sourceId === s.id)
-          tabFilters.current[key] = {
-            ...saved,
-            sourceId: "",
-            group: null,
-            language: null,
-          };
-      }
-      if (sourceId === s.id) {
-        setSourceId("");
-        setGroup(null);
-        setLanguage(null);
-      }
+      filters.forgetSource(s.id);
       changed();
     } catch {
       setError("删除未完成，请重试");
@@ -1067,7 +1023,6 @@ export default function App() {
     region.cancel();
     try {
       await repo.clearAll();
-      invalidateCatalog();
       setRevokePending(false);
       setMobileWarning(true);
       setMobileAccepted(false);
@@ -1079,13 +1034,10 @@ export default function App() {
       setPreviousChannel(null);
       lastWatched.current = null;
       setCheckSummaries({});
-      tabFilters.current = {};
+      filters.forgetSaved();
+      filters.reset();
+      filters.setCountryBypass(null);
       tabOffsets.current = {};
-      setSourceId("");
-      setGroup(null);
-      setLanguage(null);
-      setSearch("");
-      setQuery("");
       setTab("all");
       setRecentEditing(false);
       changed();
@@ -1095,21 +1047,10 @@ export default function App() {
   };
   const changeTab = (key: Tab) => {
     setRecentEditing(false);
-    if (tab !== "settings")
-      tabFilters.current[tab] = {
-        sourceId: tab === "all" ? sourceId : "",
-        group: tab === "all" ? group : null,
-        language: tab === "all" ? language : null,
-        search,
-      };
-    if (key !== "settings") {
-      const saved = tabFilters.current[key];
-      setSourceId(key === "all" ? (saved?.sourceId ?? "") : "");
-      setGroup(key === "all" ? (saved?.group ?? null) : null);
-      setLanguage(key === "all" ? (saved?.language ?? null) : null);
-      setSearch(saved?.search ?? "");
-      setQuery(saved?.search.trim() ?? "");
-    }
+    filters.switchTab(
+      tab === "settings" ? null : tab,
+      key === "settings" ? null : key,
+    );
     restoreTab.current = key;
     setTab(key);
   };
@@ -1169,8 +1110,7 @@ export default function App() {
       if (!recentEditing) {
         tabOffsets.current.recent = 0;
         restoreTab.current = "recent";
-        setSearch("");
-        setQuery("");
+        filters.clearSearch();
       }
       setRecentEditing((value) => !value);
     },
@@ -1181,28 +1121,27 @@ export default function App() {
     onSearchChange: (text) => {
       tabOffsets.current[tab] = 0;
       restoreTab.current = tab;
-      setSearch(text);
+      filters.setSearch(text);
     },
     onClearSearch: () => {
       tabOffsets.current[tab] = 0;
       restoreTab.current = tab;
-      setSearch("");
-      setQuery("");
+      filters.clearSearch();
     },
     onSourceChange: (id) => {
       tabOffsets.current[tab] = 0;
       restoreTab.current = tab;
-      setSourceId(id);
-      setGroup(null);
-      setLanguage(null);
+      filters.setSource(id);
     },
     onFacetChange: (selection, kind) => {
       tabOffsets.current[tab] = 0;
       restoreTab.current = tab;
-      setGroup(selection.content);
-      setLanguage(selection.language);
-      if (kind === "country")
+      Keyboard.dismiss();
+      filters.setFacets(selection);
+      if (kind === "country") {
+        filters.setCountryBypass(null);
         void region.selectManualCountry(selection.country);
+      }
     },
   };
   const rows = !hasCurrentList || listError ? [] : channels;
@@ -1335,12 +1274,8 @@ export default function App() {
                       onShowAll={() => {
                         setRecentEditing(false);
                         setTab("all");
-                        setSourceId("");
-                        setGroup(null);
-                        setLanguage(null);
+                        filters.reset();
                         void region.selectManualCountry(null);
-                        setSearch("");
-                        setQuery("");
                       }}
                     />
                   );
@@ -1466,24 +1401,44 @@ export default function App() {
             onDismissError={() => setError("")}
             channel={playing}
             channels={playQueue}
-            allChannels={allChannels.length ? allChannels : undefined}
-            recentChannels={recent}
             artworkEnabled={artworkAllowed && remoteAllowed && !revokePending}
-            countryCode={effectiveCountry(
-              region.preference,
-              region.result,
-              buildFacetOptions(allChannels.length ? allChannels : playQueue)
-                .countries,
-            )}
-            countrySelectionKey={countryKey}
-            countryHint={
-              region.preference.mode === "manual"
-                ? "手动选择"
-                : region.result.message
-            }
-            onCountryChange={(value) => void region.selectManualCountry(value)}
+            sheet={{
+              filters: listHeaderProps,
+              onTabChange: changeTab,
+              channels: rows,
+              rangeKey: hasCurrentList
+                ? JSON.stringify([
+                    tab,
+                    sourceId,
+                    group,
+                    language,
+                    countryKey,
+                    countryBypassed,
+                    query,
+                  ])
+                : null,
+              loading: listLoading,
+              onLocate: () => {
+                restoreTab.current = "all";
+                tabOffsets.current.all = 0;
+                setRecentEditing(false);
+                if (tab !== "all") changeTab("all");
+                filters.reset();
+                filters.setCountryBypass(countryKey);
+              },
+            }}
             onSelect={(channel, queue) => {
-              if (queue) setPlayQueue(queue);
+              if (queue) {
+                setPlayQueue(queue);
+                // Picked while the rest of a long list was still loading.
+                if (!listSettled.current)
+                  void fullList.current.then((whole) => {
+                    if (mounted.current)
+                      setPlayQueue((q) =>
+                        q === queue ? whole.filter((x) => x.active) : q,
+                      );
+                  });
+              }
               if (channel.id !== playing.id) setPreviousChannel(playing);
               setPlaying(channel);
             }}
@@ -1508,10 +1463,12 @@ export default function App() {
             onMobileAccepted={() => setMobileAccepted(true)}
             swipeReverse={swipeReverse}
             skipUnreachable={skipUnreachable}
-            // Resolve from the fresh catalog: a refresh may have changed it.
+            // Prefer a fresh row: a refresh may have changed the channel.
             previousChannel={
               previousChannel
-                ? (allChannels.find((c) => c.id === previousChannel.id) ?? null)
+                ? ([...playQueue, ...channels, ...recent].find(
+                    (c) => c.id === previousChannel.id,
+                  ) ?? previousChannel)
                 : null
             }
           />

@@ -125,15 +125,22 @@ export function hasFilterBar(
  * Search, source chooser, facets and scope: stays pinned to the top while a
  * long list scrolls, so filters are reachable without scrolling back up.
  */
-export function ChannelFilterBar(props: HeaderProps) {
-  const { tab } = props;
+export function ChannelFilterBar(
+  props: HeaderProps & {
+    /** testID prefix, so the page and the player sheet stay distinguishable. */
+    idPrefix?: string;
+    /** Inside the player sheet: no own background or vertical padding. */
+    compact?: boolean;
+  },
+) {
+  const { tab, idPrefix = "channel" } = props;
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const selectedSource = props.sources.find(
     (source) => source.id === props.sourceId,
   );
   if (!hasFilterBar(props)) return null;
   return (
-    <View style={s.filterBar}>
+    <View style={[s.filterBar, props.compact && s.compactBar]}>
       <View style={s.searchLine}>
         <View style={[s.searchRow, { flex: 1 }]}>
           <TextInput
@@ -213,7 +220,7 @@ export function ChannelFilterBar(props: HeaderProps) {
           onChange={props.onFacetChange}
           countryHint={props.countryHint}
           contentAsTabs
-          testID="channel-facet-filters"
+          testID={`${idPrefix}-facet-filters`}
         />
       )}
       {tab === "all" && props.autoCheck && (
@@ -368,6 +375,7 @@ const s = StyleSheet.create({
   header: { gap: 10, marginBottom: 12 },
   // Opaque so rows scrolling underneath never show through the pinned bar.
   filterBar: { gap: 10, paddingVertical: 8, backgroundColor: colors.bg },
+  compactBar: { gap: 8, paddingVertical: 0, backgroundColor: "transparent" },
   searchLine: { flexDirection: "row", alignItems: "center", gap: 8 },
   topRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   sourceToggle: {
