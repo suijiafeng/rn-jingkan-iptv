@@ -4,7 +4,7 @@
 
 ## 当前交付状态
 
-完整可构建的 Expo / React Native 源码。最新 TypeScript、ESLint、21 组 308 项自动测试、Android Hermes JS bundle 与 Android arm64 release 构建均通过。需求规格见 docs/DEV_SPEC.md，分阶段验证记录见 docs/TEST_REPORT.md。
+正式候选版本为 1.0.0（构建 2），面向个人 Android 手机使用。TypeScript、ESLint、43 组 383 项自动测试通过；构建及设备证据见 docs/TEST_REPORT.md。签名、安装迁移和真机放行步骤见 [发布说明](docs/RELEASE.md)。
 
 本机已生成可独立安装的 APK，使用 Android Debug 测试签名；它不是正式分发签名包。三星 S25 Ultra 真机、长时间播放和真实定位/IP 服务验收仍需分别验证，构建成功不能替代这些证据。
 
@@ -12,17 +12,19 @@
 
 ## 已实现
 
-- M3U HTTP(S) 链接或系统文件导入；2 MiB 实际字节限制、UTF-8 严格解析、统计预览后确认保存
+- M3U/TXT HTTP(S) 链接或系统文件导入；8 MiB 实际字节限制、UTF-8/GBK 解析、统计预览后确认保存
 - 来源选择、国家/地区／语言／内容下拉筛选和中文名称搜索（分组按“;”拆分并中文化，[Geo-blocked] 等标记显示为标签），独立收藏按钮，最近 100 个成功播放频道
 - 来源管理中手动“检测可用性”（每频道 1 KiB 请求、8 秒、4 并发，可停止；结果只代表服务器有响应）
 - SQLite 事务刷新，稳定频道 ID；消失的收藏保留为失效条目，旧任务不能覆盖新数据或复活已删除来源
 - expo-video 原生播放器、暂停/重新连接直播、上一台/下一台、底部选台、横屏全屏与返回优先级
 - 沉浸式全屏（隐藏状态栏与导航栏），轻触画面显隐控件，播放中 4 秒自动隐藏，TalkBack 下不自动隐藏
-- 换台：全屏上下滑动换台（可反转）、台名浮层、回上个台、等待计时与 15 秒慢源提示、可跳过检测不可达的频道
+- 换台：全屏上下滑动换台（可反转）、台名浮层、等待计时与慢源提示、可跳过检测不可达的频道；超时或可分类错误尝试同频道备用源，未知原生错误保留手动重试
 - 频道页筛选栏吸顶；导入上限 8 MiB，已用 iptv-org 完整列表（11,344 个频道）实测
 - 明确联网许可、移动数据提醒（VPN/未知网络按可能计费，确认一次至连回 Wi-Fi）、后台停止/释放、30 秒初始等待预算、未知错误手动重试
 - 备份与换机迁移排除：allowBackup=false + dataExtractionRules（含 device-transfer）+ fullBackupContent
 - 来源改名/刷新/命名删除确认；清理观看记录/全部资料；深色薄荷绿界面，48 dp 触控目标
+- 设置中手动导出/恢复节目源、收藏和播放偏好；32 MiB 上限、格式校验、事务回滚。未加密文件含地址与令牌；不备份观看记录或联网、台标和地区识别许可
+- 关于页面、动态版本与构建号、隐私与权限说明；专属图标和深色启动画面；直播长暂停安全重连
 
 不内置频道，不自动下载列表；台标默认关闭，单独授权后可显示有效 HTTPS 台标，缺图回退首字；不提供版权破解、付费节目授权、录制、后台播放、EPG、投屏和电视端。
 
@@ -53,12 +55,10 @@ npx expo install --check
 
 ```sh
 npm ci
-npm run prebuild
-cd android
-./gradlew assembleRelease
+npm run release:test
 ```
 
-默认 Expo 模板的 release variant 使用测试/debug 签名配置，生成的 APK 含 JS bundle，可脱离 Metro 试用，**不是正式分发签名包**。路径为 android/app/build/outputs/apk/release/app-release.apk。
+测试入口生成独立发行目录 `release/`，包含 APK、校验和、证书、构建记录及开源许可。未配置正式密钥时使用 Debug 签名；APK 内含 JS bundle，可脱离 Metro 试用。正式打包入口会强制检查密钥、干净工作区、最终 APK 签名和权限。
 
 开发调试可用 npm run android（需要连接设备或模拟器，通常依赖 Metro）。不把 assembleDebug 的结果当作独立正式安装包。原生目录可重新生成，不纳入源码包；配置通过 app.json / plugins 管理。
 
@@ -66,7 +66,8 @@ cd android
 
 ```sh
 ./scripts/create-release-keystore.sh      # 你自己运行，交互输入密码；写入 ~/.jingkan 与 ~/.gradle/gradle.properties
-cd android && ./gradlew assembleRelease -PjingkanRequireReleaseKey=true
+npm run release:check
+npm run release:build
 ```
 
 未配置密钥时 release 包会用 debug 密钥签名并在构建日志警告；加 `-PjingkanRequireReleaseKey=true` 时缺少密钥直接失败。请备份 keystore 和密码。

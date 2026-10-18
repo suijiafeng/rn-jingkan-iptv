@@ -10,3 +10,4 @@ coverage/
 *.aab
 .DS_Store
 .claude/
+release/

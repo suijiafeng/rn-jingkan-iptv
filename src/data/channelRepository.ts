@@ -7,6 +7,7 @@ import type {
   Source,
 } from "../domain/types";
 import { normalizeRemoteUrl } from "../domain/url";
+import { parseBackup, readBackup, writeBackup } from "./backup";
 import {
   buildFacetOptions,
   normalizeLanguages,
@@ -485,5 +486,25 @@ export class Repository {
         // The deletion is already committed; checkpoint failure must not report it as failed.
       }
     });
+  }
+
+  /** Consistent offline snapshot, excluding viewing history and permissions. */
+  exportBackup(): Promise<string> {
+    return this.serialize(async () => {
+      let text = "";
+      await this.db.withExclusiveTransactionAsync(async (tx) => {
+        text = JSON.stringify(await readBackup(tx, this.now()));
+        parseBackup(text);
+      });
+      return text;
+    });
+  }
+
+  async restoreBackup(text: string): Promise<void> {
+    const backup = parseBackup(text);
+    for (const key of this.generations.keys()) this.cancelRefresh(key);
+    return this.serialize(() =>
+      this.db.withExclusiveTransactionAsync((tx) => writeBackup(tx, backup)),
+    );
   }
 }

@@ -4,8 +4,13 @@ import { Button, Heading } from "../../components/ui";
 import { colors, styles } from "../../theme";
 import { RISK } from "../common/confirm";
 import { Chevron, RowAction, SettingRow, SettingSection } from "./SettingRows";
+import type { Repository } from "../../data/repository";
+import { BackupControls } from "./BackupControls";
+import { About, versionLabel } from "./About";
 
 interface Props {
+  repo?: Repository | null;
+  onRestoreBackup?: (text: string) => Promise<void>;
   /** Shown under 管理节目来源; omitted while sources are unknown. */
   sourceCount?: number;
   remoteAllowed: boolean;
@@ -183,6 +188,9 @@ export function SettingsScreen(props: Props) {
         />
       </SettingSection>
       <SettingSection label="本机资料">
+        {props.repo && props.onRestoreBackup && (
+          <BackupControls repo={props.repo} onRestore={props.onRestoreBackup} />
+        )}
         <SettingRow
           title="清空全部本地资料"
           caption="节目单、收藏、最近观看和许可都会删除"
@@ -190,8 +198,11 @@ export function SettingsScreen(props: Props) {
           onPress={props.onClearAll}
         />
       </SettingSection>
+      <SettingSection label="应用信息">
+        <About />
+      </SettingSection>
       <View style={screenStyles.footer}>
-        <Text style={styles.muted}>静看 0.1.0 · 个人测试版</Text>
+        <Text style={styles.muted}>{versionLabel()}</Text>
         <Text style={styles.caption}>
           无广告、无账号、无统计。资料只保存在本机。直播源本身可能含广告。只观看你有权访问的内容。
         </Text>

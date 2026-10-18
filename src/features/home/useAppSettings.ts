@@ -34,6 +34,7 @@ export function useAppSettings({
     // One confirmation covers this metered connection until Wi-Fi returns.
     [mobileAccepted, setMobileAccepted] = useState(false);
   const mounted = useRef(true),
+    preserveTabOnReload = useRef(false),
     remoteRef = useRef(false),
     // Bumped on revocation; async work started under an older epoch stops.
     permissionEpoch = useRef(0),
@@ -57,7 +58,9 @@ export function useAppSettings({
           setSwipeReverse(reverse);
           setSkipUnreachable(skipDead);
           setArtworkAllowed(artwork);
-          setTab(favorites.length ? "favorites" : "all");
+          if (!preserveTabOnReload.current)
+            setTab(favorites.length ? "favorites" : "all");
+          preserveTabOnReload.current = false;
           setRepo(opened);
         }
       })
@@ -209,6 +212,10 @@ export function useAppSettings({
   return {
     repo,
     retryStartup: () => setStartupAttempt((attempt) => attempt + 1),
+    reloadSettings: () => {
+      preserveTabOnReload.current = true;
+      setStartupAttempt((attempt) => attempt + 1);
+    },
     mounted,
     remoteRef,
     permissionEpoch,

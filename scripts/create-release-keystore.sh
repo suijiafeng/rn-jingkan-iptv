@@ -5,6 +5,7 @@
 # BACK UP the keystore and passwords: losing them means future versions can
 # no longer upgrade the installed app in place (uninstall wipes local data).
 set -euo pipefail
+umask 077
 
 STORE="${1:-$HOME/.jingkan/jingkan-release.jks}"
 ALIAS="jingkan"
@@ -14,7 +15,7 @@ if [ -e "$STORE" ]; then
   echo "已存在：$STORE —— 为避免覆盖正式密钥，脚本已停止。" >&2
   exit 1
 fi
-if [ -f "$PROPS" ] && grep -q '^JINGKAN_UPLOAD_STORE_FILE=' "$PROPS"; then
+if [ -f "$PROPS" ] && grep -q '^JINGKAN_UPLOAD_' "$PROPS"; then
   echo "$PROPS 已配置 JINGKAN_UPLOAD_*，请先确认后手动处理。" >&2
   exit 1
 fi
@@ -42,14 +43,11 @@ chmod 600 "$STORE"
 mkdir -p "$(dirname "$PROPS")"
 touch "$PROPS"
 chmod 600 "$PROPS"
-{
-  echo ""
-  echo "# 静看 release signing (scripts/create-release-keystore.sh)"
-  echo "JINGKAN_UPLOAD_STORE_FILE=$STORE"
-  echo "JINGKAN_UPLOAD_STORE_PASSWORD=$PASS"
-  echo "JINGKAN_UPLOAD_KEY_ALIAS=$ALIAS"
-  echo "JINGKAN_UPLOAD_KEY_PASSWORD=$PASS"
-} >> "$PROPS"
+# Java properties need escaping for backslashes, whitespace and Unicode.
+# The password travels through the child environment, never command arguments.
+export JINGKAN_KS_PASS="$PASS" JINGKAN_KS_STORE="$STORE" JINGKAN_KS_ALIAS="$ALIAS" JINGKAN_KS_PROPS="$PROPS"
+node "$(dirname "$0")/write-signing-properties.cjs"
+unset JINGKAN_KS_PASS JINGKAN_KS_STORE JINGKAN_KS_ALIAS JINGKAN_KS_PROPS PASS PASS2
 
 echo "完成：$STORE"
 echo "已写入 $PROPS（仅本机可读）。请把 keystore 文件和密码备份到安全的地方。"

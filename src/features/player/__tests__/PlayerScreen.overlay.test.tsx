@@ -101,6 +101,49 @@ describe("one overlay instead of native controls", () => {
     });
     await ui.unmount();
   });
+
+  test("resuming live after a long pause reconnects; on-demand retains its position", async () => {
+    const now = jest.spyOn(Date, "now").mockReturnValue(1_000);
+    Object.assign(mockNative, {
+      isLive: true,
+      duration: 3600,
+      currentTime: 1800,
+    });
+    const ui = await render(<PlayerScreen {...props()} />);
+    try {
+      await start();
+      await fireEvent.press(ui.getByTestId("center-play-pause"));
+      now.mockReturnValue(61_001);
+      await fireEvent.press(ui.getByTestId("center-play-pause"));
+      expect(mockMounts).toHaveBeenCalledTimes(2);
+      expect(mockUnmounts).toHaveBeenCalledTimes(1);
+      expect(mockNative.play).not.toHaveBeenCalled();
+    } finally {
+      await ui.unmount();
+      now.mockRestore();
+    }
+
+    Object.assign(mockNative, {
+      isLive: false,
+      duration: 3600,
+      currentTime: 1800,
+    });
+    const clock = jest.spyOn(Date, "now").mockReturnValue(1_000);
+    const movie = await render(<PlayerScreen {...props()} />);
+    try {
+      await start();
+      await fireEvent.press(movie.getByTestId("center-play-pause"));
+      const mounts = mockMounts.mock.calls.length;
+      clock.mockReturnValue(121_001);
+      await fireEvent.press(movie.getByTestId("center-play-pause"));
+      expect(mockMounts).toHaveBeenCalledTimes(mounts);
+      expect(mockNative.play).toHaveBeenCalledTimes(1);
+      expect(mockNative.currentTime).toBe(1800);
+    } finally {
+      await movie.unmount();
+      clock.mockRestore();
+    }
+  });
 });
 
 describe("portrait layout", () => {

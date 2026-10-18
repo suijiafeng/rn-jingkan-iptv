@@ -1,5 +1,6 @@
 import { ReadableStream } from "node:stream/web";
 import { TextDecoder as NodeTextDecoder } from "node:util";
+import { createHash } from "node:crypto";
 import {
   decodeGbk,
   decodePlaylistBytes,
@@ -37,11 +38,19 @@ const encodeGbk = (text: string): Uint8Array => {
 };
 
 describe("GBK decoding", () => {
-  it("matches Node's WHATWG GBK decoder for every two-byte code", () => {
+  it("decodes every two-byte code against the pinned WHATWG index", () => {
     expect(GBK_ROWS).toHaveLength(0xfe - 0x81 + 1);
     for (const row of GBK_ROWS) expect(row).toHaveLength(GBK_TRAIL_COUNT);
     const bytes = new Uint8Array(allPairs.flat());
-    expect(decodeGbk(bytes)).toBe(nodeGbk.decode(bytes));
+    const reference = GBK_ROWS.join("");
+    // Independently checked against WHATWG index-gb18030.txt (2024-09-18,
+    // identifier ff1c9a923b5d24f9761b3a2de2c0f07b395f9f6f36519508944de4f0415be81c).
+    // Older host ICU builds expose CP936 private-use aliases instead.
+    expect(createHash("sha256").update(reference).digest("hex")).toBe(
+      "85373408efe24c652c0a2f37997df8c657b0e8a654d07d9f9d97f1ad16609bc6",
+    );
+    expect(decodeGbk(bytes)).toBe(reference);
+    expect(decodeGbk(new Uint8Array([0xa2, 0xe3, 0xa8, 0xbc]))).toBe("€ḿ");
   });
 
   it("keeps ASCII, maps 0x80 to the euro sign and decodes Chinese", () => {

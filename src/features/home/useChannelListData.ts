@@ -72,6 +72,7 @@ export function useChannelListData({
   // Drives the header overlay from the list's native scroll events.
   const [scrollY] = useState(() => new Animated.Value(0));
   const loadGeneration = useRef(0);
+  const restoreFrame = useRef<number | null>(null);
   const listRef = useRef<FlatList<ChannelListItem>>(null),
     tabOffsets = useRef<Partial<Record<Tab, number>>>({}),
     restoreTab = useRef<Tab | null>(null),
@@ -89,11 +90,16 @@ export function useChannelListData({
   // Re-sent each frame until the list reports the offset (see scrollRestore).
   const restoreOffset = useCallback(
     (target: number) => {
+      if (restoreFrame.current !== null)
+        cancelAnimationFrame(restoreFrame.current);
       const send = (offset: number | null) => {
+        restoreFrame.current = null;
         if (offset === null) return;
         listRef.current?.scrollToOffset({ offset, animated: false });
         if (scrollRestore.pending())
-          requestAnimationFrame(() => send(scrollRestore.retry()));
+          restoreFrame.current = requestAnimationFrame(() =>
+            send(scrollRestore.retry()),
+          );
       };
       send(scrollRestore.request(target));
     },
@@ -148,6 +154,7 @@ export function useChannelListData({
   useEffect(() => {
     if (!repo || !region.ready) return;
     let active = true;
+    let layoutFrame: number | null = null;
     const loadId = ++loadGeneration.current;
     const current = () => active && loadId === loadGeneration.current;
     scrollRestore.cancel();
@@ -209,7 +216,8 @@ export function useChannelListData({
       if (restoring) {
         restoreTab.current = null;
         const offset = tabOffsets.current[tab] ?? 0;
-        requestAnimationFrame(() => {
+        layoutFrame = requestAnimationFrame(() => {
+          layoutFrame = null;
           if (current()) restoreOffset(offset);
         });
       }
@@ -241,6 +249,11 @@ export function useChannelListData({
       });
     return () => {
       active = false;
+      scrollRestore.cancel();
+      if (layoutFrame !== null) cancelAnimationFrame(layoutFrame);
+      if (restoreFrame.current !== null)
+        cancelAnimationFrame(restoreFrame.current);
+      restoreFrame.current = null;
     };
   }, [
     repo,

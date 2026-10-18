@@ -145,6 +145,10 @@ export function useChannelSession(props: SessionProps) {
   );
   // Paused in place: the attempt (and its native player) is still alive.
   const retained = state.phase === "paused" && state.attemptId !== null;
+  const pausedAt = useRef<number | null>(null);
+  useEffect(() => {
+    pausedAt.current = retained ? Date.now() : null;
+  }, [retained, state.attemptId]);
   const primaryLabel =
     state.phase === "cellular"
       ? "继续播放"
@@ -175,7 +179,16 @@ export function useChannelSession(props: SessionProps) {
       if (!controller.userPaused(id)) controller.pause();
       return;
     }
-    if (retained && media.play()) return;
+    if (retained) {
+      const expiredLive =
+        mediaInfo.isLive &&
+        pausedAt.current !== null &&
+        Date.now() - pausedAt.current >= 60_000;
+      if (!expiredLive && media.play()) return;
+      onUserPlay();
+      void controller.requestPlay();
+      return;
+    }
     if (busy) controller.pause();
     else {
       onUserPlay();

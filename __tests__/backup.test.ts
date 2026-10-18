@@ -1,0 +1,103 @@
+/** @jest-environment node */
+import { parseBackup } from "../src/data/backup";
+import {
+  importInitialInto,
+  openTestRepository,
+} from "./support/repositoryTestKit";
+
+test("offline backup round-trip preserves stable identities, sources and favorites, resets consent and history", async () => {
+  const origin = await openTestRepository(),
+    target = await openTestRepository();
+  try {
+    await importInitialInto(origin.repo);
+    const [channel] = await origin.repo.listChannels();
+    await origin.repo.toggleFavorite(channel.id);
+    await origin.repo.recordRecent(channel.id);
+    for (const key of ["remoteAllowed", "artworkAllowed", "swipeReverse"])
+      await origin.repo.setSetting(key, true);
+    await origin.repo.setSetting("regionPreference", {
+      ipAllowed: true,
+      locationAllowed: true,
+    });
+    const text = await origin.repo.exportBackup();
+    expect(text).not.toContain("lastPlayedAt");
+    expect(text).not.toContain("remoteAllowed");
+    expect(text).not.toContain("regionPreference");
+    await importInitialInto(target.repo);
+    await target.repo.setSetting("remoteAllowed", true);
+    await target.repo.restoreBackup(text);
+    expect(await target.repo.listSources()).toHaveLength(1);
+    expect((await target.repo.listChannels()).map((row) => row.id)).toEqual(
+      (await origin.repo.listChannels()).map((row) => row.id),
+    );
+    expect((await target.repo.listFavorites())[0].id).toBe(channel.id);
+    expect(await target.repo.listRecent()).toEqual([]);
+    expect(await target.repo.getSetting("remoteAllowed", false)).toBe(false);
+    expect(await target.repo.getSetting("artworkAllowed", false)).toBe(false);
+    expect(await target.repo.getSetting("swipeReverse", false)).toBe(true);
+    expect(
+      await target.repo.getSourceContent(
+        (await target.repo.listSources())[0].id,
+      ),
+    ).toContain("#EXTM3U");
+  } finally {
+    origin.db.native.close();
+    target.db.native.close();
+  }
+});
+
+test("restore is atomic on disk errors and rejects future, unsafe and dangling data before replacement", async () => {
+  const { repo, db } = await openTestRepository();
+  try {
+    await importInitialInto(repo);
+    const text = await repo.exportBackup(),
+      before = await repo.listChannels();
+    db.failWhen = (sql) => sql.startsWith("INSERT INTO channels");
+    await expect(repo.restoreBackup(text)).rejects.toThrow();
+    db.failWhen = undefined;
+    expect(await repo.listChannels()).toEqual(before);
+    const invalid = [
+      { ...JSON.parse(text), version: 9 },
+      { ...JSON.parse(text), sources: [] },
+      {
+        ...JSON.parse(text),
+        favorites: [{ groupKey: "missing", createdAt: 1 }],
+      },
+      {
+        ...JSON.parse(text),
+        channels: [
+          {
+            ...JSON.parse(text).channels[0],
+            streamUrl: "http://127.0.0.1/private",
+          },
+        ],
+      },
+      {
+        ...JSON.parse(text),
+        channels: [JSON.parse(text).channels[0], JSON.parse(text).channels[0]],
+      },
+    ];
+    for (const value of invalid) {
+      expect(() => parseBackup(JSON.stringify(value))).toThrow();
+      await expect(repo.restoreBackup(JSON.stringify(value))).rejects.toThrow();
+      expect(await repo.listChannels()).toEqual(before);
+    }
+  } finally {
+    db.native.close();
+  }
+});
+
+test("empty backups are valid and unrecognized preferences never restore permissions", async () => {
+  const { repo, db } = await openTestRepository();
+  try {
+    const backup = JSON.parse(await repo.exportBackup());
+    backup.preferences.remoteAllowed = true;
+    backup.preferences.artworkAllowed = true;
+    await repo.restoreBackup(JSON.stringify(backup));
+    expect(await repo.listSources()).toEqual([]);
+    expect(await repo.getSetting("remoteAllowed", false)).toBe(false);
+    expect(await repo.getSetting("artworkAllowed", false)).toBe(false);
+  } finally {
+    db.native.close();
+  }
+});

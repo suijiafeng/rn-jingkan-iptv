@@ -4,6 +4,14 @@
 import { writeFileSync } from "node:fs";
 
 const decoder = new TextDecoder("gbk", { fatal: true });
+if (
+  decoder.decode(new Uint8Array([0xa2, 0xe3])) !== "€" ||
+  decoder.decode(new Uint8Array([0xa8, 0xbc])) !== "ḿ"
+) {
+  throw new Error(
+    "This ICU uses legacy CP936 mappings; use the documented Node 24.19.0 runtime (ICU 78+) to regenerate the WHATWG table.",
+  );
+}
 const rows = [];
 for (let lead = 0x81; lead <= 0xfe; lead += 1) {
   let row = "";

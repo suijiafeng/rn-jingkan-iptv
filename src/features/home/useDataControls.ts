@@ -135,5 +135,23 @@ export function useDataControls({
     }
   };
 
-  return { removeSource, revoke, clearAll };
+  const restoreBackup = async (text: string) => {
+    if (!repo) throw new Error("Database unavailable");
+    stopRemoteWork();
+    await importer.closeForm();
+    await repo.restoreBackup(text);
+    settings.resetToDefaults();
+    region.reset();
+    playback.forgetHistory();
+    sourceTasks.clearCheckSummaries();
+    filters.forgetSaved();
+    filters.reset();
+    filters.setCountryBypass(null);
+    list.forgetTabOffsets();
+    setRecentEditing(false);
+    settings.reloadSettings();
+    list.changed();
+  };
+
+  return { removeSource, revoke, clearAll, restoreBackup };
 }
