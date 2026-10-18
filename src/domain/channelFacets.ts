@@ -332,6 +332,7 @@ function contentValues(channel: FacetChannel): string[] {
     value === UNGROUPED ? "" : value,
   );
 }
+const facetOrder = new Intl.Collator("zh-Hans-CN");
 function sortOptions(values: Set<string>, kind: FacetKind): string[] {
   return [...values].sort((a, b) =>
     !a
@@ -340,7 +341,7 @@ function sortOptions(values: Set<string>, kind: FacetKind): string[] {
         : 1
       : !b
         ? -1
-        : facetLabel(kind, a).localeCompare(facetLabel(kind, b), "zh-Hans-CN"),
+        : facetOrder.compare(facetLabel(kind, a), facetLabel(kind, b)),
   );
 }
 export function buildFacetOptions(

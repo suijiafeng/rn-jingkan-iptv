@@ -85,6 +85,7 @@ jest.mock("react-native-safe-area-context", () => ({
 const repo = {
   getSetting: jest.fn(),
   listChannels: jest.fn(async () => []),
+  countChannels: jest.fn(async () => 0),
   listSources: jest.fn(async () => []),
   listFacets: jest.fn(async (): Promise<ChannelFacetOptions> => ({
     countries: [],
@@ -138,6 +139,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   repo.getSetting.mockImplementation(async (_k, fallback) => fallback);
   repo.listChannels.mockImplementation(async () => []);
+  repo.countChannels.mockImplementation(async () => 0);
   repo.listSources.mockImplementation(async () => []);
   repo.listFacets.mockImplementation(async () => ({
     countries: [],
@@ -870,6 +872,108 @@ test("playback receives the complete catalog when opened from favorites", async 
   const selected = mockPlayerProps.mock.calls.at(-1)![0];
   expect(selected.channel.id).toBe("other");
   expect(selected.channels).toEqual([favorite, other]);
+});
+
+test("a long list shows its first page at once and still queues every row", async () => {
+  const rows = Array.from({ length: 45 }, (_, i) => ({
+    id: `c${i}`,
+    name: `台${i}`,
+    active: true,
+    favorite: false,
+    sourceId: "s",
+    sourceName: "来源",
+    groupName: "新闻",
+  }));
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed"
+      ? true
+      : key === "countryPreference"
+        ? {
+            mode: "manual",
+            countryCode: "CN",
+            ipAllowed: false,
+            locationAllowed: false,
+          }
+        : fallback,
+  );
+  repo.listFacets.mockResolvedValue({
+    countries: ["CN", "US"],
+    languages: ["zh"],
+    contents: ["新闻"],
+  });
+  let finishRest!: () => void;
+  const restReady = new Promise<void>((resolve) => (finishRest = resolve));
+  (repo.listChannels as jest.Mock).mockImplementation(
+    async (query?: { mode?: string; limit?: number; offset?: number }) => {
+      if (query?.mode === "favorites" || query?.mode === "recent") return [];
+      if (query?.offset) {
+        await restReady;
+        return rows.slice(query.offset);
+      }
+      return query?.limit ? rows.slice(0, query.limit) : rows;
+    },
+  );
+  repo.countChannels.mockImplementation(async () => rows.length);
+  await render(<App />);
+  // The header counts every match while only the first page is loaded.
+  await waitFor(() => expect(screen.getByText(/当前 45 个频道/)).toBeTruthy());
+  expect(repo.listChannels).toHaveBeenCalledWith(
+    expect.objectContaining({ mode: "all", limit: 40, country: "CN" }),
+  );
+  expect(repo.countChannels).toHaveBeenCalledWith(
+    expect.objectContaining({ mode: "all", country: "CN" }),
+  );
+  // A tap before the remainder arrives waits for it to build the queue.
+  await fireEvent.press(screen.getByLabelText("台0，播放"));
+  await act(async () => finishRest());
+  expect(repo.listChannels).toHaveBeenCalledWith(
+    expect.objectContaining({ mode: "all", offset: 40, country: "CN" }),
+  );
+  await waitFor(() => expect(mockPlayerProps).toHaveBeenCalled());
+  const props = mockPlayerProps.mock.calls.at(-1)![0];
+  expect(props.channel.id).toBe("c0");
+  expect(props.channels.map((c: { id: string }) => c.id)).toEqual(
+    rows.map((c) => c.id),
+  );
+  expect(
+    screen.getByText(/当前 45 个频道/, { includeHiddenElements: true }),
+  ).toBeTruthy();
+});
+
+test("favoriting on the channel tab patches the row without re-reading the list", async () => {
+  const channel = {
+    id: "a",
+    name: "台A",
+    active: true,
+    favorite: false,
+    sourceId: "s",
+    sourceName: "来源",
+    groupName: "新闻",
+  };
+  (repo.listChannels as jest.Mock).mockImplementation(async (query) =>
+    query?.mode === "favorites" || query?.mode === "recent" ? [] : [channel],
+  );
+  repo.toggleFavorite.mockResolvedValue(true);
+  await render(<App />);
+  const star = await screen.findByLabelText("收藏台A");
+  await waitFor(() => expect(repo.listSources).toHaveBeenCalled());
+  const reads = (repo.listChannels as jest.Mock).mock.calls.length;
+  const sourceReads = repo.listSources.mock.calls.length;
+  await fireEvent.press(star);
+  await waitFor(() =>
+    expect(screen.getByLabelText("取消收藏台A")).toBeTruthy(),
+  );
+  // Only source counts (favoriteCount) are re-read, not the channel list.
+  await waitFor(() =>
+    expect(repo.listSources).toHaveBeenCalledTimes(sourceReads + 1),
+  );
+  expect(repo.listChannels).toHaveBeenCalledTimes(reads);
+  await fireEvent.press(screen.getByText("收藏", { exact: true }));
+  await waitFor(() =>
+    expect(repo.listChannels).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "favorites" }),
+    ),
+  );
 });
 
 function setupRecentHistory() {

@@ -109,6 +109,9 @@ const CHANNEL_BOUND_COLUMNS = [
   "sortIndex",
   "lastSeenRevision",
 ];
+// One collator: localeCompare with a locale builds a new one per comparison,
+// which on Hermes/Android made listing groups take ~100 ms.
+const groupOrder = new Intl.Collator("zh-Hans-CN");
 const CLEAN_UNREFERENCED = `DELETE FROM channels WHERE active = 0
   AND NOT EXISTS (SELECT 1 FROM favorites WHERE channelId = channels.id)
   AND NOT EXISTS (SELECT 1 FROM recents WHERE channelId = channels.id)`;
@@ -120,6 +123,55 @@ function makeId(): string {
     const digit = Math.floor(Math.random() * 16);
     return (char === "x" ? digit : (digit & 3) | 8).toString(16);
   });
+}
+
+function channelFilter(query: ChannelQuery): {
+  where: string;
+  params: SqlValue[];
+} {
+  const where: string[] = [];
+  const params: SqlValue[] = [];
+  if (
+    !query.includeInactive &&
+    query.mode !== "favorites" &&
+    query.mode !== "recent"
+  )
+    where.push("c.active = 1");
+  if (query.sourceId) {
+    where.push("c.sourceId = ?");
+    params.push(query.sourceId);
+  }
+  if (query.groupName !== undefined) {
+    if (!query.groupName || query.groupName === UNGROUPED) {
+      where.push("(c.groupName = ? OR c.groupName = '')");
+      params.push(UNGROUPED);
+    } else {
+      // groupName holds a ";"-joined list; match one whole member.
+      where.push("(';' || c.groupName || ';') LIKE ? ESCAPE '\\'");
+      params.push(`%;${query.groupName.replace(/[\\%_]/g, "\\$&")};%`);
+    }
+  }
+  for (const [column, value] of [
+    ["countries", query.country],
+    ["languages", query.language],
+  ] as const) {
+    if (value === undefined) continue;
+    if (value === "") where.push(`c.${column} = ''`);
+    else {
+      where.push(`(';' || c.${column} || ';') LIKE ? ESCAPE '\\'`);
+      params.push(`%;${value.replace(/[\\%_]/g, "\\$&")};%`);
+    }
+  }
+  if (query.search?.trim()) {
+    where.push("c.name LIKE ? ESCAPE '\\' COLLATE NOCASE");
+    params.push(`%${query.search.trim().replace(/[\\%_]/g, "\\$&")}%`);
+  }
+  if (query.mode === "favorites") where.push("f.channelId IS NOT NULL");
+  if (query.mode === "recent") where.push("r.channelId IS NOT NULL");
+  return {
+    where: where.length ? ` WHERE ${where.join(" AND ")}` : "",
+    params,
+  };
 }
 
 function assertPreview(preview: ImportPreview): void {
@@ -261,56 +313,34 @@ export class Repository {
   }
 
   async listChannels(query: ChannelQuery = {}): Promise<Channel[]> {
-    const where: string[] = [];
-    const params: SqlValue[] = [];
-    if (
-      !query.includeInactive &&
-      query.mode !== "favorites" &&
-      query.mode !== "recent"
-    )
-      where.push("c.active = 1");
-    if (query.sourceId) {
-      where.push("c.sourceId = ?");
-      params.push(query.sourceId);
-    }
-    if (query.groupName !== undefined) {
-      if (!query.groupName || query.groupName === UNGROUPED) {
-        where.push("(c.groupName = ? OR c.groupName = '')");
-        params.push(UNGROUPED);
-      } else {
-        // groupName holds a ";"-joined list; match one whole member.
-        where.push("(';' || c.groupName || ';') LIKE ? ESCAPE '\\'");
-        params.push(`%;${query.groupName.replace(/[\\%_]/g, "\\$&")};%`);
-      }
-    }
-    for (const [column, value] of [
-      ["countries", query.country],
-      ["languages", query.language],
-    ] as const) {
-      if (value === undefined) continue;
-      if (value === "") where.push(`c.${column} = ''`);
-      else {
-        where.push(`(';' || c.${column} || ';') LIKE ? ESCAPE '\\'`);
-        params.push(`%;${value.replace(/[\\%_]/g, "\\$&")};%`);
-      }
-    }
-    if (query.search?.trim()) {
-      where.push("c.name LIKE ? ESCAPE '\\' COLLATE NOCASE");
-      params.push(`%${query.search.trim().replace(/[\\%_]/g, "\\$&")}%`);
-    }
-    if (query.mode === "favorites") where.push("f.channelId IS NOT NULL");
-    if (query.mode === "recent") where.push("r.channelId IS NOT NULL");
+    const { where, params } = channelFilter(query);
     const order =
       query.mode === "recent"
         ? "r.lastPlayedAt DESC, c.id"
         : query.mode === "favorites"
           ? "f.createdAt DESC, c.id"
           : "s.createdAt, s.id, c.sortIndex, c.id";
+    let page = "";
+    if (query.limit !== undefined || query.offset) {
+      page = " LIMIT ? OFFSET ?";
+      params.push(query.limit ?? -1, query.offset ?? 0);
+    }
     const rows = await this.db.getAllAsync<RawChannel>(
-      `${CHANNEL_SELECT}${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY ${order}`,
+      `${CHANNEL_SELECT}${where} ORDER BY ${order}${page}`,
       params,
     );
     return rows.map(mapChannel);
+  }
+
+  /** Row count for the same filter as listChannels (paging ignored). */
+  async countChannels(query: ChannelQuery = {}): Promise<number> {
+    const { where, params } = channelFilter(query);
+    const row = await this.db.getFirstAsync<{ total: number }>(
+      `SELECT COUNT(*) AS total FROM channels c
+  LEFT JOIN favorites f ON f.channelId = c.id LEFT JOIN recents r ON r.channelId = c.id${where}`,
+      params,
+    );
+    return row?.total ?? 0;
   }
 
   /** One channel by id (any state), for starting playback without the catalog. */
@@ -336,7 +366,7 @@ export class Repository {
     );
     const groups = new Set(rows.flatMap((row) => splitGroups(row.groupName)));
     const ungrouped = groups.delete(UNGROUPED);
-    const sorted = [...groups].sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+    const sorted = [...groups].sort((a, b) => groupOrder.compare(a, b));
     return ungrouped ? [...sorted, UNGROUPED] : sorted;
   }
 

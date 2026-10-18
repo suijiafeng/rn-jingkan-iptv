@@ -101,6 +101,9 @@ export interface ChannelQuery {
   search?: string;
   mode?: "all" | "favorites" | "recent";
   includeInactive?: boolean;
+  /** Paging for progressive display; rows keep the query's stable order. */
+  limit?: number;
+  offset?: number;
 }
 
 export interface RefreshToken {
