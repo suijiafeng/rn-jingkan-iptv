@@ -11,6 +11,34 @@ interface IconProps {
   color?: string;
 }
 
+export function PictureInPictureIcon({
+  size = 22,
+  color = colors.text,
+}: IconProps) {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        width: size,
+        height: size * 0.75,
+        borderWidth: 2,
+        borderColor: color,
+      }}
+    >
+      <View
+        style={{
+          position: "absolute",
+          right: 1,
+          bottom: 1,
+          width: size * 0.4,
+          height: size * 0.3,
+          backgroundColor: color,
+        }}
+      />
+    </View>
+  );
+}
+
 /** Back: a plain "<" chevron (portrait collapse, leaving fullscreen). */
 export function ChevronLeftIcon({ size = 22, color = colors.text }: IconProps) {
   const arm = size * 0.42;

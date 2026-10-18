@@ -21,6 +21,7 @@ import type { Channel } from "../../domain/types";
 import { qualityName } from "../../domain/channelSources";
 import { channelTitle } from "../../domain/channelLabels";
 import { MediaHandle } from "./mediaHandle";
+import { PictureInPictureIcon } from "./playerIcons";
 import { OverlayButton, SourceChip } from "./overlayWidgets";
 import {
   adjacentPlayableIndex,
@@ -340,6 +341,7 @@ export function useChannelSession(props: SessionProps) {
   const pictureInPictureButton = state.attemptId !== null && (
     <OverlayButton
       label="画中画"
+      icon={<PictureInPictureIcon />}
       accessibilityLabel="进入画中画"
       variant="quiet"
       onPress={() => {

@@ -35,6 +35,7 @@ export function NativeAttempt({
   const view = useRef<VideoView>(null);
   const backgroundPolicy = useRef(backgroundAllowed);
   const pipActive = useRef(false);
+  const exitPictureInPicture = useRef<(() => void) | null>(null);
   const pendingPip = useRef<{
     resolve: () => void;
     reject: () => void;
@@ -47,13 +48,16 @@ export function NativeAttempt({
     if (currentInstance.current) {
       currentInstance.current.staysActiveInBackground =
         backgroundAllowed || pipActive.current || !!pendingPip.current;
-      currentInstance.current.showNowPlayingNotification = backgroundAllowed;
+      currentInstance.current.showNowPlayingNotification =
+        backgroundAllowed || pipActive.current || !!pendingPip.current;
     }
   }, [backgroundAllowed]);
   useEffect(() => {
     alive.current = true;
     let live = true;
     let instance: VideoPlayer | undefined;
+    let exitTimer: ReturnType<typeof setTimeout> | undefined;
+    let settleExit: (() => void) | undefined;
     const sniff = new AbortController();
     const subscriptions: { remove: () => void }[] = [];
     const current = () => live && controller.isCurrentAttempt(attemptId);
@@ -70,6 +74,23 @@ export function NativeAttempt({
       ownedPlayer.loop = false;
       // One sample per second feeds the overlay timeline (catch-up streams only).
       ownedPlayer.timeUpdateEventInterval = 1;
+      settleExit = () => {
+        if (exitTimer !== undefined) clearTimeout(exitTimer);
+        exitTimer = undefined;
+        if (!live) return;
+        pipActive.current = false;
+        ownedPlayer.staysActiveInBackground = backgroundPolicy.current;
+        ownedPlayer.showNowPlayingNotification = backgroundPolicy.current;
+        controller.setPictureInPicture(attemptId, false);
+      };
+      exitPictureInPicture.current = () => {
+        if (exitTimer !== undefined) clearTimeout(exitTimer);
+        // Android can announce PiP exit before React Native sees onResume.
+        // Keep the same attempt during that bounded ordering gap. A genuine
+        // dismissal still pauses after one second when background is off.
+        if (AppState.currentState === "active") settleExit?.();
+        else exitTimer = setTimeout(() => settleExit?.(), 1000);
+      };
       media?.attach(ownedPlayer);
       media?.attachPictureInPicture(ownedPlayer, async () => {
         if (!current() || !view.current || !isPictureInPictureSupported())
@@ -79,6 +100,7 @@ export function NativeAttempt({
         // before delivering onPictureInPictureStart to JavaScript.
         controller.setPictureInPicture(attemptId, true);
         ownedPlayer.staysActiveInBackground = true;
+        ownedPlayer.showNowPlayingNotification = true;
         let entryTimer: ReturnType<typeof setTimeout> | undefined;
         try {
           await new Promise<void>((resolve, reject) => {
@@ -90,6 +112,7 @@ export function NativeAttempt({
         } catch {
           if (current()) {
             ownedPlayer.staysActiveInBackground = backgroundPolicy.current;
+            ownedPlayer.showNowPlayingNotification = backgroundPolicy.current;
             controller.setPictureInPicture(attemptId, false);
           }
           throw new Error("Picture in picture failed");
@@ -122,6 +145,7 @@ export function NativeAttempt({
           if (current()) controller.nativeEnded(attemptId);
         }),
         AppState.addEventListener("change", (state) => {
+          if (state === "active" && exitTimer !== undefined) settleExit?.();
           if (state !== "active" && !controller.canContinueOutsideApp()) {
             // Pause synchronously before React commits the controller's unmount.
             ownedPlayer.pause();
@@ -167,12 +191,15 @@ export function NativeAttempt({
     return () => {
       alive.current = false;
       live = false;
+      if (exitTimer !== undefined) clearTimeout(exitTimer);
+      exitPictureInPicture.current = null;
       if (pendingPip.current) {
         clearTimeout(pendingPip.current.timer);
         pendingPip.current.reject();
         pendingPip.current = null;
       }
       pipActive.current = false;
+      controller.setPictureInPicture(attemptId, false);
       sniff.abort();
       currentInstance.current = null;
       subscriptions.forEach((subscription) => subscription.remove());
@@ -220,10 +247,7 @@ export function NativeAttempt({
       }}
       onPictureInPictureStop={() => {
         if (currentInstance.current && player === currentInstance.current) {
-          pipActive.current = false;
-          currentInstance.current.staysActiveInBackground =
-            backgroundPolicy.current;
-          controller.setPictureInPicture(attemptId, false);
+          exitPictureInPicture.current?.();
         }
       }}
       useExoShutter

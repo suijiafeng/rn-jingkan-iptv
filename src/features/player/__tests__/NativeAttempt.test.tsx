@@ -118,6 +118,7 @@ test("background setting configures media controls without replacing the player"
 });
 
 test("PiP reserves playback before backgrounding and confirms the actual native event", async () => {
+  jest.useFakeTimers();
   const { controller, id } = await readyController();
   const media = new MediaHandle();
   const ui = await render(
@@ -131,6 +132,7 @@ test("PiP reserves playback before backgrounding and confirms the actual native 
   const entering = media.startPictureInPicture();
   expect(mockEnterPip).toHaveBeenCalledTimes(1);
   expect(controller.canContinueOutsideApp()).toBe(true);
+  expect(mockPlayers[0]).toHaveProperty("showNowPlayingNotification", true);
   Object.defineProperty(AppState, "currentState", {
     configurable: true,
     value: "background",
@@ -144,7 +146,49 @@ test("PiP reserves playback before backgrounding and confirms the actual native 
   await act(() =>
     ui.getByTestId("native-video-view").props.onPictureInPictureStop(),
   );
+  await act(async () => {
+    jest.advanceTimersByTime(1000);
+  });
   expect(controller.getSnapshot().attemptId).toBeNull();
+  expect(mockPlayers[0]).toHaveProperty("showNowPlayingNotification", false);
+  await ui.unmount();
+});
+
+test("PiP exit preceding Activity resume does not pause or replace playback", async () => {
+  jest.useFakeTimers();
+  const { controller, id } = await readyController();
+  const media = new MediaHandle();
+  const ui = await render(
+    <NativeAttempt
+      uri="https://example.test/live.m3u8"
+      attemptId={id}
+      controller={controller}
+      media={media}
+    />,
+  );
+  const entering = media.startPictureInPicture();
+  await act(() =>
+    ui.getByTestId("native-video-view").props.onPictureInPictureStart(),
+  );
+  expect(await entering).toBe(true);
+  Object.defineProperty(AppState, "currentState", {
+    configurable: true,
+    value: "background",
+  });
+  await act(() =>
+    ui.getByTestId("native-video-view").props.onPictureInPictureStop(),
+  );
+  expect(controller.isCurrentAttempt(id)).toBe(true);
+  Object.defineProperty(AppState, "currentState", {
+    configurable: true,
+    value: "active",
+  });
+  await act(async () => {
+    jest.advanceTimersByTime(1000);
+  });
+  expect(controller.isCurrentAttempt(id)).toBe(true);
+  expect(controller.canContinueOutsideApp()).toBe(false);
+  expect(mockPlayers).toHaveLength(1);
   await ui.unmount();
 });
 
@@ -171,6 +215,7 @@ test("silent PiP denial expires and never leaves background permission enabled",
   expect(await entering).toBe(false);
   expect(controller.canContinueOutsideApp()).toBe(false);
   expect(mockPlayers[0].staysActiveInBackground).toBe(false);
+  expect(mockPlayers[0]).toHaveProperty("showNowPlayingNotification", false);
   await ui.unmount();
   controller.dispose();
   await act(async () => {
