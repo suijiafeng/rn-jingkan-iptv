@@ -2,6 +2,7 @@ import { fetch as expoFetch } from "expo/fetch";
 import { File } from "expo-file-system";
 import { normalizeRemoteUrl } from "../domain/url";
 import { M3U_LIMITS, MAX_MIB } from "../domain/m3u";
+import { decodePlaylistBytes, TextEncodingError } from "../domain/textEncoding";
 export const MAX_IMPORT_BYTES = M3U_LIMITS.maxBytes;
 export class ImportIOError extends Error {}
 export async function readBoundedStream(
@@ -43,9 +44,13 @@ export async function readBoundedStream(
       offset += chunk.byteLength;
     }
     try {
-      return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-    } catch {
-      throw new ImportIOError("文件不是有效 UTF-8 编码，请转换后重试");
+      return decodePlaylistBytes(bytes).text;
+    } catch (error) {
+      throw new ImportIOError(
+        error instanceof TextEncodingError
+          ? error.message
+          : "文件编码无法识别，请转换为 UTF-8 后重试",
+      );
     }
   } finally {
     signal.removeEventListener("abort", cancel);

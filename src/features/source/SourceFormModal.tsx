@@ -123,8 +123,8 @@ export function SourceFormModal({
                     ) : (
                       <>
                         <Notice
-                          title={form.fileName || "选择 M3U 文件"}
-                          body={`使用系统文件选择器，仅读取你选中的文件。上限 ${MAX_MIB} MiB，UTF-8 编码。`}
+                          title={form.fileName || "选择节目单文件"}
+                          body={`使用系统文件选择器，仅读取你选中的文件。支持 M3U 与 TXT，UTF-8 或 GBK 编码，上限 ${MAX_MIB} MiB。`}
                         />
                         <Button
                           label="选择 / 更换文件"

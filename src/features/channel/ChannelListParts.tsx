@@ -316,7 +316,7 @@ export function ChannelListEmpty(props: EmptyProps) {
         }
         body={
           !props.hasSources
-            ? "添加你信任的 M3U 链接或本地文件。频道、收藏和最近观看保存在这台手机。"
+            ? "添加你信任的 M3U、TXT 链接或本地文件。频道、收藏和最近观看保存在这台手机。"
             : props.filtered
               ? "试试清空搜索或筛选条件。"
               : props.tab === "favorites"

@@ -113,7 +113,7 @@ export function useSourceImport({
     } catch {
       if (task === generation.current)
         setFormError(
-          `文件读取失败或超过 ${MAX_MIB} MiB，请选择有效 UTF-8 M3U 文件。`,
+          `文件读取失败或超过 ${MAX_MIB} MiB，请选择 UTF-8 或 GBK 编码的 M3U、TXT 节目单。`,
         );
     } finally {
       if (task === generation.current) {
