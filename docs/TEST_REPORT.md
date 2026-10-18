@@ -1,5 +1,15 @@
 # 验证记录
 
+## 2026-10-19 · 节目来源兼容：TXT 节目单、无文件头 M3U、GBK 编码
+
+- 代码在 66df4b7 中提交：另一会话在同一工作区提交文档时一并带入了这些源码改动，提交说明与内容不符；测试与本记录在后续提交补上，未改写 main 历史。
+- 格式：第一行不是 #EXTM3U 时，含 #EXTINF 行仍按 M3U 读取；否则识别 TXT（“分组,#genre#”开始分组，“频道名,地址”为频道，“#”连接多个地址，结尾“$备注”去掉）。TXT 没有 tvg-id 与国家/语言标注，每个地址按完整 URL 各自成为一个频道，不按名称合并。两者都不是时仍报无法识别。
+- 编码：先严格按 UTF-8 解码，失败再按 GBK（WHATWG 两字节表，另含 0x80 欧元符号）严格解码，两者都失败才报错，不产生替换字符。GB18030 四字节序列不支持。码表由 scripts/generate-gbk-table.mjs 从 Node 的 GBK 解码器生成为静态文件，约 80 KB。
+- 安全规则不变：局域网、本机与特殊端口地址仍被拒绝（新增用例覆盖 TXT 中的 192.168 地址）。
+- 自动化：typecheck、lint 通过；Jest 39 个套件 375 项通过，新增 13 项（GBK 全表 23,940 个码与 Node 解码器逐一比对、非法序列拒绝、UTF-8 优先、GBK 经导入流读入、TXT 分组/多地址/备注/忽略统计、无文件头 M3U）。
+- 构建：`expo export --platform android` 成功；`./gradlew assembleRelease --offline -PreactNativeArchitectures=arm64-v8a` 成功，APK 33,363,868 字节，仍为 Android Debug 测试签名。
+- 未验证：真实 GBK 或 TXT 节目单在模拟器与三星真机上的导入。模拟器当时由另一会话使用，本次未操作。
+
 ## 2026-10-19 · 合并后的 release 包与模拟器自动换源验收
 
 - 构建：main（ff0610a）`expo prebuild` 后 `./gradlew assembleRelease --offline -PreactNativeArchitectures=arm64-v8a` 通过（6 分 59 秒；prebuild 会重置 android/local.properties，需设置 ANDROID_HOME）。APK 33,298,904 字节，SHA-256 36b794f9567aac0d2f06a83203588cf14120a0aea828c19e82f9d27613e64572，仍为 Android Debug 测试签名。构建目录随后被另一次并发构建覆盖（05:02，另一会话在主工作区改动 importIO/txtPlaylist 时的构建），Downloads/jingkan-iptv-test-20261019-36b794f9.apk 是从模拟器回拉的已安装包，SHA-256 与本次构建一致。
