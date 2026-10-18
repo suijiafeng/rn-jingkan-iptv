@@ -3,6 +3,7 @@ import {
   Alert,
   AppState,
   BackHandler,
+  FlatList,
   type AppStateStatus,
 } from "react-native";
 import * as Network from "expo-network";
@@ -1176,4 +1177,73 @@ test("the filter bar is pinned while the title scrolls away", async () => {
   // Row 0 of the data is the filter bar itself, so search stays reachable.
   expect(list.props.data[0]).toEqual({ kind: "filters" });
   expect(screen.getByLabelText("搜索频道名称")).toBeTruthy();
+});
+
+test("a deep scroll offset is restored once the reloaded list is tall enough", async () => {
+  const rows = Array.from({ length: 30 }, (_, i) => ({
+    id: `c${i}`,
+    name: `台${i}`,
+    active: true,
+    favorite: false,
+    sourceId: "s",
+    sourceName: "来源",
+    groupName: "新闻",
+  }));
+  (repo.listChannels as jest.Mock).mockImplementation(async (query) =>
+    query?.mode === "favorites" || query?.mode === "recent" ? [] : rows,
+  );
+  const scrollToOffset = jest
+    .spyOn(FlatList.prototype, "scrollToOffset")
+    .mockImplementation(() => {});
+  try {
+    await render(<App />);
+    expect(await screen.findByLabelText("台0，播放")).toBeTruthy();
+    const list = () => screen.getByTestId("channel-list");
+    const scroll = async (y: number) =>
+      fireEvent.scroll(list(), {
+        nativeEvent: {
+          contentOffset: { x: 0, y },
+          contentSize: { width: 400, height: 100_000 },
+          layoutMeasurement: { width: 400, height: 800 },
+        },
+      });
+    await scroll(90_000);
+    await fireEvent.press(screen.getByText("收藏", { exact: true }));
+    expect(await screen.findByText("从一份节目单开始")).toBeTruthy();
+    scrollToOffset.mockClear();
+    await fireEvent.press(screen.getByRole("tab", { name: "频道" }));
+    expect(await screen.findByLabelText("台0，播放")).toBeTruthy();
+    await waitFor(() =>
+      expect(scrollToOffset).toHaveBeenCalledWith({
+        offset: 90_000,
+        animated: false,
+      }),
+    );
+    // The list is still short, so Android clamps the scroll and reports 700;
+    // the request is re-sent on later frames and 700 is never saved.
+    await scroll(700);
+    await waitFor(() =>
+      expect(scrollToOffset.mock.calls.length).toBeGreaterThanOrEqual(3),
+    );
+    for (const [arg] of scrollToOffset.mock.calls)
+      expect(arg).toEqual({ offset: 90_000, animated: false });
+    await scroll(90_000);
+    // Reaching the target stops the retries.
+    const sent = scrollToOffset.mock.calls.length;
+    await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+    expect(scrollToOffset).toHaveBeenCalledTimes(sent);
+    // The clamped 700 was never saved: leaving and returning targets 90000.
+    await fireEvent.press(screen.getByText("收藏", { exact: true }));
+    expect(await screen.findByText("从一份节目单开始")).toBeTruthy();
+    scrollToOffset.mockClear();
+    await fireEvent.press(screen.getByRole("tab", { name: "频道" }));
+    await waitFor(() =>
+      expect(scrollToOffset).toHaveBeenCalledWith({
+        offset: 90_000,
+        animated: false,
+      }),
+    );
+  } finally {
+    scrollToOffset.mockRestore();
+  }
 });

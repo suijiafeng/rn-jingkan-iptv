@@ -42,6 +42,7 @@ import {
 } from "./features/source/SourceManagerModal";
 import { checkChannels } from "./features/source/availability";
 import { SettingsScreen } from "./features/settings/SettingsScreen";
+import { createScrollRestore } from "./features/channel/scrollRestore";
 import {
   BottomTabs,
   ChannelListEmpty,
@@ -125,7 +126,21 @@ export default function App() {
   const listRef = useRef<FlatList<ListItem>>(null),
     tabOffsets = useRef<Partial<Record<Tab, number>>>({}),
     tabFilters = useRef<Partial<Record<ListTab, ListFilters>>>({}),
-    restoreTab = useRef<Tab | null>(null);
+    restoreTab = useRef<Tab | null>(null),
+    [scrollRestore] = useState(createScrollRestore);
+  // Re-sent each frame until the list reports the offset (see scrollRestore).
+  const restoreOffset = useCallback(
+    (target: number) => {
+      const send = (offset: number | null) => {
+        if (offset === null) return;
+        listRef.current?.scrollToOffset({ offset, animated: false });
+        if (scrollRestore.pending())
+          requestAnimationFrame(() => send(scrollRestore.retry()));
+      };
+      send(scrollRestore.request(target));
+    },
+    [scrollRestore],
+  );
   const changed = useCallback(() => setRevision((v) => v + 1), []);
   const loadRequest = useMemo(
     () => ({ repo, tab, sourceId, group, query, revision }),
@@ -186,6 +201,7 @@ export default function App() {
     if (!repo) return;
     let active = true;
     const id = ++loadGeneration.current;
+    scrollRestore.cancel();
     Promise.all([
       repo.listSources(),
       repo.listChannels({
@@ -211,7 +227,7 @@ export default function App() {
             const offset = tabOffsets.current[tab] ?? 0;
             requestAnimationFrame(() => {
               if (active && id === loadGeneration.current)
-                listRef.current?.scrollToOffset({ offset, animated: false });
+                restoreOffset(offset);
             });
           }
         }
@@ -227,7 +243,17 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [repo, tab, sourceId, group, query, revision, loadRequest]);
+  }, [
+    repo,
+    tab,
+    sourceId,
+    group,
+    query,
+    revision,
+    loadRequest,
+    scrollRestore,
+    restoreOffset,
+  ]);
   useEffect(() => {
     const sub = Network.addNetworkStateListener((net) => {
       if (!isOffline(net) && !mightUseMobileData(net)) setMobileAccepted(false);
@@ -934,9 +960,11 @@ export default function App() {
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
             onScroll={(e) => {
-              if (!listLoading)
-                tabOffsets.current[tab] = e.nativeEvent.contentOffset.y;
+              const y = e.nativeEvent.contentOffset.y;
+              if (!listLoading && scrollRestore.scrolled(y))
+                tabOffsets.current[tab] = y;
             }}
+            onScrollBeginDrag={scrollRestore.cancel}
             scrollEventThrottle={100}
             keyExtractor={(item) =>
               item === FILTER_ROW
