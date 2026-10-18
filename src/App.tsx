@@ -77,7 +77,7 @@ type ListItem = Channel | typeof EMPTY_ROW;
 // A screenful is shown first; the rest of a 10k-row list follows in a second
 // read so switching tabs or filters does not wait for the whole table.
 const FIRST_PAGE = 40;
-const ListSeparator = () => <View style={{ height: 12 }} />;
+const ListSeparator = () => <View style={{ height: 4 }} />;
 const listKey = (item: ListItem) =>
   item === EMPTY_ROW ? "__empty__" : (item as Channel).id;
 
@@ -1245,6 +1245,7 @@ export default function App() {
         )}
         {tab === "settings" ? (
           <SettingsScreen
+            sourceCount={sources.length}
             remoteAllowed={remoteAllowed}
             revokePending={revokePending}
             artworkAllowed={artworkAllowed}

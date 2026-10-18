@@ -284,7 +284,7 @@ test("settings permission write failures are shown without granting access", asy
   await waitFor(() =>
     expect(screen.getByText("无法保存网络许可，请重试")).toBeTruthy(),
   );
-  expect(screen.getByText("未允许联网，频道资料仍可离线查看")).toBeTruthy();
+  expect(screen.getByText("频道资料仍可离线查看")).toBeTruthy();
   expect(downloadPlaylist).not.toHaveBeenCalled();
 });
 test("failed revocation stays blocked and can persist a retry without another consent prompt", async () => {
@@ -304,7 +304,7 @@ test("failed revocation stays blocked and can persist a retry without another co
     expect(screen.getByText("从一份节目单开始")).toBeTruthy(),
   );
   await fireEvent.press(screen.getByText("设置"));
-  await fireEvent.press(screen.getByText("撤销联网许可"));
+  await fireEvent.press(screen.getByRole("button", { name: "撤销联网许可" }));
   await waitFor(() => expect(screen.getByText("重试保存撤销")).toBeTruthy());
   expect(persistedAllowed).toBe(true);
   expect(screen.queryByText("阅读风险并允许")).toBeNull();
@@ -330,7 +330,7 @@ test("failed revocation stays blocked and can persist a retry without another co
     expect(screen.getByText("从一份节目单开始")).toBeTruthy(),
   );
   await fireEvent.press(screen.getByText("设置"));
-  expect(screen.getByText("未允许联网，频道资料仍可离线查看")).toBeTruthy();
+  expect(screen.getByText("频道资料仍可离线查看")).toBeTruthy();
   expect(downloadPlaylist).not.toHaveBeenCalled();
 });
 test.each(["频道", "最近"])(
@@ -513,7 +513,7 @@ test("initial empty UI offers import without any remote access", async () => {
   );
   expect(downloadPlaylist).not.toHaveBeenCalled();
   await fireEvent.press(screen.getByText("设置"));
-  expect(screen.getByText("节目来源联网与 HTTP 许可")).toBeTruthy();
+  expect(screen.getByText("节目来源联网")).toBeTruthy();
 });
 test("declining informed consent never downloads the playlist", async () => {
   jest
@@ -715,7 +715,9 @@ test.each(["revocation", "background", "stop", "unmount"])(
       );
       if (action === "revocation") {
         await fireEvent.press(screen.getByText("返回", { exact: true }));
-        await fireEvent.press(screen.getByText("撤销联网许可"));
+        await fireEvent.press(
+          screen.getByRole("button", { name: "撤销联网许可" }),
+        );
         await waitFor(() =>
           expect(screen.getByText("阅读风险并允许")).toBeTruthy(),
         );
@@ -850,7 +852,7 @@ test("deleting one playback source refreshes alternatives and switches off the d
   ] as never[]);
   (repo.listChannels as jest.Mock).mockImplementation(
     async (query?: ChannelQuery) =>
-    query?.mode === "recent" ? [] : ([primary] as never[]),
+      query?.mode === "recent" ? [] : ([primary] as never[]),
   );
   repo.getChannel.mockImplementation(async (id) =>
     id === primary.id && !deleted ? primary : id === backup.id ? backup : null,
