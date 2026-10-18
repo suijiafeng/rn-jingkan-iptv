@@ -1,9 +1,13 @@
-import React from "react";
+import React, { memo, useMemo } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Channel } from "../domain/types";
 import { channelTitle, displayGroups } from "../domain/channelLabels";
 import { colors, styles } from "../theme";
-export function ChannelRow({
+/**
+ * Memoized: with 10k+ rows the list re-renders cells on every parent update,
+ * so callers pass stable handlers that receive the channel.
+ */
+export const ChannelRow = memo(function ChannelRow({
   channel,
   onPlay,
   onFavorite,
@@ -12,13 +16,16 @@ export function ChannelRow({
   recentBusy = false,
 }: {
   channel: Channel;
-  onPlay: () => void;
-  onFavorite: () => void;
+  onPlay: (channel: Channel) => void;
+  onFavorite: (channel: Channel) => void;
   current?: boolean;
-  onRemoveRecent?: () => void;
+  onRemoveRecent?: (channel: Channel) => void;
   recentBusy?: boolean;
 }) {
-  const { title, tags } = channelTitle(channel.name);
+  const { title, tags } = useMemo(
+    () => channelTitle(channel.name),
+    [channel.name],
+  );
   const unreachable = channel.active && channel.checkStatus === "unreachable";
   const labels = [...tags, ...(unreachable ? ["上次检测不可达"] : [])];
   const editingRecent = !!onRemoveRecent;
@@ -35,7 +42,7 @@ export function ChannelRow({
             : `${title}${labels.length ? `，${labels.join("，")}` : ""}，${channel.active ? "播放" : "来源已不再提供"}`
         }
         accessibilityState={{ disabled: playbackDisabled, selected: current }}
-        onPress={onPlay}
+        onPress={() => onPlay(channel)}
         disabled={playbackDisabled}
         style={({ pressed }) => [s.main, pressed && { opacity: 0.65 }]}
       >
@@ -73,7 +80,7 @@ export function ChannelRow({
           accessibilityLabel={`删除${title}的观看记录`}
           accessibilityState={{ disabled: recentBusy }}
           disabled={recentBusy}
-          onPress={onRemoveRecent}
+          onPress={() => onRemoveRecent(channel)}
           style={({ pressed }) => [
             s.removeRecent,
             { opacity: recentBusy ? 0.4 : pressed ? 0.65 : 1 },
@@ -87,7 +94,7 @@ export function ChannelRow({
           accessibilityRole="button"
           accessibilityLabel={`${channel.favorite ? "取消收藏" : "收藏"}${title}`}
           accessibilityState={{ selected: channel.favorite }}
-          onPress={onFavorite}
+          onPress={() => onFavorite(channel)}
           style={s.star}
         >
           <Text
@@ -102,7 +109,7 @@ export function ChannelRow({
       )}
     </View>
   );
-}
+});
 const s = StyleSheet.create({
   row: {
     flexDirection: "row",

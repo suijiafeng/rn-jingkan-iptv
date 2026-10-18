@@ -43,6 +43,29 @@ import {
   type PlaybackSnapshot,
 } from "./playbackController";
 
+/**
+ * Per-channel search text and group list, computed once per channel object.
+ * Rows are replaced (not mutated) on change, so a WeakMap stays fresh and
+ * typing in the sheet filters 10k+ channels without rebuilding strings.
+ */
+const sheetKeys = new WeakMap<
+  Channel,
+  { title: string; groups: string[]; text: string }
+>();
+function sheetKey(channel: Channel) {
+  let key = sheetKeys.get(channel);
+  if (!key) {
+    const groups = splitGroups(channel.groupName);
+    key = {
+      title: channelTitle(channel.name).title,
+      groups,
+      text: `${channel.name} ${groups.join("、")} ${channel.sourceName}`.toLocaleLowerCase(),
+    };
+    sheetKeys.set(channel, key);
+  }
+  return key;
+}
+
 export interface PlayerScreenProps {
   channel: Channel;
   channels: Channel[];
@@ -197,7 +220,7 @@ export function PlayerScreen(props: PlayerScreenProps) {
   const groups = useMemo(
     () => [
       ...new Set(
-        allActiveChannels.flatMap((channel) => splitGroups(channel.groupName)),
+        allActiveChannels.flatMap((channel) => sheetKey(channel).groups),
       ),
     ],
     [allActiveChannels],
@@ -209,11 +232,8 @@ export function PlayerScreen(props: PlayerScreenProps) {
         (channel) =>
           (scope !== "all" ||
             !group ||
-            splitGroups(channel.groupName).includes(group)) &&
-          (!query ||
-            `${channel.name} ${displayGroups(channel.groupName)} ${channel.sourceName}`
-              .toLocaleLowerCase()
-              .includes(query)),
+            sheetKey(channel).groups.includes(group)) &&
+          (!query || sheetKey(channel).text.includes(query)),
       ),
     [scopeChannels, scope, query, group],
   );
@@ -468,7 +488,7 @@ export function PlayerScreen(props: PlayerScreenProps) {
                   <Pressable
                     style={[s.channelSelect, !item.active && s.inactiveChannel]}
                     accessibilityRole="button"
-                    accessibilityLabel={`${channelTitle(item.name).title}，${item.sourceName}${item.id === props.channel.id ? "，当前频道" : ""}`}
+                    accessibilityLabel={`${sheetKey(item).title}，${item.sourceName}${item.id === props.channel.id ? "，当前频道" : ""}`}
                     accessibilityState={{
                       selected: item.id === props.channel.id,
                       disabled: !item.active,
@@ -484,19 +504,19 @@ export function PlayerScreen(props: PlayerScreenProps) {
                   >
                     <View style={s.channelMark}>
                       <Text style={s.markText}>
-                        {Array.from(channelTitle(item.name).title)[0] || "台"}
+                        {Array.from(sheetKey(item).title)[0] || "台"}
                       </Text>
                     </View>
                     <View style={s.flex}>
                       <Text numberOfLines={1} style={theme.heading}>
-                        {channelTitle(item.name).title}
+                        {sheetKey(item).title}
                       </Text>
                       <Text numberOfLines={1} style={theme.muted}>
                         {!item.active
                           ? "已失效"
                           : item.id === props.channel.id
                             ? "当前频道"
-                            : displayGroups(item.groupName)}{" "}
+                            : sheetKey(item).groups.join("、")}{" "}
                         · {item.sourceName}
                       </Text>
                     </View>
@@ -504,7 +524,7 @@ export function PlayerScreen(props: PlayerScreenProps) {
                   <Pressable
                     style={s.favoriteHit}
                     accessibilityRole="button"
-                    accessibilityLabel={`${item.favorite ? "取消收藏" : "收藏"}${channelTitle(item.name).title}`}
+                    accessibilityLabel={`${item.favorite ? "取消收藏" : "收藏"}${sheetKey(item).title}`}
                     accessibilityState={{ selected: item.favorite }}
                     onPress={() => props.onFavorite(item)}
                   >

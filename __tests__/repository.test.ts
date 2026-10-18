@@ -172,6 +172,41 @@ describe("SQLite repository with real SQLite", () => {
     expect(await repo.listChannels({ search: "' OR 1=1 --" })).toHaveLength(0);
   });
 
+  it("pages a list in the same order as the full read and counts the same filter", async () => {
+    const many = content(
+      Array.from({ length: 25 }, (_, i) => ({
+        name: `台${i}`,
+        id: `p${i}`,
+        url: `https://a.example.com/p${i}`,
+        group: i % 2 ? "体育" : "新闻",
+      })),
+    );
+    await repo.importSource({
+      name: "分页",
+      kind: "file",
+      location: "page.m3u",
+      content: many,
+      preview: await parseM3U(many),
+    });
+    const full = await repo.listChannels();
+    const first = await repo.listChannels({ limit: 10 });
+    const rest = await repo.listChannels({ offset: 10 });
+    expect([...first, ...rest].map((c) => c.id)).toEqual(full.map((c) => c.id));
+    expect(await repo.countChannels()).toBe(25);
+    const sports = { groupName: "体育", search: "台1" };
+    const sportsRows = await repo.listChannels(sports);
+    expect(sportsRows.length).toBeGreaterThan(0);
+    expect(await repo.countChannels(sports)).toBe(sportsRows.length);
+    expect(await repo.listChannels({ ...sports, limit: 2 })).toEqual(
+      sportsRows.slice(0, 2),
+    );
+    await repo.toggleFavorite(full[3].id);
+    expect(await repo.countChannels({ mode: "favorites" })).toBe(1);
+    expect(await repo.listChannels({ mode: "favorites", offset: 1 })).toEqual(
+      [],
+    );
+  });
+
   it("preserves stable IDs, favorites and recents across trusted ID URL-token refresh", async () => {
     const source = await importInitial();
     const [channel] = await repo.listChannels();
