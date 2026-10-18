@@ -266,7 +266,7 @@ export function MediaStatus({
  * Seconds without a picture, so a dead stream is not a silent 30 s wait.
  * Own component (keyed per attempt) so the 1 s tick re-renders only itself.
  */
-export function WaitProgress() {
+export function WaitProgress({ prefix = "" }: { prefix?: string }) {
   const [started] = useState(() => Date.now());
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
@@ -279,13 +279,19 @@ export function WaitProgress() {
     return () => clearTimeout(timer);
   }, [started, seconds]);
   const slow = seconds >= SLOW_START_SECONDS;
+  // One line: "最多等 30 秒 · 已等 12 秒", then "已等 16 秒 · 比平时慢，可以换台".
+  const line = [
+    slow ? "" : prefix,
+    seconds > 0 ? `已等 ${seconds} 秒` : "",
+    slow ? "比平时慢，可以换台" : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  if (!line) return null;
   return (
-    <>
-      <View pointerEvents="none" style={s.noticeText}>
-        {seconds > 0 && <Text style={s.noticeBody}>已等 {seconds} 秒</Text>}
-        {slow && <Text style={s.noticeBody}>比平时慢，可以换台</Text>}
-      </View>
-    </>
+    <Text style={s.noticeBody} numberOfLines={1}>
+      {line}
+    </Text>
   );
 }
 

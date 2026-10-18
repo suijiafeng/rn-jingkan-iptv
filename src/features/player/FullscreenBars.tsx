@@ -2,7 +2,7 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors } from "../../theme";
 import { LiveBadge, MediaStatus, OverlayButton } from "./overlayWidgets";
-import { ChevronLeftIcon } from "./playerIcons";
+import { ChevronLeftIcon, MenuIcon } from "./playerIcons";
 import type { SessionProps } from "./ChannelSession";
 import type { SessionView } from "./useChannelSession";
 
@@ -92,8 +92,10 @@ export function FullscreenBars({
             <View style={s.flex} />
             {sourceButton}
             <OverlayButton
-              label="☰ 频道列表"
+              label="频道列表"
+              icon={<MenuIcon />}
               accessibilityLabel="频道列表"
+              variant="quiet"
               onPress={props.onOpenSheet}
             />
           </View>

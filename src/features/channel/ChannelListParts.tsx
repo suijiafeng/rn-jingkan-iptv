@@ -131,6 +131,10 @@ export function ChannelFilterBar(
     idPrefix?: string;
     /** Inside the player sheet: no own background or vertical padding. */
     compact?: boolean;
+    /** Player: fold the search field (shown only while a search is active). */
+    foldSearch?: boolean;
+    /** Player: fold the country/language triggers (shown while one is set). */
+    foldTriggers?: boolean;
   },
 ) {
   const { tab, idPrefix = "channel" } = props;
@@ -141,7 +145,7 @@ export function ChannelFilterBar(
   if (!hasFilterBar(props)) return null;
   return (
     <View style={[s.filterBar, props.compact && s.compactBar]}>
-      <View style={s.searchLine}>
+      <View style={[s.searchLine, props.foldSearch && s.hidden]}>
         <View style={[s.searchRow, { flex: 1 }]}>
           <TextInput
             accessibilityLabel="搜索频道名称"
@@ -221,6 +225,7 @@ export function ChannelFilterBar(
           countryHint={props.countryHint}
           contentAsTabs
           compact={props.compact}
+          tabsOnly={props.foldTriggers}
           testID={`${idPrefix}-facet-filters`}
         />
       )}
@@ -377,6 +382,7 @@ const s = StyleSheet.create({
   // Opaque so rows scrolling underneath never show through the pinned bar.
   filterBar: { gap: 10, paddingVertical: 8, backgroundColor: colors.bg },
   compactBar: { gap: 8, paddingVertical: 0, backgroundColor: "transparent" },
+  hidden: { display: "none" },
   searchLine: { flexDirection: "row", alignItems: "center", gap: 8 },
   topRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   sourceToggle: {

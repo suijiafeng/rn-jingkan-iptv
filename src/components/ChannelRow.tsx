@@ -41,7 +41,7 @@ export const ChannelRow = memo(function ChannelRow({
       style={[
         s.row,
         flat && s.flat,
-        current && { borderColor: colors.accent, borderWidth: 1 },
+        current && !flat && { borderColor: colors.accent, borderWidth: 1 },
       ]}
     >
       <Pressable
@@ -119,8 +119,12 @@ export const ChannelRow = memo(function ChannelRow({
         >
           <Text
             style={{
-              fontSize: 24,
-              color: channel.favorite ? colors.accent : colors.muted,
+              fontSize: flat ? 20 : 24,
+              color: channel.favorite
+                ? colors.warn
+                : flat
+                  ? "#A6B6BD99"
+                  : colors.muted,
             }}
           >
             {channel.favorite ? "★" : "☆"}

@@ -29,6 +29,8 @@ export interface FacetFiltersProps {
   contentAsTabs?: boolean;
   /** Dense sizes inside the player (40dp triggers, chip tabs). */
   compact?: boolean;
+  /** Only the content tabs; the country/language triggers stay folded. */
+  tabsOnly?: boolean;
   testID?: string;
 }
 
@@ -47,6 +49,7 @@ export function FacetFilters({
   onChange,
   contentAsTabs = false,
   compact = false,
+  tabsOnly = false,
   testID = "facet-filters",
 }: FacetFiltersProps) {
   const [open, setOpen] = useState<FacetKind | null>(null);
@@ -102,7 +105,12 @@ export function FacetFilters({
   const selectedTab = selected.content === "" ? UNGROUPED : selected.content;
   return (
     <View style={s.column}>
-      <View ref={bar} testID={testID} style={s.bar} collapsable={false}>
+      <View
+        ref={bar}
+        testID={testID}
+        style={[s.bar, tabsOnly && s.hidden]}
+        collapsable={false}
+      >
         {menuKinds.map((kind) => (
           <Pressable
             key={kind}
@@ -223,6 +231,7 @@ export function FacetFilters({
 
 const s = StyleSheet.create({
   column: { gap: 8 },
+  hidden: { display: "none" },
   bar: { flexDirection: "row", gap: 8 },
   trigger: {
     flex: 1,

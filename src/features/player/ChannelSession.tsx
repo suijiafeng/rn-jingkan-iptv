@@ -72,6 +72,16 @@ export function ChannelSession(props: SessionProps) {
     sourceButton,
     favoriteButton,
   } = view;
+  // Title, then one line of description: the state's body plus any hint.
+  const noticeLine = [
+    state.phase === "paused" ? pausedBody : description.body,
+    (state.phase === "timeout" || state.phase === "error") &&
+    props.channel.checkStatus === "unreachable"
+      ? "上次检测也没有响应"
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <View
       style={props.mini ? s.miniBar : props.fullscreen ? s.flex : undefined}
@@ -156,6 +166,14 @@ export function ChannelSession(props: SessionProps) {
             }}
           />
         )}
+        {props.fullscreen && !controlsVisible && state.phase === "playing" && (
+          <View
+            style={[s.swipeHint, { right: insets.right + 14 }]}
+            pointerEvents="none"
+          >
+            <Text style={s.swipeHintText}>上下滑动换台</Text>
+          </View>
+        )}
         {props.fullscreen && osd && !props.sheetOpen && (
           <View
             style={[
@@ -190,21 +208,19 @@ export function ChannelSession(props: SessionProps) {
                 {!(state.phase === "paused" && !pausedBody) && (
                   <Text style={s.noticeTitle}>{description.title}</Text>
                 )}
-                {!!(state.phase === "paused"
-                  ? pausedBody
-                  : description.body) && (
-                  <Text style={s.noticeBody}>
-                    {state.phase === "paused" ? pausedBody : description.body}
-                  </Text>
-                )}
-                {(state.phase === "timeout" || state.phase === "error") &&
-                  props.channel.checkStatus === "unreachable" && (
-                    <Text style={s.noticeBody}>
-                      上次可用性检测时，这个地址也没有响应。
+                {waiting ? (
+                  <WaitProgress
+                    key={state.attemptId ?? "checking"}
+                    prefix={description.body}
+                  />
+                ) : (
+                  !!noticeLine && (
+                    <Text style={s.noticeBody} numberOfLines={1}>
+                      {noticeLine}
                     </Text>
-                  )}
+                  )
+                )}
               </View>
-              {waiting && <WaitProgress key={state.attemptId ?? "checking"} />}
               {(state.attemptId === null || starting) && zapCluster(false)}
               {state.phase === "cellular" && (
                 <Pressable
@@ -405,6 +421,24 @@ const s = StyleSheet.create({
     lineHeight: 22,
     fontWeight: "600",
     textAlign: "center",
+  },
+  swipeHint: {
+    position: "absolute",
+    top: "50%",
+    width: 16,
+    height: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    opacity: 0.55,
+  },
+  swipeHintText: {
+    color: colors.text,
+    fontSize: 11,
+    lineHeight: 16,
+    letterSpacing: 2,
+    width: 120,
+    textAlign: "center",
+    transform: [{ rotate: "90deg" }],
   },
   osd: {
     position: "absolute",

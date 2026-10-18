@@ -229,7 +229,7 @@ export function PlayerScreen(props: PlayerScreenProps) {
             style={[
               s.landscapePanel,
               {
-                width: Math.min(width, Math.max(280, width * 0.4), 440),
+                width: Math.min(width, Math.max(280, width * 0.4), 300),
                 marginTop: insets.top,
                 marginRight: insets.right,
                 marginBottom: insets.bottom,
@@ -268,9 +268,10 @@ const s = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 8,
     paddingHorizontal: 12,
-    gap: 4,
-    borderTopLeftRadius: 16,
-    backgroundColor: "#131D23F2",
+    gap: 6,
+    borderLeftWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: "#0B1115F5",
   },
   sourceSheet: {
     width: "100%",

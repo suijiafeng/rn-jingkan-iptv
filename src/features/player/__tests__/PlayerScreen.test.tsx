@@ -1,11 +1,5 @@
 import React from "react";
-import {
-  AppState,
-  BackHandler,
-  FlatList,
-  Keyboard,
-  StyleSheet,
-} from "react-native";
+import { AppState, BackHandler, FlatList, StyleSheet } from "react-native";
 import { act, fireEvent, render, within } from "@testing-library/react-native";
 import {
   PlayerScreen,
@@ -264,10 +258,10 @@ test("rotation preserves the current attempt; choosing a channel closes the shee
   expect(mockLock).toHaveBeenLastCalledWith(2);
   expect(mockMounts).toHaveBeenCalledTimes(1);
   await fireEvent.press(ui.getByRole("button", { name: "频道列表" }));
-  expect(ui.getByText("选择频道")).toBeTruthy();
+  expect(ui.getByRole("header", { name: "频道列表" })).toBeTruthy();
   await fireEvent.press(ui.getByRole("button", { name: "自然之声，播放" }));
   expect(options.onSelect).toHaveBeenCalledWith(second, [first, second]);
-  expect(ui.queryByText("选择频道")).toBeNull();
+  expect(ui.queryByRole("header", { name: "频道列表" })).toBeNull();
   expect(ui.getByRole("button", { name: "退出全屏" })).toBeTruthy();
   expect(mockMounts).toHaveBeenCalledTimes(1);
   await ui.unmount();
@@ -369,50 +363,35 @@ test("the sheet shows the page's result in its order; the visible playable rows 
   await ui.unmount();
 });
 
-test("the sheet uses the page's filter bar and switches the page's tab", async () => {
-  const keyboardSpy = jest
-    .spyOn(Keyboard, "dismiss")
-    .mockImplementation(() => {});
+test("the player shows the page's content tabs only; folded filters appear while active", async () => {
   const options = props({
     sheet: sheet([first, second], {
       facets: { countries: ["CN"], languages: ["zh"], contents: ["纪录片"] },
     }),
   });
   const ui = await render(<PlayerScreen {...options} />);
-  expect(
-    within(ui.getByTestId("player-scopes"))
-      .getAllByRole("button")
-      .map((item) => item.props.accessibilityLabel),
-  ).toEqual(["频道", "收藏", "最近", "定位当前频道"]);
-  expect(
-    within(ui.getByTestId("player-facet-filters"))
-      .getAllByRole("button")
-      .map((item) => item.props.accessibilityLabel),
-  ).toEqual(["国家/地区：全部", "语言：全部"]);
-  await fireEvent.changeText(ui.getByLabelText("搜索频道名称"), "自然");
-  expect(options.sheet.filters.onSearchChange).toHaveBeenCalledWith("自然");
+  // Portrait: one row, the content tabs; no scope row, search or triggers.
+  expect(ui.queryByTestId("player-scopes")).toBeNull();
+  expect(ui.queryByLabelText("搜索频道名称")).toBeNull();
+  expect(ui.queryByRole("button", { name: /国家\/地区：/ })).toBeNull();
   const tabs = ui.getByTestId("player-facet-filters-content-tabs");
   await fireEvent.press(within(tabs).getByRole("button", { name: "纪录片" }));
   expect(options.sheet.filters.onFacetChange).toHaveBeenCalledWith(
     { country: null, language: null, content: "纪录片" },
     "content",
   );
-  await fireEvent.press(ui.getByRole("button", { name: "频道" }));
-  expect(options.sheet.onTabChange).not.toHaveBeenCalled();
-  expect(keyboardSpy).not.toHaveBeenCalled();
-  await fireEvent.press(ui.getByRole("button", { name: "收藏" }));
-  expect(options.sheet.onTabChange).toHaveBeenCalledWith("favorites");
-  expect(keyboardSpy).toHaveBeenCalledTimes(1);
-  await ui.rerender(
-    <PlayerScreen {...options} sheet={sheet([second], { tab: "favorites" })} />,
-  );
-  expect(
-    ui.getByRole("button", { name: "收藏" }).props.accessibilityState.selected,
-  ).toBe(true);
-  expect(ui.queryByTestId("player-facet-filters")).toBeNull();
-  expect(ui.getByLabelText("搜索频道名称")).toBeTruthy();
+  // The fullscreen panel is the same list with a heading, nothing more.
+  await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
+  await fireEvent.press(ui.getByRole("button", { name: "频道列表" }));
+  expect(ui.getByRole("header", { name: "频道列表" })).toBeTruthy();
+  expect(ui.queryByTestId("player-scopes")).toBeNull();
+  expect(ui.queryByLabelText("搜索频道名称")).toBeNull();
+  // An active search from the page is shown so it can be cleared here.
+  const searching = sheet([second], { search: "自然", rangeKey: "search" });
+  await ui.rerender(<PlayerScreen {...options} sheet={searching} />);
+  await fireEvent.changeText(ui.getByLabelText("搜索频道名称"), "自然之");
+  expect(searching.filters.onSearchChange).toHaveBeenCalledWith("自然之");
   await ui.unmount();
-  keyboardSpy.mockRestore();
 });
 
 test("recent rows in the sheet have no history management actions", async () => {
@@ -449,6 +428,8 @@ test("locating asks the page to show everything only when the current channel is
     .mockImplementation(() => {});
   const options = props({ sheet: sheet([second], { tab: "favorites" }) });
   const ui = await render(<PlayerScreen {...options} />);
+  await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
+  await fireEvent.press(ui.getByRole("button", { name: "频道列表" }));
   await fireEvent.press(ui.getByRole("button", { name: "定位当前频道" }));
   expect(options.sheet.onLocate).toHaveBeenCalledTimes(1);
   // The page reloads: nothing while loading, then the full list.
@@ -564,7 +545,7 @@ test("hardware back closes sheet, then fullscreen, then player", async () => {
   await act(() => {
     handler?.();
   });
-  expect(ui.queryByText("选择频道")).toBeNull();
+  expect(ui.queryByRole("header", { name: "频道列表" })).toBeNull();
   expect(ui.getByRole("button", { name: "退出全屏" })).toBeTruthy();
   await act(() => {
     handler?.();
@@ -813,7 +794,7 @@ describe("waiting and failure", () => {
     const options = props();
     const ui = await render(<PlayerScreen {...options} />);
     await seconds(3);
-    expect(ui.getByText("已等 3 秒")).toBeTruthy();
+    expect(ui.getByText(/已等 3 秒/)).toBeTruthy();
     await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
     expect(ui.queryByText(/比平时慢/)).toBeNull();
     await seconds(12);
@@ -952,9 +933,9 @@ describe("portrait layout", () => {
     const options = props({ sheet: sheet([first, second]) });
     const ui = await render(<PlayerScreen {...options} />);
     expect(ui.queryByRole("button", { name: /打开频道列表/ })).toBeNull();
-    expect(ui.queryByText("选择频道")).toBeNull();
+    expect(ui.queryByRole("header", { name: "频道列表" })).toBeNull();
     expect(ui.getByTestId("player-channel-list")).toBeTruthy();
-    expect(ui.getByRole("button", { name: "定位当前频道" })).toBeTruthy();
+    expect(ui.queryByRole("button", { name: "定位当前频道" })).toBeNull();
     // The heading names the channel and its groups; the source appears only
     // on the chip that opens the alternatives. Zapping lives in the picture.
     const info = within(ui.getByTestId("portrait-info"));
