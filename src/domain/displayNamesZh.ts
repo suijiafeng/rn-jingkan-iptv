@@ -48,7 +48,7 @@ export const COUNTRY_NAMES_ZH: Readonly<Record<string, string>> = {
   CK: "库克群岛",
   CL: "智利",
   CM: "喀麦隆",
-  CN: "中国",
+  CN: "中国大陆",
   CO: "哥伦比亚",
   CR: "哥斯达黎加",
   CU: "古巴",

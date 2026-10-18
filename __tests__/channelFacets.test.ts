@@ -143,7 +143,8 @@ describe("explicit channel facets", () => {
     });
     try {
       // Like Hermes on Android: no DisplayNames data, static names still work.
-      expect(countryLabel("CN")).toBe("中国");
+      expect(countryLabel("CN")).toBe("中国大陆");
+      expect(countryLabel("MO")).toBe("中国澳门");
       expect(countryLabel("IS")).toBe("冰岛");
       expect(countryLabel("TT")).toBe("特立尼达和多巴哥");
       expect(countryLabel("HK")).toBe("中国香港");
@@ -203,8 +204,11 @@ test("long menus pin Chinese-relevant countries and languages first", () => {
     { countries: ["TW"], languages: ["zh"], groupName: "新闻" },
     { countries: ["AL"], languages: ["sq"], groupName: "新闻" },
     { countries: ["CN"], languages: ["yue"], groupName: "新闻" },
+    { countries: ["MO"], languages: [], groupName: "新闻" },
+    { countries: ["HK"], languages: [], groupName: "新闻" },
     { countries: [], languages: [], groupName: "新闻" },
   ]);
-  expect(options.countries).toEqual(["CN", "TW", "AL", "US", ""]);
+  // 中国大陆、中国香港、中国澳门、中国台湾, then the rest.
+  expect(options.countries).toEqual(["CN", "HK", "MO", "TW", "AL", "US", ""]);
   expect(options.languages).toEqual(["zh", "yue", "en", "sq", ""]);
 });

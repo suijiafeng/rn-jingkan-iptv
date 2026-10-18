@@ -1421,7 +1421,7 @@ test("country/language/content menus form an intersection without shrinking avai
   setupFacetCatalog();
   await render(<App />);
   await screen.findByLabelText("中文新闻，播放");
-  await chooseFacet("国家/地区", "中国");
+  await chooseFacet("国家/地区", "中国大陆");
   await chooseFacet("语言", "英语");
   expect(await screen.findByLabelText("英语体育，播放")).toBeTruthy();
   expect(screen.queryByLabelText("美国英语，播放")).toBeNull();
@@ -1447,7 +1447,9 @@ test("country/language/content menus form an intersection without shrinking avai
       groupName: "体育",
     }),
   );
-  expect(screen.getByRole("button", { name: "国家/地区：中国" })).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "国家/地区：中国大陆" }),
+  ).toBeTruthy();
   expect(selectedContent()).toBe("体育");
 });
 

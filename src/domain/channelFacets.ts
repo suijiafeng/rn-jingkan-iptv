@@ -35,7 +35,7 @@ const COUNTRY_CODES = new Set(
   ),
 );
 const COUNTRY_FALLBACK: Record<string, string> = {
-  CN: "中国",
+  CN: "中国大陆",
   HK: "中国香港",
   MO: "中国澳门",
   TW: "中国台湾",
@@ -381,7 +381,8 @@ const facetOrder = new Intl.Collator("zh-Hans-CN");
 // Pinned to the top of long menus (200+ languages, 160+ countries), in
 // this order; everything else follows by Chinese collation, unlabeled last.
 const PINNED: Partial<Record<FacetKind, readonly string[]>> = {
-  country: ["CN", "HK", "TW", "MO"],
+  // 通行写法与顺序：中国大陆、中国香港、中国澳门、中国台湾。
+  country: ["CN", "HK", "MO", "TW"],
   language: ["zh", "yue", "en"],
 };
 function sortOptions(values: Set<string>, kind: FacetKind): string[] {
