@@ -37,6 +37,7 @@ const activePhases: PlaybackPhase[] = [
   "playing",
   "buffering",
 ];
+const retainedAttemptPhases: PlaybackPhase[] = [...activePhases, "paused"];
 /**
  * Only a missing link counts as offline. isInternetReachable reflects Android's
  * own validation probe (Google connectivitycheck), which fails on networks
@@ -112,7 +113,8 @@ export class PlaybackController {
       newlyWarned &&
       this.latestNetwork &&
       mightUseMobileData(this.latestNetwork) &&
-      activePhases.includes(this.snapshot.phase)
+      (activePhases.includes(this.snapshot.phase) ||
+        this.snapshot.attemptId !== null)
     ) {
       this.stop("cellular");
     }
@@ -182,7 +184,11 @@ export class PlaybackController {
     const previous = this.latestNetwork;
     this.latestNetwork = network;
     ++this.networkVersion;
-    if (!activePhases.includes(this.snapshot.phase)) return;
+    if (
+      !activePhases.includes(this.snapshot.phase) &&
+      this.snapshot.attemptId === null
+    )
+      return;
     if (isOffline(network)) {
       this.stop("offline");
       return;
@@ -201,7 +207,7 @@ export class PlaybackController {
     this.options.remoteAllowed &&
     this.options.isAppActive() &&
     this.snapshot.attemptId === id &&
-    activePhases.includes(this.snapshot.phase);
+    retainedAttemptPhases.includes(this.snapshot.phase);
   nativeStarted(id: number) {
     if (!this.isCurrentAttempt(id)) return;
     this.clearTimer();
@@ -225,7 +231,12 @@ export class PlaybackController {
     if (!this.isCurrentAttempt(id)) return;
     // Buffering also emits isPlaying=false. Only a genuine ready-state pause is
     // passed here by the native adapter; never infer audio-focus error strings.
-    if (this.startedAttempt === id) this.pause("interrupted");
+    if (this.startedAttempt === id) {
+      this.clearTimer();
+      // Native controls own play/pause while the view exists. Retain this
+      // attempt so the same control can resume without reconnecting the stream.
+      this.publish({ phase: "paused", attemptId: id, pauseReason: "interrupted" });
+    }
   }
   nativeEnded(id: number) {
     // An empty ExoPlayer (constructed with no source) reports ENDED at once.

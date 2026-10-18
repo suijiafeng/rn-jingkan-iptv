@@ -133,7 +133,16 @@ describe("playback intent and source isolation", () => {
     const next = controller.getSnapshot().attemptId!;
     controller.nativeStarted(next);
     controller.nativeStopped(next);
-    expect(controller.getSnapshot().pauseReason).toBe("interrupted");
+    expect(controller.getSnapshot()).toEqual({
+      phase: "paused",
+      attemptId: next,
+      pauseReason: "interrupted",
+    });
+    controller.nativeStarted(next);
+    expect(controller.getSnapshot()).toEqual({
+      phase: "playing",
+      attemptId: next,
+    });
     controller.dispose();
   });
   test("revocation cancels a pending lookup and restoring consent does not autoplay", async () => {

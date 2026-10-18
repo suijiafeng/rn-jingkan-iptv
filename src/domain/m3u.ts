@@ -11,6 +11,10 @@ import {
   normalizeCountries,
   normalizeLanguages,
 } from "./channelFacets";
+import {
+  parseDeclaredQuality,
+  qualityFromIptvOrgId,
+} from "./channelSources";
 
 // 8 MiB fits the full iptv-org index (~2.5 MiB, 11k+ entries) with headroom;
 // still bounded because the text is held in memory while parsing.
@@ -87,6 +91,8 @@ interface PendingChannel {
   logoUrl: string | null;
   countries: string[];
   languages: string[];
+  qualityLabel: string | null;
+  qualityRank: number | null;
   line: number;
 }
 interface Candidate extends PendingChannel {
@@ -123,11 +129,19 @@ function parseExtinf(line: string, lineNumber: number): PendingChannel | null {
       .replace(/\\(["'\\])/g, "$1")
       .trim();
   }
+  const tvgId = attributes["tvg-id"] || null;
+  const quality =
+    parseDeclaredQuality(
+      attributes["tvg-quality"] ||
+        attributes["video-quality"] ||
+        attributes.resolution ||
+        attributes.quality,
+    ) ?? qualityFromIptvOrgId(tvgId);
   return {
     name:
       line.slice(comma + 1).trim() || attributes["tvg-name"] || "未命名频道",
     groupName: normalizeGroups(attributes["group-title"]),
-    tvgId: attributes["tvg-id"] || null,
+    tvgId,
     // Loading remote artwork requires a separate informed application consent.
     logoUrl: attributes["tvg-logo"] || null,
     // Explicit attributes win; otherwise only an iptv-org formatted tvg-id
@@ -139,6 +153,8 @@ function parseExtinf(line: string, lineNumber: number): PendingChannel | null {
     languages: normalizeLanguages(
       attributes["tvg-language"] || attributes.language,
     ),
+    qualityLabel: quality?.label ?? null,
+    qualityRank: quality?.rank ?? null,
     line: lineNumber,
   };
 }
@@ -273,6 +289,8 @@ export async function parseM3U(
         countries: candidate.countries,
         languages: candidate.languages,
         streamUrl: candidate.streamUrl,
+        qualityLabel: candidate.qualityLabel,
+        qualityRank: candidate.qualityRank,
         sortIndex: channels.length,
       });
       if (candidate.streamUrl.startsWith("http:")) stats.http += 1;

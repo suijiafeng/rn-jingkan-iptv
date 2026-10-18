@@ -119,12 +119,23 @@ export function NativeAttempt({ uri, attemptId, controller }: Props) {
       style={StyleSheet.absoluteFill}
       contentFit="contain"
       surfaceType="textureView"
-      nativeControls={false}
+      nativeControls
+      buttonOptions={{
+        showNext: false,
+        showPrevious: false,
+        showSeekForward: false,
+        showSeekBackward: false,
+        // Live playback has no meaningful speed control. Keep native
+        // play/pause and the timeline (useful for catch-up/DVR streams), but
+        // hide ExoPlayer's generic settings menu.
+        showSettings: false,
+        showPlayPause: true,
+      }}
+      controllerAutoShow
       fullscreenOptions={{ enable: false }}
       allowsPictureInPicture={false}
       startsPictureInPictureAutomatically={false}
       allowsVideoFrameAnalysis={false}
-      requiresLinearPlayback
       useExoShutter
       onFirstFrameRender={() => {
         if (alive.current && player === currentInstance.current)

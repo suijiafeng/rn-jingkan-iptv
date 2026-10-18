@@ -109,6 +109,7 @@ const repo = {
         (channel) => channel.id === id,
       ) ?? null,
   ),
+  listChannelSources: jest.fn(async (_groupKey: string) => []),
   deleteSource: jest.fn(async () => {}),
   renameSource: jest.fn(async () => {}),
   removeRecent: jest.fn(async (_channelId: string) => {}),
@@ -147,6 +148,13 @@ beforeEach(() => {
   repo.countChannels.mockImplementation(async () => 0);
   repo.listSources.mockImplementation(async () => []);
   repo.listFacetRows.mockImplementation(async () => []);
+  repo.getChannel.mockImplementation(
+    async (id: string): Promise<unknown> =>
+      ((await listChannelsForLookup()) as { id: string }[]).find(
+        (channel) => channel.id === id,
+      ) ?? null,
+  );
+  repo.listChannelSources.mockReset().mockResolvedValue([]);
   repo.clearAll.mockReset().mockResolvedValue(undefined);
   repo.setSetting.mockImplementation(async () => {});
   repo.toggleFavorite.mockReset();
@@ -812,6 +820,69 @@ test("source deletion failure is shown inside source management", async () => {
     expect(screen.getByText("删除未完成，请重试")).toBeTruthy(),
   );
   expect(screen.getByRole("header", { name: "管理节目来源" })).toBeTruthy();
+});
+
+test("deleting one playback source refreshes alternatives and switches off the deleted address", async () => {
+  const primary = {
+    id: "primary",
+    groupKey: "iptv:cctv1.cn",
+    name: "CCTV-1",
+    active: true,
+    favorite: false,
+    sourceId: "s1",
+    sourceName: "来源一",
+    groupName: "新闻",
+  };
+  const backup = {
+    ...primary,
+    id: "backup",
+    sourceId: "s2",
+    sourceName: "来源二",
+  };
+  let deleted = false;
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" ? true : fallback,
+  );
+  repo.listSources.mockResolvedValue([
+    { ...checkSource, id: "s1", name: "来源一" },
+    { ...checkSource, id: "s2", name: "来源二" },
+  ] as never[]);
+  (repo.listChannels as jest.Mock).mockImplementation(
+    async (query?: ChannelQuery) =>
+    query?.mode === "recent" ? [] : ([primary] as never[]),
+  );
+  repo.getChannel.mockImplementation(async (id) =>
+    id === primary.id && !deleted ? primary : id === backup.id ? backup : null,
+  );
+  (repo.listChannelSources as jest.Mock).mockImplementation(async () =>
+    deleted ? [backup] : [primary, backup],
+  );
+  repo.deleteSource.mockImplementation(async () => {
+    deleted = true;
+  });
+  jest
+    .spyOn(Alert, "alert")
+    .mockImplementation((_title, _message, buttons) =>
+      buttons?.[1]?.onPress?.(),
+    );
+
+  await render(<App />);
+  await fireEvent.press(await screen.findByLabelText("CCTV-1，播放"));
+  await waitFor(() => expect(mockPlayerProps).toHaveBeenCalled());
+  await act(async () =>
+    mockManagerProps.mock.calls.at(-1)![0].onRemove({
+      ...checkSource,
+      id: "s1",
+      name: "来源一",
+    }),
+  );
+  await waitFor(() => {
+    const player = mockPlayerProps.mock.calls.at(-1)![0];
+    expect(player.channel.id).toBe("backup");
+    expect(player.sources.map((source: Channel) => source.id)).toEqual([
+      "backup",
+    ]);
+  });
 });
 
 test("failed saving of finished results after a manual stop remains visible", async () => {

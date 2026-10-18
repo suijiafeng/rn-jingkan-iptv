@@ -8,7 +8,8 @@ import { colors, styles } from "../../theme";
 export interface CheckProgress {
   sourceId: string;
   done: number;
-  total: number;
+  /** Null while the repository is loading the complete, ungrouped target set. */
+  total: number | null;
 }
 export interface CheckSummary {
   ok: number;
@@ -87,7 +88,9 @@ export function SourceManagerModal(props: ManagerProps) {
                 )}
                 {running && (
                   <Text style={styles.body} accessibilityLiveRegion="polite">
-                    正在检测可用性 {check.done}/{check.total}
+                    {check.total === null
+                      ? "正在读取待检测频道…"
+                      : `正在检测可用性 ${check.done}/${check.total}`}
                   </Text>
                 )}
                 {!running && summary && (

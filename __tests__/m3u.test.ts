@@ -103,6 +103,29 @@ describe("M3U bounded import parser", () => {
     expect(result.issues).toEqual([{ line: 4, reason: "duplicate" }]);
   });
 
+  it("reads only explicit quality metadata or strict iptv-org quality suffixes", async () => {
+    const result = await parseM3U(
+      m3u(
+        line(
+          "名称里写着 4K 但属性是标清",
+          "https://a.example.com/sd",
+          'tvg-id="CCTV1.cn@SD"',
+        ),
+        line(
+          "普通频道",
+          "https://a.example.com/hd",
+          'tvg-id="CCTV1.cn@HD" resolution="1080p"',
+        ),
+        line("名字里的高清不可信", "https://a.example.com/unknown"),
+      ),
+    );
+    expect(result.channels).toMatchObject([
+      { qualityLabel: "标清", qualityRank: 576 },
+      { qualityLabel: "1080p", qualityRank: 1080 },
+      { qualityLabel: null, qualityRank: null },
+    ]);
+  });
+
   it("supports HTTP only as metadata and reports how many accepted entries use it", async () => {
     const result = await parseM3U(
       m3u(line("明文", "http://a.example.com/live")),

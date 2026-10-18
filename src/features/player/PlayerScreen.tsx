@@ -20,7 +20,10 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { NavigationBar } from "expo-navigation-bar";
 import * as Network from "expo-network";
@@ -34,6 +37,7 @@ import {
 import { Button, Heading, Notice } from "../../components/ui";
 import { colors, styles as theme } from "../../theme";
 import type { Channel } from "../../domain/types";
+import { qualityName } from "../../domain/channelSources";
 import { channelTitle, displayGroups } from "../../domain/channelLabels";
 import { NativeAttempt } from "./NativeAttempt";
 import {
@@ -60,9 +64,12 @@ export interface ChannelSheetProps {
 export interface PlayerScreenProps {
   channel: Channel;
   channels: Channel[];
+  /** Alternative stream addresses for the same logical channel. */
+  sources: Channel[];
   /** The channel page's list and filters; channels remains the playback queue. */
   sheet: ChannelSheetProps;
   onSelect: (channel: Channel, queue?: Channel[]) => void;
+  onSelectSource: (source: Channel) => void;
   onClose: () => void;
   onFavorite: (channel: Channel) => void;
   onStarted: (channel: Channel) => void;
@@ -118,6 +125,8 @@ export const SLOW_START_SECONDS = 15;
 /** Minimum vertical travel (dp) for a fullscreen swipe to change channel. */
 export const SWIPE_MIN_DP = 60;
 const TAP_SLOP_DP = 12;
+const sameChannel = (a: Channel, b: Channel) =>
+  (a.groupKey ?? a.id) === (b.groupKey ?? b.id);
 
 /** Fullscreen and sheet belong to the screen, not to the replaceable channel. */
 export function PlayerScreen(props: PlayerScreenProps) {
@@ -127,6 +136,7 @@ export function PlayerScreen(props: PlayerScreenProps) {
   const [controlsShown, setControlsShown] = useState(true);
   const [locateRequest, setLocateRequest] = useState(0);
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const channelList = useRef<FlatList<Channel>>(null);
   const savedSheetPosition = useRef<{
     range: string | null;
@@ -197,7 +207,7 @@ export function PlayerScreen(props: PlayerScreenProps) {
   const shownChannels = sheet.channels;
   const range = sheet.rangeKey;
   const currentIndex = shownChannels.findIndex(
-    (channel) => channel.id === props.channel.id,
+    (channel) => sameChannel(channel, props.channel),
   );
   const lastLocateRequest = useRef(0);
   const changeScope = (next: ListTab) => {
@@ -255,10 +265,12 @@ export function PlayerScreen(props: PlayerScreenProps) {
   }, [sheetOpen, range, props.channel.id, currentIndex, locateRequest]);
   return (
     <SafeAreaView
+      testID="player-screen"
       style={s.screen}
-      edges={
-        fullscreen ? ["left", "right"] : ["top", "left", "right", "bottom"]
-      }
+      // Fullscreen media stays edge-to-edge. Interactive overlays apply the
+      // physical display insets individually below, so a cutout never shrinks
+      // the video itself.
+      edges={fullscreen ? [] : ["top", "left", "right", "bottom"]}
     >
       <StatusBar style="light" hidden={fullscreen} />
       {/* Immersive: system bars reappear transiently on an edge swipe. */}
@@ -289,11 +301,15 @@ export function PlayerScreen(props: PlayerScreenProps) {
             onPress={() => setSheetOpen(false)}
           />
           <View
+            testID="player-channel-sheet"
             style={[
               s.sheet,
               fullscreen && s.landscapeSheet,
               fullscreen && {
                 width: Math.min(width, Math.max(280, width * 0.4), 440),
+                marginTop: insets.top,
+                marginRight: insets.right,
+                marginBottom: insets.bottom,
               },
             ]}
           >
@@ -429,7 +445,7 @@ export function PlayerScreen(props: PlayerScreenProps) {
               renderItem={({ item }) => (
                 <ChannelRow
                   channel={item}
-                  current={item.id === props.channel.id}
+                  current={sameChannel(item, props.channel)}
                   onPlay={selectFromSheet}
                   onFavorite={props.onFavorite}
                   artworkEnabled={!!props.artworkEnabled && props.remoteAllowed}
@@ -455,6 +471,8 @@ interface SessionProps extends PlayerScreenProps {
 }
 
 function ChannelSession(props: SessionProps) {
+  const insets = useSafeAreaInsets();
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const [controller] = useState(
     () =>
       new PlaybackController({
@@ -541,13 +559,19 @@ function ChannelSession(props: SessionProps) {
   const canRetry = ["offline", "timeout", "error", "ended"].includes(
     state.phase,
   );
-  const primaryLabel = busy ? "暂停" : canRetry ? "重试播放" : "播放";
+  const primaryLabel = ["checking", "connecting"].includes(state.phase)
+    ? "取消"
+    : busy
+      ? "暂停"
+      : canRetry
+        ? "重试播放"
+        : "播放";
   const primaryAction = () => {
     if (busy) controller.pause();
     else void controller.requestPlay();
   };
   const index = props.channels.findIndex(
-    (channel) => channel.id === props.channel.id,
+    (channel) => sameChannel(channel, props.channel),
   );
   const skip = (channel: Channel) =>
     !!props.skipUnreachable && channel.checkStatus === "unreachable";
@@ -625,7 +649,7 @@ function ChannelSession(props: SessionProps) {
   const previousChannel =
     props.previousChannel &&
     props.previousChannel.active &&
-    props.previousChannel.id !== props.channel.id
+    !sameChannel(props.previousChannel, props.channel)
       ? props.previousChannel
       : null;
 
@@ -660,27 +684,17 @@ function ChannelSession(props: SessionProps) {
   return (
     <ScrollView
       style={s.flex}
-      contentContainerStyle={[
-        s.content,
-        props.fullscreen && s.fullscreenContent,
-      ]}
+      contentContainerStyle={[s.content, props.fullscreen && s.fullscreenContent]}
       scrollEnabled={!props.fullscreen}
       importantForAccessibility={
         props.sheetOpen ? "no-hide-descendants" : "auto"
       }
       accessibilityElementsHidden={props.sheetOpen}
     >
-      <View style={props.fullscreen ? s.hidden : undefined}>
-        <Heading
-          title={channelTitle(props.channel.name).title}
-          subtitle={[
-            props.channel.sourceName,
-            displayGroups(props.channel.groupName),
-            ...channelTitle(props.channel.name).tags,
-          ].join(" · ")}
-        />
-      </View>
-      <View style={[s.videoStage, props.fullscreen && s.fullscreenVideo]}>
+      <View
+        testID="video-stage"
+        style={[s.videoStage, props.fullscreen && s.fullscreenVideo]}
+      >
         {props.remoteAllowed && state.attemptId !== null && (
           <NativeAttempt
             key={state.attemptId}
@@ -692,14 +706,14 @@ function ChannelSession(props: SessionProps) {
         {props.fullscreen && (
           <View
             testID="fullscreen-gesture-layer"
-            style={StyleSheet.absoluteFill}
+            style={[s.zapGesture, { right: insets.right }]}
             accessible
             accessibilityRole="adjustable"
-            accessibilityLabel={`${title}，轻触${controlsVisible ? "隐藏" : "显示"}播放控件，上下滑动换台`}
+            accessibilityLabel={`${title}，上下滑动换台，轻触显示或隐藏频道操作`}
             accessibilityActions={[
               {
                 name: "activate",
-                label: controlsVisible ? "隐藏播放控件" : "显示播放控件",
+                label: controlsVisible ? "隐藏频道操作" : "显示频道操作",
               },
               { name: "increment", label: "下一台" },
               { name: "decrement", label: "上一台" },
@@ -734,13 +748,25 @@ function ChannelSession(props: SessionProps) {
           />
         )}
         {props.fullscreen && osd && !props.sheetOpen && (
-          <View style={s.osd} pointerEvents="none" testID="channel-osd">
+          <View
+            style={[
+              s.osd,
+              {
+                top: insets.top + 24,
+                marginLeft: insets.left,
+                marginRight: insets.right,
+              },
+            ]}
+            pointerEvents="none"
+            testID="channel-osd"
+          >
             <Text style={s.osdText} numberOfLines={1}>
               {osd}
             </Text>
           </View>
         )}
-        {state.phase !== "playing" && (
+        {state.phase !== "playing" &&
+          !(state.phase === "paused" && state.attemptId !== null) && (
           // box-none: swipes on the dimmed area still reach the gesture layer.
           <View
             style={s.videoNotice}
@@ -790,11 +816,36 @@ function ChannelSession(props: SessionProps) {
                 </View>
               </View>
             )}
+            {state.phase !== "cellular" && state.attemptId === null && (
+              <View style={s.noticeAction}>{playButton}</View>
+            )}
           </View>
         )}
       </View>
+      <View style={props.fullscreen ? s.hidden : s.paddedSection}>
+        <Heading
+          title={channelTitle(props.channel.name).title}
+          subtitle={[
+            props.channel.sourceName,
+            displayGroups(props.channel.groupName),
+            ...channelTitle(props.channel.name).tags,
+          ].join(" · ")}
+        />
+      </View>
       <View
-        style={props.fullscreen && controlsVisible ? s.fullscreenTop : s.hidden}
+        testID="fullscreen-controls"
+        style={
+          props.fullscreen && controlsVisible
+            ? [
+                s.fullscreenTop,
+                {
+                  top: insets.top + 16,
+                  left: insets.left + 24,
+                  right: insets.right + 24,
+                },
+              ]
+            : s.hidden
+        }
       >
         <Button label="退出全屏" secondary onPress={props.onToggleFullscreen} />
         <Text style={[theme.heading, s.flex]} numberOfLines={1}>
@@ -809,13 +860,26 @@ function ChannelSession(props: SessionProps) {
           />
         )}
         {props.fullscreen && favoriteButton}
+        {props.fullscreen && props.sources.length > 1 && (
+          <Button
+            label={`来源 ${props.sources.length}`}
+            secondary
+            onPress={() => setSourcesOpen((open) => !open)}
+          />
+        )}
+        {props.fullscreen && (
+          <Button label="频道列表" secondary onPress={props.onOpenSheet} />
+        )}
       </View>
       <View style={props.fullscreen ? s.hidden : s.portraitControls}>
         <Text style={theme.muted}>
-          {description.title} · {props.channel.sourceName}
+          {description.title} · {qualityName(props.channel)} · {props.channel.sourceName}
         </Text>
         <View style={s.row}>
-          <View style={s.flex}>{playButton}</View>
+          <View style={s.flex}>{previousButton}</View>
+          <View style={s.flex}>{nextButton}</View>
+        </View>
+        <View style={s.row}>
           <View style={s.flex}>
             <Button
               label="横屏全屏"
@@ -823,12 +887,32 @@ function ChannelSession(props: SessionProps) {
               onPress={props.onToggleFullscreen}
             />
           </View>
+          <View style={s.flex}>
+            <Button
+              label="频道列表"
+              accessibilityLabel="打开频道列表"
+              secondary
+              onPress={props.onOpenSheet}
+            />
+          </View>
         </View>
-        <View style={s.row}>
-          <View style={s.flex}>{previousButton}</View>
-          <View style={s.flex}>{nextButton}</View>
-        </View>
-        <Button label="打开频道列表" secondary onPress={props.onOpenSheet} />
+        {props.sources.length > 1 && (
+          <Button
+            label={`播放来源 ${props.sources.length}`}
+            secondary
+            onPress={() => setSourcesOpen((open) => !open)}
+          />
+        )}
+        {sourcesOpen && (
+          <SourceList
+            current={props.channel}
+            sources={props.sources}
+            onSelect={(source) => {
+              setSourcesOpen(false);
+              props.onSelectSource(source);
+            }}
+          />
+        )}
         {previousChannel && (
           <Pressable
             style={s.quiet}
@@ -855,19 +939,68 @@ function ChannelSession(props: SessionProps) {
           </Text>
         )}
       </View>
-      <View
-        style={
-          props.fullscreen && controlsVisible ? s.fullscreenBottom : s.hidden
-        }
-      >
-        <View style={s.flex}>{previousButton}</View>
-        <View style={s.flex}>{playButton}</View>
-        <View style={s.flex}>{nextButton}</View>
-        <View style={s.flex}>
-          <Button label="频道列表" secondary onPress={props.onOpenSheet} />
+      {props.fullscreen && sourcesOpen && (
+        <View
+          testID="fullscreen-sources"
+          style={[
+            s.fullscreenSources,
+            {
+              top: insets.top + 82,
+              right: insets.right + 24,
+              bottom: insets.bottom + 16,
+            },
+          ]}
+        >
+          <SourceList
+            current={props.channel}
+            sources={props.sources}
+            onSelect={(source) => {
+              setSourcesOpen(false);
+              props.onSelectSource(source);
+            }}
+          />
         </View>
-      </View>
+      )}
     </ScrollView>
+  );
+}
+
+function SourceList({
+  current,
+  sources,
+  onSelect,
+}: {
+  current: Channel;
+  sources: Channel[];
+  onSelect: (source: Channel) => void;
+}) {
+  return (
+    <View style={s.sourceList} accessibilityRole="list" testID="source-list">
+      {sources.map((source) => {
+        const selected = source.id === current.id;
+        return (
+          <Pressable
+            key={source.id}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            accessibilityLabel={`${qualityName(source)}，${source.sourceName}${selected ? "，当前来源" : ""}`}
+            style={({ pressed }) => [
+              s.sourceRow,
+              selected && s.sourceRowSelected,
+              pressed && s.pressed,
+            ]}
+            onPress={() => onSelect(source)}
+          >
+            <Text style={[s.sourceText, selected && s.accent]} numberOfLines={1}>
+              {selected ? "●" : "○"} {qualityName(source)} · {source.sourceName}
+            </Text>
+            {source.checkStatus === "unreachable" && (
+              <Text style={s.sourceWarning}>上次检测未响应</Text>
+            )}
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
@@ -906,15 +1039,15 @@ function WaitProgress({ onNext }: { onNext?: () => void }) {
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
-  content: { padding: 20, gap: 12, flexGrow: 1, paddingBottom: 24 },
+  content: { gap: 12, flexGrow: 1, paddingBottom: 24 },
   fullscreenContent: { padding: 0, paddingBottom: 0, minHeight: "100%" },
+  paddedSection: { paddingHorizontal: 20 },
   hidden: { display: "none" },
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
   videoStage: {
     width: "100%",
     aspectRatio: 16 / 9,
     backgroundColor: "#000000",
-    borderRadius: 20,
     overflow: "hidden",
   },
   fullscreenVideo: {
@@ -925,7 +1058,13 @@ const s = StyleSheet.create({
     left: 0,
     width: undefined,
     aspectRatio: undefined,
-    borderRadius: 0,
+  },
+  zapGesture: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 72,
+    width: 72,
   },
   videoNotice: {
     position: "absolute",
@@ -951,8 +1090,9 @@ const s = StyleSheet.create({
     lineHeight: 18,
     textAlign: "center",
   },
-  portraitControls: { gap: 12 },
+  portraitControls: { gap: 12, paddingHorizontal: 20 },
   noticeText: { gap: 8 },
+  noticeAction: { alignSelf: "center", minWidth: 160 },
   osd: {
     position: "absolute",
     top: 24,
@@ -993,18 +1133,31 @@ const s = StyleSheet.create({
     paddingRight: 16,
     backgroundColor: "#0A1214D9",
   },
-  fullscreenBottom: {
+  fullscreenSources: {
     position: "absolute",
-    bottom: 24,
-    left: 24,
+    top: 82,
     right: 24,
-    maxWidth: 676,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+    width: 300,
+    maxHeight: "65%",
     borderRadius: 16,
+    padding: 8,
     backgroundColor: "#0A1214D9",
   },
+  sourceList: { gap: 4 },
+  sourceRow: {
+    minHeight: 48,
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "transparent",
+    backgroundColor: colors.raised,
+  },
+  sourceRowSelected: { borderColor: colors.accent },
+  sourceText: { color: colors.text, fontSize: 14, lineHeight: 21 },
+  sourceWarning: { color: colors.warn, fontSize: 11, lineHeight: 16 },
+  pressed: { opacity: 0.7 },
   sheetOverlay: {
     position: "absolute",
     top: 0,

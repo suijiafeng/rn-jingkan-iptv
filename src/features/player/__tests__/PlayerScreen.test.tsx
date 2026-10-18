@@ -1,5 +1,11 @@
 import React from "react";
-import { AppState, BackHandler, FlatList, Keyboard } from "react-native";
+import {
+  AppState,
+  BackHandler,
+  FlatList,
+  Keyboard,
+  StyleSheet,
+} from "react-native";
 import { act, fireEvent, render, within } from "@testing-library/react-native";
 import {
   PlayerScreen,
@@ -14,6 +20,7 @@ const mockNetworkListeners = new Set<(state: object) => void>();
 const mockMounts = jest.fn();
 const mockUnmounts = jest.fn();
 const mockLock = jest.fn();
+const mockSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 jest.mock("expo-network", () => ({
   getNetworkStateAsync: () => mockNetworkCheck(),
   addNetworkStateListener: (listener: (state: object) => void) => {
@@ -29,6 +36,7 @@ jest.mock("expo-screen-orientation", () => ({
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView:
     jest.requireActual<typeof import("react-native")>("react-native").View,
+  useSafeAreaInsets: () => mockSafeAreaInsets,
 }));
 jest.mock("../NativeAttempt", () => ({
   NativeAttempt: function MockNativeAttempt(props: {
@@ -120,9 +128,17 @@ const props = (more: Partial<PlayerScreenProps> = {}): PlayerScreenProps => ({
   onFavorite: jest.fn(),
   onStarted: jest.fn(),
   ...more,
+  sources: more.sources ?? [more.channel ?? first],
+  onSelectSource: more.onSelectSource ?? jest.fn(),
 });
 beforeEach(() => {
   jest.clearAllMocks();
+  Object.assign(mockSafeAreaInsets, {
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  });
   mockNetworkListeners.clear();
   mockNetworkCheck.mockResolvedValue({ type: "WIFI", isConnected: true });
   mockLock.mockResolvedValue(undefined);
@@ -146,6 +162,45 @@ test("remote consent prevents all loading, including HTTPS, and revocation tears
   expect(mockUnmounts).toHaveBeenCalledWith(first.streamUrl);
   expect(ui.queryByTestId("mock-native-attempt")).toBeNull();
   await ui.unmount();
+});
+
+test("the video is edge-to-edge and alternative sources can be selected", async () => {
+  const low: Channel = {
+    ...first,
+    groupKey: "iptv:cctv1.cn",
+    qualityLabel: "标清",
+    qualityRank: 576,
+  };
+  const high: Channel = {
+    ...low,
+    id: "high",
+    streamUrl: "https://example.test/high.m3u8",
+    sourceName: "备用节目单",
+    qualityLabel: "高清",
+    qualityRank: 720,
+  };
+  const onSelectSource = jest.fn();
+  const ui = await render(
+    <PlayerScreen
+      {...props({
+        channel: low,
+        sources: [low, high],
+        onSelectSource,
+      })}
+    />,
+  );
+  expect(ui.getByTestId("video-stage").props.style).not.toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ borderRadius: expect.any(Number) }),
+    ]),
+  );
+  await fireEvent.press(ui.getByRole("button", { name: "播放来源 2" }));
+  await fireEvent.press(
+    within(ui.getByTestId("source-list")).getByRole("button", {
+      name: "高清，备用节目单",
+    }),
+  );
+  expect(onSelectSource).toHaveBeenCalledWith(high);
 });
 
 test("mobile transition unmounts before confirmation and decline stays stopped", async () => {
@@ -184,6 +239,41 @@ test("rotation preserves the current attempt; choosing a channel closes the shee
   expect(mockMounts).toHaveBeenCalledTimes(1);
   await ui.unmount();
   expect(mockLock).toHaveBeenLastCalledWith(0);
+});
+
+test("fullscreen media stays edge-to-edge while controls and sheets respect display insets", async () => {
+  Object.assign(mockSafeAreaInsets, {
+    top: 11,
+    right: 13,
+    bottom: 17,
+    left: 19,
+  });
+  const ui = await render(
+    <PlayerScreen {...props({ sources: [first, second] })} />,
+  );
+  await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
+
+  expect(ui.getByTestId("player-screen").props.edges).toEqual([]);
+  expect(StyleSheet.flatten(ui.getByTestId("video-stage").props.style)).toMatchObject(
+    { top: 0, right: 0, bottom: 0, left: 0 },
+  );
+  expect(
+    StyleSheet.flatten(ui.getByTestId("fullscreen-controls").props.style),
+  ).toMatchObject({ top: 27, right: 37, left: 43 });
+  expect(
+    StyleSheet.flatten(ui.getByTestId("fullscreen-gesture-layer").props.style),
+  ).toMatchObject({ right: 13 });
+
+  await fireEvent.press(ui.getByRole("button", { name: "来源 2" }));
+  expect(
+    StyleSheet.flatten(ui.getByTestId("fullscreen-sources").props.style),
+  ).toMatchObject({ top: 93, right: 37, bottom: 33 });
+
+  await fireEvent.press(ui.getByRole("button", { name: "频道列表" }));
+  expect(
+    StyleSheet.flatten(ui.getByTestId("player-channel-sheet").props.style),
+  ).toMatchObject({ marginTop: 11, marginRight: 13, marginBottom: 17 });
+  await ui.unmount();
 });
 
 test("the sheet shows the page's result in its order; the visible playable rows become the queue", async () => {

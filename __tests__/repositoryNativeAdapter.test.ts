@@ -97,11 +97,11 @@ it("opens private SQLite through the native adapter, configures each transaction
     primary.db.prepare("SELECT COUNT(*) AS n FROM channels").get()!.n,
   ).toBe(0);
   expect(
-    primary.db.prepare("SELECT COUNT(*) AS n FROM favorites").get()!.n,
+    primary.db.prepare("SELECT COUNT(*) AS n FROM favorite_groups").get()!.n,
   ).toBe(0);
-  expect(primary.db.prepare("SELECT COUNT(*) AS n FROM recents").get()!.n).toBe(
-    0,
-  );
+  expect(
+    primary.db.prepare("SELECT COUNT(*) AS n FROM recent_groups").get()!.n,
+  ).toBe(0);
   expect(
     mockConnections.filter((item) => item.newConnection).length,
   ).toBeGreaterThanOrEqual(5);

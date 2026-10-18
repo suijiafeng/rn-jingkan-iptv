@@ -17,6 +17,7 @@ const mockPlayers: {
   staysActiveInBackground?: boolean;
 }[] = [];
 let mockReplace: () => Promise<void> = () => Promise.resolve();
+const createdControllers: PlaybackController[] = [];
 jest.mock("expo-video", () => ({
   createVideoPlayer: jest.fn((source: unknown) => {
     if (source !== null) throw new Error("Players must be constructed empty");
@@ -66,6 +67,7 @@ async function readyController() {
     isAppActive: () => AppState.currentState === "active",
     onStarted,
   });
+  createdControllers.push(controller);
   await controller.requestPlay();
   return { controller, id: controller.getSnapshot().attemptId!, onStarted };
 }
@@ -77,6 +79,9 @@ beforeEach(() => {
     writable: true,
     value: "active",
   });
+});
+afterEach(() => {
+  createdControllers.splice(0).forEach((controller) => controller.dispose());
 });
 
 test("constructs empty, configures safe native controls, and loads one HLS attempt", async () => {
@@ -100,7 +105,15 @@ test("constructs empty, configures safe native controls, and loads one HLS attem
   expect(native.play).toHaveBeenCalledTimes(1);
   expect(onStarted).not.toHaveBeenCalled();
   expect(ui.getByTestId("native-video-view").props).toMatchObject({
-    nativeControls: false,
+    nativeControls: true,
+    buttonOptions: {
+      showNext: false,
+      showPrevious: false,
+      showSeekForward: false,
+      showSeekBackward: false,
+      showSettings: false,
+      showPlayPause: true,
+    },
     fullscreenOptions: { enable: false },
     allowsPictureInPicture: false,
   });

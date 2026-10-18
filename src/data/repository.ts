@@ -21,8 +21,12 @@ import {
   type ChannelFacetOptions,
   type FacetChannel,
 } from "../domain/channelFacets";
+import {
+  channelGroupKey,
+  qualityFromIptvOrgId,
+} from "../domain/channelSources";
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 6;
 
 export type SqlValue = string | number | null;
 export interface SqlExecutor {
@@ -76,6 +80,10 @@ interface RawChannel extends Omit<
   countries: string;
   languages: string;
   lookupLanguages?: string;
+  favoriteCreatedAt?: number | null;
+  sourceCreatedAt?: number;
+  groupRow?: number;
+  preferredChannelId?: string | null;
 }
 export interface RefreshOptions {
   content?: string;
@@ -90,18 +98,22 @@ export interface RepositoryOptions {
 const SOURCE_SELECT = `SELECT s.id, s.name, s.kind, s.location, s.createdAt, s.lastSuccessAt,
   s.lastErrorCategory, s.revision,
   (SELECT COUNT(*) FROM channels c WHERE c.sourceId = s.id AND c.active = 1) AS channelCount,
-  (SELECT COUNT(*) FROM channels c JOIN favorites f ON f.channelId = c.id WHERE c.sourceId = s.id) AS favoriteCount
+  (SELECT COUNT(DISTINCT c.groupKey) FROM channels c JOIN favorite_groups f ON f.groupKey = c.groupKey
+    WHERE c.sourceId = s.id AND c.active = 1) AS favoriteCount
   FROM sources s`;
-const CHANNEL_SELECT = `SELECT c.*, s.name AS sourceName,
-  CASE WHEN f.channelId IS NOT NULL THEN 1 ELSE 0 END AS favorite,
-  r.lastPlayedAt AS lastPlayedAt FROM channels c JOIN sources s ON s.id = c.sourceId
-  LEFT JOIN favorites f ON f.channelId = c.id LEFT JOIN recents r ON r.channelId = c.id`;
+const CHANNEL_SELECT = `SELECT c.*, s.name AS sourceName, s.createdAt AS sourceCreatedAt,
+  CASE WHEN fg.groupKey IS NULL THEN 0 ELSE 1 END AS favorite,
+  fg.createdAt AS favoriteCreatedAt, rg.lastPlayedAt, rg.preferredChannelId
+  FROM channels c JOIN sources s ON s.id = c.sourceId
+  LEFT JOIN favorite_groups fg ON fg.groupKey = c.groupKey
+  LEFT JOIN recent_groups rg ON rg.groupKey = c.groupKey`;
 // Use a conservative bound below SQLite's historical 999-variable limit.
 const MAX_INSERT_PARAMETERS = 900;
 const CHANNEL_BOUND_COLUMNS = [
   "id",
   "sourceId",
   "identityKey",
+  "groupKey",
   "name",
   "groupName",
   "tvgId",
@@ -109,15 +121,25 @@ const CHANNEL_BOUND_COLUMNS = [
   "countries",
   "languages",
   "streamUrl",
+  "qualityLabel",
+  "qualityRank",
   "sortIndex",
   "lastSeenRevision",
 ];
 // One collator: localeCompare with a locale builds a new one per comparison,
 // which on Hermes/Android made listing groups take ~100 ms.
 const groupOrder = new Intl.Collator("zh-Hans-CN");
-const CLEAN_UNREFERENCED = `DELETE FROM channels WHERE active = 0
-  AND NOT EXISTS (SELECT 1 FROM favorites WHERE channelId = channels.id)
-  AND NOT EXISTS (SELECT 1 FROM recents WHERE channelId = channels.id)`;
+const CLEAN_UNREFERENCED = [
+  `DELETE FROM channels WHERE active = 0
+    AND groupKey NOT IN (SELECT groupKey FROM favorite_groups)
+    AND groupKey NOT IN (SELECT groupKey FROM recent_groups)`,
+  `DELETE FROM favorite_groups WHERE NOT EXISTS (
+    SELECT 1 FROM channels c WHERE c.groupKey = favorite_groups.groupKey
+  )`,
+  `DELETE FROM recent_groups WHERE NOT EXISTS (
+    SELECT 1 FROM channels c WHERE c.groupKey = recent_groups.groupKey
+  )`,
+] as const;
 
 function makeId(): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -134,12 +156,7 @@ function channelFilter(query: ChannelQuery): {
 } {
   const where: string[] = [];
   const params: SqlValue[] = [];
-  if (
-    !query.includeInactive &&
-    query.mode !== "favorites" &&
-    query.mode !== "recent"
-  )
-    where.push("c.active = 1");
+  if (!query.includeInactive) where.push("c.active = 1");
   if (query.sourceId) {
     where.push("c.sourceId = ?");
     params.push(query.sourceId);
@@ -169,8 +186,14 @@ function channelFilter(query: ChannelQuery): {
     where.push("c.name LIKE ? ESCAPE '\\' COLLATE NOCASE");
     params.push(`%${query.search.trim().replace(/[\\%_]/g, "\\$&")}%`);
   }
-  if (query.mode === "favorites") where.push("f.channelId IS NOT NULL");
-  if (query.mode === "recent") where.push("r.channelId IS NOT NULL");
+  if (query.mode === "favorites")
+    where.push(
+      "EXISTS (SELECT 1 FROM favorite_groups f WHERE f.groupKey = c.groupKey)",
+    );
+  if (query.mode === "recent")
+    where.push(
+      "EXISTS (SELECT 1 FROM recent_groups r WHERE r.groupKey = c.groupKey)",
+    );
   return {
     where: where.length ? ` WHERE ${where.join(" AND ")}` : "",
     params,
@@ -201,7 +224,14 @@ const EFFECTIVE_LANGUAGES =
   "(CASE WHEN c.languages <> '' THEN c.languages ELSE c.lookupLanguages END)";
 
 function mapChannel(row: RawChannel): Channel {
-  const { lookupLanguages, ...rest } = row;
+  const {
+    lookupLanguages,
+    favoriteCreatedAt: _favoriteCreatedAt,
+    sourceCreatedAt: _sourceCreatedAt,
+    groupRow: _groupRow,
+    preferredChannelId: _preferredChannelId,
+    ...rest
+  } = row;
   return {
     ...rest,
     countries: normalizeCountries(row.countries),
@@ -231,6 +261,10 @@ export class Repository {
     return next;
   }
 
+  private async cleanUnreferenced(tx: SqlExecutor): Promise<void> {
+    for (const statement of CLEAN_UNREFERENCED) await tx.runAsync(statement);
+  }
+
   async initialize(): Promise<void> {
     await this.serialize(async () => {
       await this.db.execAsync(
@@ -247,6 +281,8 @@ export class Repository {
         if (current < 2) await this.migrateV2(tx);
         if (current < 3) await this.migrateV3(tx);
         if (current < 4) await this.migrateV4(tx);
+        if (current < 5) await this.migrateV5(tx);
+        if (current < 6) await this.migrateV6(tx);
         await tx.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
       });
     });
@@ -332,6 +368,113 @@ export class Repository {
       }
   }
 
+  /** v5: reliable logical-channel grouping and explicit stream quality. */
+  private async migrateV5(tx: SqlExecutor): Promise<void> {
+    // Inspect each column so a retried/partially applied migration is safe.
+    // Normal upgrades still execute atomically, but this also protects repaired
+    // or development databases whose user_version lags their actual schema.
+    const columns = new Set(
+      (
+        await tx.getAllAsync<{ name: string }>("PRAGMA table_info(channels)")
+      ).map((column) => column.name),
+    );
+    if (!columns.has("groupKey"))
+      await tx.execAsync(
+        "ALTER TABLE channels ADD COLUMN groupKey TEXT NOT NULL DEFAULT '';",
+      );
+    if (!columns.has("qualityLabel"))
+      await tx.execAsync("ALTER TABLE channels ADD COLUMN qualityLabel TEXT;");
+    if (!columns.has("qualityRank"))
+      await tx.execAsync("ALTER TABLE channels ADD COLUMN qualityRank INTEGER;");
+    const rows = await tx.getAllAsync<{
+      id: string;
+      sourceId: string;
+      identityKey: string;
+      tvgId: string | null;
+    }>("SELECT id, sourceId, identityKey, tvgId FROM channels");
+    for (let start = 0; start < rows.length; start += 120) {
+      const chunk = rows.slice(start, start + 120);
+      await tx.runAsync(
+        `UPDATE channels SET
+          groupKey = CASE id ${chunk
+          .map(() => "WHEN ? THEN ?")
+          .join(" ")} ELSE groupKey END,
+          qualityLabel = CASE id ${chunk
+            .map(() => "WHEN ? THEN ?")
+            .join(" ")} ELSE qualityLabel END,
+          qualityRank = CASE id ${chunk
+            .map(() => "WHEN ? THEN ?")
+            .join(" ")} ELSE qualityRank END
+          WHERE id IN (${chunk
+          .map(() => "?")
+          .join(",")})`,
+        [
+          ...chunk.flatMap((row) => [
+            row.id,
+            channelGroupKey(row.sourceId, row.identityKey, row.tvgId),
+          ]),
+          ...chunk.flatMap((row) => [
+            row.id,
+            qualityFromIptvOrgId(row.tvgId)?.label ?? null,
+          ]),
+          ...chunk.flatMap((row) => [
+            row.id,
+            qualityFromIptvOrgId(row.tvgId)?.rank ?? null,
+          ]),
+          ...chunk.map((row) => row.id),
+        ],
+      );
+    }
+    await tx.execAsync(
+      "CREATE INDEX IF NOT EXISTS channels_group ON channels(groupKey, active, qualityRank, sortIndex);",
+    );
+  }
+
+  /**
+   * v6: favorite/recent state belongs to a logical channel, not one stream
+   * row. recent_groups also remembers the exact source last played.
+   */
+  private async migrateV6(tx: SqlExecutor): Promise<void> {
+    await tx.execAsync(`
+      CREATE TABLE IF NOT EXISTS favorite_groups (
+        groupKey TEXT PRIMARY KEY NOT NULL, createdAt INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS recent_groups (
+        groupKey TEXT PRIMARY KEY NOT NULL, preferredChannelId TEXT,
+        lastPlayedAt INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS favorite_groups_time ON favorite_groups(createdAt DESC);
+      CREATE INDEX IF NOT EXISTS recent_groups_time ON recent_groups(lastPlayedAt DESC);
+    `);
+    const legacyTables = new Set(
+      (
+        await tx.getAllAsync<{ name: string }>(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('favorites','recents')",
+        )
+      ).map((table) => table.name),
+    );
+    if (legacyTables.has("favorites"))
+      await tx.execAsync(`
+        INSERT OR IGNORE INTO favorite_groups(groupKey, createdAt)
+        SELECT c.groupKey, MIN(f.createdAt) FROM favorites f
+        JOIN channels c ON c.id = f.channelId GROUP BY c.groupKey;
+        DROP TABLE favorites;
+      `);
+    if (legacyTables.has("recents"))
+      await tx.execAsync(`
+        INSERT OR IGNORE INTO recent_groups(groupKey, preferredChannelId, lastPlayedAt)
+        SELECT c.groupKey,
+          (SELECT r2.channelId FROM recents r2
+             JOIN channels c2 ON c2.id = r2.channelId
+             WHERE c2.groupKey = c.groupKey
+             ORDER BY r2.lastPlayedAt DESC, r2.channelId LIMIT 1),
+          MAX(r.lastPlayedAt)
+        FROM recents r JOIN channels c ON c.id = r.channelId
+        GROUP BY c.groupKey;
+        DROP TABLE recents;
+      `);
+  }
+
   async listSources(): Promise<Source[]> {
     return this.db.getAllAsync<Source>(
       `${SOURCE_SELECT} ORDER BY s.createdAt, s.id`,
@@ -354,21 +497,30 @@ export class Repository {
 
   async listChannels(query: ChannelQuery = {}): Promise<Channel[]> {
     const { where, params } = channelFilter(query);
-    // Channels the last check found unreachable sink to the end (recent keeps
-    // pure play order); everything else keeps the playlist/favorite order.
+    const representativeOrder =
+      query.mode === "recent"
+        ? "COALESCE(checkStatus = 'unreachable', 0), (id = preferredChannelId) DESC, qualityRank IS NULL, qualityRank, sourceCreatedAt, sourceId, sortIndex, id"
+        : "COALESCE(checkStatus = 'unreachable', 0), qualityRank IS NULL, qualityRank, sourceCreatedAt, sourceId, sortIndex, id";
     const order =
       query.mode === "recent"
-        ? "r.lastPlayedAt DESC, c.id"
+        ? "lastPlayedAt DESC, id"
         : query.mode === "favorites"
-          ? "COALESCE(c.checkStatus = 'unreachable', 0), f.createdAt DESC, c.id"
-          : "COALESCE(c.checkStatus = 'unreachable', 0), s.createdAt, s.id, c.sortIndex, c.id";
+          ? "COALESCE(checkStatus = 'unreachable', 0), favoriteCreatedAt DESC, id"
+          : "COALESCE(checkStatus = 'unreachable', 0), sourceCreatedAt, sourceId, sortIndex, id";
     let page = "";
     if (query.limit !== undefined || query.offset) {
       page = " LIMIT ? OFFSET ?";
       params.push(query.limit ?? -1, query.offset ?? 0);
     }
+    const groupedSql = `WITH candidates AS (${CHANNEL_SELECT}${where}), ranked AS (
+        SELECT candidates.*, ROW_NUMBER() OVER (
+          PARTITION BY groupKey ORDER BY ${representativeOrder}
+        ) AS groupRow FROM candidates
+      ) SELECT * FROM ranked WHERE groupRow = 1 ORDER BY ${order}${page}`;
     const rows = await this.db.getAllAsync<RawChannel>(
-      `${CHANNEL_SELECT}${where} ORDER BY ${order}${page}`,
+      query.includeVariants
+        ? `${CHANNEL_SELECT}${where} ORDER BY ${order}${page}`
+        : groupedSql,
       params,
     );
     return rows.map(mapChannel);
@@ -378,8 +530,7 @@ export class Repository {
   async countChannels(query: ChannelQuery = {}): Promise<number> {
     const { where, params } = channelFilter(query);
     const row = await this.db.getFirstAsync<{ total: number }>(
-      `SELECT COUNT(*) AS total FROM channels c
-  LEFT JOIN favorites f ON f.channelId = c.id LEFT JOIN recents r ON r.channelId = c.id${where}`,
+      `SELECT COUNT(${query.includeVariants ? "*" : "DISTINCT c.groupKey"}) AS total FROM channels c${where}`,
       params,
     );
     return row?.total ?? 0;
@@ -392,6 +543,20 @@ export class Repository {
       [id],
     );
     return row ? mapChannel(row) : null;
+  }
+
+  /** Active alternatives: last played, then unlabelled main, then low-to-high. */
+  async listChannelSources(groupKey: string): Promise<Channel[]> {
+    if (!groupKey) return [];
+    const rows = await this.db.getAllAsync<RawChannel>(
+      `${CHANNEL_SELECT} WHERE c.groupKey = ? AND c.active = 1
+       ORDER BY COALESCE(c.checkStatus = 'unreachable', 0),
+         COALESCE(c.id = rg.preferredChannelId, 0) DESC,
+         c.qualityRank IS NOT NULL, c.qualityRank,
+         s.createdAt, c.sourceId, c.sortIndex, c.id`,
+      [groupKey],
+    );
+    return rows.map(mapChannel);
   }
 
   listFavorites(): Promise<Channel[]> {
@@ -537,7 +702,7 @@ export class Repository {
             sourceId,
           ],
         );
-        await tx.runAsync(CLEAN_UNREFERENCED);
+        await this.cleanUnreferenced(tx);
         result = await tx.getFirstAsync<Source>(
           `${SOURCE_SELECT} WHERE s.id = ?`,
           [sourceId],
@@ -574,6 +739,7 @@ export class Repository {
           identities.get(channel.identityKey) ?? this.makeId(),
           sourceId,
           channel.identityKey,
+          channelGroupKey(sourceId, channel.identityKey, channel.tvgId),
           channel.name,
           channel.groupName,
           channel.tvgId,
@@ -581,6 +747,8 @@ export class Repository {
           normalizeCountries(channel.countries?.join(";")).join(";"),
           normalizeLanguages(channel.languages?.join(";")).join(";"),
           channel.streamUrl,
+          channel.qualityLabel ?? null,
+          channel.qualityRank ?? null,
           start + offset,
           revision,
         );
@@ -588,15 +756,18 @@ export class Repository {
       await tx.runAsync(
         `INSERT INTO channels(${CHANNEL_BOUND_COLUMNS.join(",")},active)
         VALUES${batch.map(() => `(${CHANNEL_BOUND_COLUMNS.map(() => "?").join(",")},1)`).join(",")} ON CONFLICT(sourceId, identityKey) DO UPDATE SET
-        name=excluded.name,groupName=excluded.groupName,tvgId=excluded.tvgId,logoUrl=excluded.logoUrl,
+        name=excluded.name,groupKey=excluded.groupKey,groupName=excluded.groupName,tvgId=excluded.tvgId,logoUrl=excluded.logoUrl,
         countries=excluded.countries,languages=excluded.languages,
         lookupLanguages=CASE WHEN channels.tvgId IS excluded.tvgId THEN channels.lookupLanguages ELSE '' END,
         checkStatus=CASE WHEN channels.streamUrl=excluded.streamUrl THEN channels.checkStatus END,
         checkedAt=CASE WHEN channels.streamUrl=excluded.streamUrl THEN channels.checkedAt END,
-        streamUrl=excluded.streamUrl,sortIndex=excluded.sortIndex,active=1,lastSeenRevision=excluded.lastSeenRevision`,
+        streamUrl=excluded.streamUrl,qualityLabel=excluded.qualityLabel,qualityRank=excluded.qualityRank,
+        sortIndex=excluded.sortIndex,active=1,lastSeenRevision=excluded.lastSeenRevision`,
         params,
       );
     }
+    // Favorite/recent state is keyed by groupKey, so newly imported
+    // alternatives inherit it without copying per-stream rows.
   }
 
   /**
@@ -685,6 +856,7 @@ export class Repository {
     await this.serialize(async () => {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
         await tx.runAsync("DELETE FROM sources WHERE id = ?", [sourceId]);
+        await this.cleanUnreferenced(tx);
       });
     });
   }
@@ -693,26 +865,32 @@ export class Repository {
     return this.serialize(async () => {
       let favorite = false;
       await this.db.withExclusiveTransactionAsync(async (tx) => {
-        const channel = await tx.getFirstAsync<{ id: string }>(
-          "SELECT id FROM channels WHERE id = ?",
+        const channel = await tx.getFirstAsync<{ id: string; groupKey: string }>(
+          "SELECT id, groupKey FROM channels WHERE id = ?",
           [channelId],
         );
         if (!channel) throw new RepositoryError("channel_missing");
-        const existing = await tx.getFirstAsync<{ channelId: string }>(
-          "SELECT channelId FROM favorites WHERE channelId = ?",
-          [channelId],
+        const existing = await tx.getFirstAsync<{ groupKey: string }>(
+          "SELECT groupKey FROM favorite_groups WHERE groupKey = ?",
+          [channel.groupKey],
         );
         favorite = !existing;
-        if (favorite)
-          await tx.runAsync(
-            "INSERT INTO favorites(channelId,createdAt) VALUES(?,?)",
-            [channelId, this.now()],
+        if (favorite) {
+          const active = await tx.getFirstAsync<{ id: string }>(
+            "SELECT id FROM channels WHERE groupKey = ? AND active = 1 LIMIT 1",
+            [channel.groupKey],
           );
-        else
-          await tx.runAsync("DELETE FROM favorites WHERE channelId = ?", [
-            channelId,
-          ]);
-        await tx.runAsync(CLEAN_UNREFERENCED);
+          if (!active) throw new RepositoryError("channel_missing");
+          await tx.runAsync(
+            "INSERT INTO favorite_groups(groupKey,createdAt) VALUES(?,?)",
+            [channel.groupKey, this.now()],
+          );
+        } else
+          await tx.runAsync(
+            "DELETE FROM favorite_groups WHERE groupKey = ?",
+            [channel.groupKey],
+          );
+        await this.cleanUnreferenced(tx);
       });
       return favorite;
     });
@@ -722,19 +900,25 @@ export class Repository {
   async recordRecent(channelId: string): Promise<void> {
     await this.serialize(async () => {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
-        const channel = await tx.getFirstAsync<{ id: string }>(
-          "SELECT id FROM channels WHERE id = ? AND active = 1",
+        const channel = await tx.getFirstAsync<{ id: string; groupKey: string }>(
+          "SELECT id, groupKey FROM channels WHERE id = ? AND active = 1",
           [channelId],
         );
         if (!channel) return;
         await tx.runAsync(
-          "INSERT INTO recents(channelId,lastPlayedAt) VALUES(?,?) ON CONFLICT(channelId) DO UPDATE SET lastPlayedAt=excluded.lastPlayedAt",
-          [channelId, this.now()],
+          `INSERT INTO recent_groups(groupKey,preferredChannelId,lastPlayedAt)
+           VALUES(?,?,?) ON CONFLICT(groupKey) DO UPDATE SET
+           preferredChannelId=excluded.preferredChannelId,
+           lastPlayedAt=excluded.lastPlayedAt`,
+          [channel.groupKey, channel.id, this.now()],
         );
         await tx.runAsync(
-          "DELETE FROM recents WHERE channelId NOT IN (SELECT channelId FROM recents ORDER BY lastPlayedAt DESC, channelId LIMIT 100)",
+          `DELETE FROM recent_groups WHERE groupKey NOT IN (
+             SELECT groupKey FROM recent_groups
+             ORDER BY lastPlayedAt DESC, groupKey LIMIT 100
+           )`,
         );
-        await tx.runAsync(CLEAN_UNREFERENCED);
+        await this.cleanUnreferenced(tx);
       });
     });
   }
@@ -742,10 +926,13 @@ export class Repository {
   async removeRecent(channelId: string): Promise<void> {
     await this.serialize(async () => {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
-        await tx.runAsync("DELETE FROM recents WHERE channelId = ?", [
-          channelId,
-        ]);
-        await tx.runAsync(CLEAN_UNREFERENCED);
+        await tx.runAsync(
+          `DELETE FROM recent_groups WHERE groupKey = (
+             SELECT groupKey FROM channels WHERE id = ?
+           )`,
+          [channelId],
+        );
+        await this.cleanUnreferenced(tx);
       });
     });
   }
@@ -753,8 +940,8 @@ export class Repository {
   async clearRecent(): Promise<void> {
     await this.serialize(async () => {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
-        await tx.runAsync("DELETE FROM recents");
-        await tx.runAsync(CLEAN_UNREFERENCED);
+        await tx.runAsync("DELETE FROM recent_groups");
+        await this.cleanUnreferenced(tx);
       });
     });
   }
@@ -792,6 +979,8 @@ export class Repository {
     await this.serialize(async () => {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
         await tx.runAsync("DELETE FROM sources");
+        await tx.runAsync("DELETE FROM favorite_groups");
+        await tx.runAsync("DELETE FROM recent_groups");
         await tx.runAsync("DELETE FROM settings");
       });
       // Best-effort truncate WAL; secure_delete erases freed cells, not guaranteed physical sanitization.

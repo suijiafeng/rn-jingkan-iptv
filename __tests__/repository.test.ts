@@ -105,6 +105,140 @@ afterEach(() => {
 });
 
 describe("SQLite repository with real SQLite", () => {
+  it("collapses reliable duplicate channels to the lowest declared quality and retains every source", async () => {
+    const playlist = content([
+      {
+        name: "CCTV-1 高清",
+        id: "CCTV1.cn@HD",
+        url: "https://a.example.com/hd",
+      },
+      {
+        name: "CCTV-1 标清",
+        id: "CCTV1.cn@SD",
+        url: "https://a.example.com/sd",
+      },
+    ]);
+    const source = await repo.importSource({
+      name: "主列表",
+      kind: "file",
+      location: "one.m3u",
+      content: playlist,
+      preview: await parseM3U(playlist),
+    });
+    const shown = await repo.listChannels();
+    expect(shown).toHaveLength(1);
+    expect(shown[0]).toMatchObject({
+      sourceId: source.id,
+      qualityLabel: "标清",
+      qualityRank: 576,
+    });
+    expect(await repo.countChannels()).toBe(1);
+    const alternatives = await repo.listChannelSources(shown[0].groupKey!);
+    expect(alternatives.map((item) => item.qualityLabel)).toEqual([
+      "标清",
+      "高清",
+    ]);
+    expect(shown[0]).not.toHaveProperty("groupRow");
+    expect(shown[0]).not.toHaveProperty("favoriteCreatedAt");
+    expect(shown[0]).not.toHaveProperty("sourceCreatedAt");
+  });
+
+  it("keeps inactive variants out of favorites and falls back to an active source", async () => {
+    const first = content([
+      {
+        name: "CCTV-1 标清",
+        id: "CCTV1.cn@SD",
+        url: "https://a.example.com/sd",
+      },
+      {
+        name: "CCTV-1 高清",
+        id: "CCTV1.cn@HD",
+        url: "https://a.example.com/hd",
+      },
+    ]);
+    const source = await repo.importSource({
+      name: "主列表",
+      kind: "file",
+      location: "one.m3u",
+      content: first,
+      preview: await parseM3U(first),
+    });
+    const [sd] = await repo.listChannels();
+    await repo.toggleFavorite(sd.id);
+    const second = content([
+      {
+        name: "CCTV-1 高清",
+        id: "CCTV1.cn@HD",
+        url: "https://a.example.com/hd",
+      },
+    ]);
+    await repo.refreshSource(source.id, source.revision, await parseM3U(second));
+
+    expect(await repo.listFavorites()).toMatchObject([
+      { active: true, qualityLabel: "高清" },
+    ]);
+    expect(await repo.listChannelSources(sd.groupKey!)).toMatchObject([
+      { active: true, qualityLabel: "高清" },
+    ]);
+  });
+
+  it("remembers the played source and otherwise prefers an unlabelled main source", async () => {
+    const playlist = content([
+      {
+        name: "CCTV-1 标清",
+        id: "CCTV1.cn@SD",
+        url: "https://a.example.com/sd",
+      },
+      {
+        name: "CCTV-1 主源",
+        id: "CCTV1.cn",
+        url: "https://a.example.com/main",
+      },
+      {
+        name: "CCTV-1 高清",
+        id: "CCTV1.cn@HD",
+        url: "https://a.example.com/hd",
+      },
+    ]);
+    await repo.importSource({
+      name: "主列表",
+      kind: "file",
+      location: "one.m3u",
+      content: playlist,
+      preview: await parseM3U(playlist),
+    });
+    const [shown] = await repo.listChannels();
+    expect(shown.qualityLabel).toBe("标清");
+    let alternatives = await repo.listChannelSources(shown.groupKey!);
+    expect(alternatives.map((item) => item.name)).toEqual([
+      "CCTV-1 主源",
+      "CCTV-1 标清",
+      "CCTV-1 高清",
+    ]);
+
+    const hd = alternatives.find((item) => item.qualityLabel === "高清")!;
+    await repo.recordRecent(hd.id);
+    expect(await repo.listRecent()).toMatchObject([{ id: hd.id }]);
+    alternatives = await repo.listChannelSources(shown.groupKey!);
+    expect(alternatives[0].id).toBe(hd.id);
+  });
+
+  it("does not add a favorite through an inactive group with no playable row", async () => {
+    const source = await importInitial();
+    const [channel] = await repo.listChannels();
+    await repo.refreshSource(
+      source.id,
+      source.revision,
+      await parseM3U(
+        content([{ name: "其他", id: "other", url: "https://a.example.com/other" }]),
+      ),
+    );
+    await expect(repo.toggleFavorite(channel.id)).rejects.toMatchObject({
+      code: "channel_missing",
+    });
+    expect(await repo.listFavorites()).toEqual([]);
+  });
+
   it("batches large imports across statement boundaries and keeps order and IDs on refresh", async () => {
     const run = jest.spyOn(db, "runAsync");
     const many = (prefix: string) =>
@@ -174,7 +308,7 @@ describe("SQLite repository with real SQLite", () => {
       { id: channel.id, favorite: true },
     ]);
     expect(await db.getFirstAsync("PRAGMA user_version")).toEqual({
-      user_version: 4,
+      user_version: 6,
     });
   });
 
@@ -281,10 +415,16 @@ describe("SQLite repository with real SQLite", () => {
     const channels = await repo.listChannels();
     expect(channels).toHaveLength(1);
     expect(channels[0].id).not.toBe(sport.id);
-    expect(await repo.listFavorites()).toMatchObject([
+    expect(await repo.listFavorites()).toEqual([]);
+    expect(
+      await repo.listChannels({ mode: "favorites", includeInactive: true }),
+    ).toMatchObject([
       { id: sport.id, active: false },
     ]);
-    expect(await repo.listRecent()).toMatchObject([
+    expect(await repo.listRecent()).toEqual([]);
+    expect(
+      await repo.listChannels({ mode: "recent", includeInactive: true }),
+    ).toMatchObject([
       { id: finance.id, active: false },
     ]);
     expect(await repo.listChannels({ includeInactive: true })).toHaveLength(3);
@@ -505,14 +645,17 @@ describe("SQLite repository with real SQLite", () => {
     expect(await repo.listChannels({ includeInactive: true })).toHaveLength(2);
     await repo.removeRecent(sport.id);
     expect(await repo.listRecent()).toEqual([]);
-    expect(await repo.listFavorites()).toMatchObject([
+    expect(await repo.listFavorites()).toEqual([]);
+    expect(
+      await repo.listChannels({ mode: "favorites", includeInactive: true }),
+    ).toMatchObject([
       { id: sport.id, active: false },
     ]);
     expect(await repo.listChannels({ includeInactive: true })).toHaveLength(2);
     expect(await db.getAllAsync("PRAGMA foreign_key_check")).toEqual([]);
   });
 
-  it.each(["DELETE FROM recents WHERE", "DELETE FROM channels WHERE"])(
+  it.each(["DELETE FROM recent_groups WHERE", "DELETE FROM channels WHERE"])(
     "rolls back a single recent removal when %s fails",
     async (statement) => {
       const source = await importInitial();
@@ -569,12 +712,12 @@ describe("SQLite repository with real SQLite", () => {
   });
 
   it("does not rewrite a database newer than this app", async () => {
-    await db.execAsync("PRAGMA user_version = 5");
+    await db.execAsync("PRAGMA user_version = 7");
     await expect(createRepository(db)).rejects.toMatchObject({
       code: "newer_schema",
     });
     expect(await db.getFirstAsync("PRAGMA user_version")).toEqual({
-      user_version: 5,
+      user_version: 7,
     });
   });
 
@@ -599,7 +742,7 @@ describe("SQLite repository with real SQLite", () => {
     `);
     const migrated = await createRepository(legacy);
     expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
-      user_version: 4,
+      user_version: 6,
     });
     expect(await migrated.listGroups()).toEqual(
       ["纪录片", "旅游", "文化", UNGROUPED].sort((a, b) =>
@@ -619,6 +762,76 @@ describe("SQLite repository with real SQLite", () => {
       },
     ]);
     legacy.native.close();
+  });
+
+  it("migrates v5 group state and preserves the last selected stream", async () => {
+    const legacy = new TestDatabase();
+    legacy.native.exec(`
+      CREATE TABLE sources (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL,
+        location TEXT NOT NULL, content TEXT, createdAt INTEGER NOT NULL, lastSuccessAt INTEGER NOT NULL,
+        lastErrorCategory TEXT, revision INTEGER NOT NULL DEFAULT 1);
+      CREATE TABLE channels (id TEXT PRIMARY KEY NOT NULL, sourceId TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+        identityKey TEXT NOT NULL, name TEXT NOT NULL, groupName TEXT NOT NULL, tvgId TEXT, logoUrl TEXT,
+        streamUrl TEXT NOT NULL, sortIndex INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1,
+        lastSeenRevision INTEGER NOT NULL, checkStatus TEXT, checkedAt INTEGER,
+        countries TEXT NOT NULL DEFAULT '', languages TEXT NOT NULL DEFAULT '', lookupLanguages TEXT NOT NULL DEFAULT '',
+        groupKey TEXT NOT NULL DEFAULT '', qualityLabel TEXT, qualityRank INTEGER,
+        UNIQUE(sourceId, identityKey));
+      CREATE TABLE favorites (channelId TEXT PRIMARY KEY NOT NULL REFERENCES channels(id) ON DELETE CASCADE, createdAt INTEGER NOT NULL);
+      CREATE TABLE recents (channelId TEXT PRIMARY KEY NOT NULL REFERENCES channels(id) ON DELETE CASCADE, lastPlayedAt INTEGER NOT NULL);
+      CREATE TABLE settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
+      INSERT INTO sources VALUES ('s','旧来源','url','https://a.example.com/list',NULL,1,1,NULL,1);
+      INSERT INTO channels VALUES ('sd','s','id:CCTV1.cn@SD','标清','新闻','CCTV1.cn@SD',NULL,'https://a.example.com/sd',0,1,1,NULL,NULL,'CN','','','iptv:cctv1.cn','标清',576);
+      INSERT INTO channels VALUES ('hd','s','id:CCTV1.cn@HD','高清','新闻','CCTV1.cn@HD',NULL,'https://a.example.com/hd',1,1,1,NULL,NULL,'CN','','','iptv:cctv1.cn','高清',720);
+      INSERT INTO favorites VALUES ('sd',5);
+      INSERT INTO recents VALUES ('hd',6);
+      PRAGMA user_version = 5;
+    `);
+    try {
+      const migrated = await createRepository(legacy);
+      expect(await migrated.listFavorites()).toMatchObject([
+        { id: "sd", favorite: true },
+      ]);
+      expect(await migrated.listRecent()).toMatchObject([
+        { id: "hd", lastPlayedAt: 6 },
+      ]);
+      expect((await migrated.listChannelSources("iptv:cctv1.cn"))[0].id).toBe(
+        "hd",
+      );
+      expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
+        user_version: 6,
+      });
+    } finally {
+      legacy.native.close();
+    }
+  });
+
+  it("can finish v5 when its columns already exist but user_version still says v4", async () => {
+    const legacy = new TestDatabase();
+    legacy.native.exec(`
+      CREATE TABLE sources (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL,
+        location TEXT NOT NULL, content TEXT, createdAt INTEGER NOT NULL, lastSuccessAt INTEGER NOT NULL,
+        lastErrorCategory TEXT, revision INTEGER NOT NULL DEFAULT 1);
+      CREATE TABLE channels (id TEXT PRIMARY KEY NOT NULL, sourceId TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+        identityKey TEXT NOT NULL, name TEXT NOT NULL, groupName TEXT NOT NULL, tvgId TEXT, logoUrl TEXT,
+        streamUrl TEXT NOT NULL, sortIndex INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1,
+        lastSeenRevision INTEGER NOT NULL, checkStatus TEXT, checkedAt INTEGER,
+        countries TEXT NOT NULL DEFAULT '', languages TEXT NOT NULL DEFAULT '', lookupLanguages TEXT NOT NULL DEFAULT '',
+        groupKey TEXT NOT NULL DEFAULT '', qualityLabel TEXT, qualityRank INTEGER,
+        UNIQUE(sourceId, identityKey));
+      CREATE TABLE favorites (channelId TEXT PRIMARY KEY NOT NULL REFERENCES channels(id) ON DELETE CASCADE, createdAt INTEGER NOT NULL);
+      CREATE TABLE recents (channelId TEXT PRIMARY KEY NOT NULL REFERENCES channels(id) ON DELETE CASCADE, lastPlayedAt INTEGER NOT NULL);
+      CREATE TABLE settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
+      PRAGMA user_version = 4;
+    `);
+    try {
+      await expect(createRepository(legacy)).resolves.toBeInstanceOf(Repository);
+      expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
+        user_version: 6,
+      });
+    } finally {
+      legacy.native.close();
+    }
   });
 
   it("filters by one member of a multi-group channel and treats wildcards literally", async () => {
@@ -837,7 +1050,7 @@ describe("SQLite repository with real SQLite", () => {
         { id: "legacy-channel" },
       ]);
       expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
-        user_version: 4,
+        user_version: 6,
       });
       expect(await legacy.getAllAsync("PRAGMA foreign_key_check")).toEqual([]);
     } finally {
@@ -1040,6 +1253,10 @@ it("v4 migration backfills countries from stored iptv-org tvg-ids only", async (
       VALUES ('a','s','id:CCTV1.cn@SD','CCTV-1','综合','CCTV1.cn@SD',NULL,'https://a.example.com/1',0,1,1),
              ('b','s','url:2','自有','综合','own-id',NULL,'https://a.example.com/2',1,1,1);
     ALTER TABLE channels DROP COLUMN lookupLanguages;
+    DROP INDEX channels_group;
+    ALTER TABLE channels DROP COLUMN groupKey;
+    ALTER TABLE channels DROP COLUMN qualityLabel;
+    ALTER TABLE channels DROP COLUMN qualityRank;
     PRAGMA user_version = 3;
   `);
   const migrated = await createRepository(legacy);

@@ -135,6 +135,7 @@ export default function App() {
   const [headerHeight, setHeaderHeight] = useState(0),
     [titleSpace, setTitleSpace] = useState(0);
   const [playing, setPlaying] = useState<Channel | null>(null),
+    [playingSources, setPlayingSources] = useState<Channel[]>([]),
     // For "回到上一个频道": the channel watched before the current one.
     [previousChannel, setPreviousChannel] = useState<Channel | null>(null),
     [playQueue, setPlayQueue] = useState<Channel[]>([]),
@@ -603,6 +604,26 @@ export default function App() {
       }
     }
   };
+  const reconcilePlayingSources = async (current = playing) => {
+    if (!repo || !current) return;
+    const fresh = await repo.getChannel(current.id);
+    const groupKey =
+      fresh?.active && fresh.groupKey
+        ? fresh.groupKey
+        : (current.groupKey ?? current.id);
+    const alternatives = await repo.listChannelSources(groupKey);
+    if (!mounted.current) return;
+    ++playGeneration.current;
+    setPlayingSources(alternatives);
+    if (!alternatives.length) {
+      setPlaying(null);
+      return;
+    }
+    setPlaying(
+      alternatives.find((source) => source.id === current.id) ??
+        alternatives[0],
+    );
+  };
   const save = async () => {
     if (!repo || !form?.preview || saving.current) return;
     saving.current = true;
@@ -620,6 +641,12 @@ export default function App() {
             location: f.kind === "file" ? f.fileName : undefined,
           },
         );
+        try {
+          await reconcilePlayingSources();
+        } catch {
+          if (mounted.current)
+            setError("节目单已保存，但播放器来源列表更新失败，请重新打开频道。");
+        }
       } else {
         const name =
           f.name.trim() ||
@@ -685,7 +712,9 @@ export default function App() {
     try {
       if (!(await guardRemote(c.signal)) || !current()) return;
       if (!(await checkNetwork(c.signal)) || !current()) return;
-      const targets = (await repo.listChannels({ sourceId: s.id })).filter(
+      const targets = (
+        await repo.listChannels({ sourceId: s.id, includeVariants: true })
+      ).filter(
         (channel) => isIptvOrgId(channel.tvgId) && !channel.languages?.length,
       );
       if (!current()) return;
@@ -740,11 +769,14 @@ export default function App() {
     let started = false;
     let savingResults = false;
     setError("");
-    setCheck({ sourceId: s.id, done: 0, total: s.channelCount });
+    setCheck({ sourceId: s.id, done: 0, total: null });
     try {
       if (!(await guardRemote(c.signal)) || !allowed()) return;
       if (!(await checkNetwork(c.signal)) || !allowed()) return;
-      const targets = await repo.listChannels({ sourceId: s.id });
+      const targets = await repo.listChannels({
+        sourceId: s.id,
+        includeVariants: true,
+      });
       if (!allowed()) return;
       setCheck({ sourceId: s.id, done: 0, total: targets.length });
       started = true;
@@ -797,8 +829,11 @@ export default function App() {
     try {
       const fav = await repo.toggleFavorite(c.id);
       const patch = (x: Channel) =>
-        x.id === c.id ? { ...x, favorite: fav } : x;
+        (x.groupKey ?? x.id) === (c.groupKey ?? c.id)
+          ? { ...x, favorite: fav }
+          : x;
       setPlaying((p) => (p ? patch(p) : p));
+      setPlayingSources((items) => items.map(patch));
       setPlayQueue((q) => q.map(patch));
       setRecent((r) => r.map(patch));
       setChannels((list) => list.map(patch));
@@ -886,15 +921,26 @@ export default function App() {
         epoch !== permissionEpoch.current
       )
         return;
-      const selected = fresh?.active ? fresh : null;
-      if (!selected) {
+      const representative = fresh?.active ? fresh : null;
+      if (!representative) {
         setError("频道已不可用，请重新读取频道后重试");
         return;
       }
+      const alternatives = await repo.listChannelSources(
+        representative.groupKey ?? representative.id,
+      );
+      if (
+        !mounted.current ||
+        task !== playGeneration.current ||
+        epoch !== permissionEpoch.current
+      )
+        return;
       setPlayQueue(queue.filter((x) => x.active));
+      const playable = alternatives[0] ?? representative;
+      setPlayingSources(alternatives.length ? alternatives : [representative]);
       const from = playing ?? lastWatched.current;
-      if (from && from.id !== selected.id) setPreviousChannel(from);
-      setPlaying(selected);
+      if (from && from.id !== playable.id) setPreviousChannel(from);
+      setPlaying(playable);
     } catch {
       if (
         mounted.current &&
@@ -917,13 +963,21 @@ export default function App() {
     cancelTask();
     if (check?.sourceId === s.id) stopCheck();
     if (languageLookup === s.id) stopLanguageLookup();
-    if (playing?.sourceId === s.id) setPlaying(null);
     if (previousChannel?.sourceId === s.id) setPreviousChannel(null);
     if (lastWatched.current?.sourceId === s.id) lastWatched.current = null;
     repo.cancelRefresh(s.id);
     setError("");
     try {
       await repo.deleteSource(s.id);
+      try {
+        await reconcilePlayingSources();
+      } catch {
+        if (mounted.current) {
+          setPlaying(null);
+          setPlayingSources([]);
+          setError("来源已删除；播放器来源列表更新失败，已停止当前播放。");
+        }
+      }
       filters.forgetSource(s.id);
       changed();
     } catch {
@@ -947,6 +1001,7 @@ export default function App() {
     setRemoteAllowed(false);
     setRevokePending(true);
     setPlaying(null);
+    setPlayingSources([]);
     cancelTask();
     stopCheck();
     stopLanguageLookup();
@@ -1016,6 +1071,7 @@ export default function App() {
     setRemoteAllowed(false);
     setRevokePending(true);
     setPlaying(null);
+    setPlayingSources([]);
     cancelTask();
     stopCheck();
     stopLanguageLookup();
@@ -1401,6 +1457,7 @@ export default function App() {
             onDismissError={() => setError("")}
             channel={playing}
             channels={playQueue}
+            sources={playingSources}
             artworkEnabled={artworkAllowed && remoteAllowed && !revokePending}
             sheet={{
               filters: listHeaderProps,
@@ -1427,24 +1484,16 @@ export default function App() {
                 filters.setCountryBypass(countryKey);
               },
             }}
-            onSelect={(channel, queue) => {
-              if (queue) {
-                setPlayQueue(queue);
-                // Picked while the rest of a long list was still loading.
-                if (!listSettled.current)
-                  void fullList.current.then((whole) => {
-                    if (mounted.current)
-                      setPlayQueue((q) =>
-                        q === queue ? whole.filter((x) => x.active) : q,
-                      );
-                  });
-              }
-              if (channel.id !== playing.id) setPreviousChannel(playing);
-              setPlaying(channel);
+            onSelect={(channel, queue) => void play(channel, queue)}
+            onSelectSource={(source) => {
+              if ((source.groupKey ?? source.id) !== (playing.groupKey ?? playing.id))
+                return;
+              setPlaying(source);
             }}
             onClose={() => {
               lastWatched.current = playing;
               setPlaying(null);
+              setPlayingSources([]);
             }}
             onFavorite={(c) => void favorite(c)}
             onStarted={(c) => {

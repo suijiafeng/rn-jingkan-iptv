@@ -17,6 +17,8 @@ export interface Source {
 
 export interface ParsedChannel {
   identityKey: string;
+  /** Stable logical-channel grouping; populated by the repository. */
+  groupKey?: string;
   name: string;
   groupName: string;
   tvgId: string | null;
@@ -25,6 +27,9 @@ export interface ParsedChannel {
   countries?: string[];
   languages?: string[];
   streamUrl: string;
+  /** Explicit playlist quality only; never inferred from the display name. */
+  qualityLabel?: string | null;
+  qualityRank?: number | null;
   sortIndex: number;
 }
 
@@ -101,6 +106,8 @@ export interface ChannelQuery {
   search?: string;
   mode?: "all" | "favorites" | "recent";
   includeInactive?: boolean;
+  /** Internal maintenance operations may need every real stream address. */
+  includeVariants?: boolean;
   /** Paging for progressive display; rows keep the query's stable order. */
   limit?: number;
   offset?: number;
