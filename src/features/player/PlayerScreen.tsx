@@ -450,6 +450,7 @@ export function PlayerScreen(props: PlayerScreenProps) {
                     ? "定位当前频道，暂时显示全部国家/地区"
                     : props.countryHint
                 }
+                contentAsTabs
                 testID="player-facet-filters"
               />
             )}
