@@ -232,11 +232,27 @@ export class PlaybackController {
     // Buffering also emits isPlaying=false. Only a genuine ready-state pause is
     // passed here by the native adapter; never infer audio-focus error strings.
     if (this.startedAttempt === id) {
+      // A pause the user already asked for keeps its reason.
+      if (this.snapshot.phase === "paused") return;
       this.clearTimer();
-      // Native controls own play/pause while the view exists. Retain this
-      // attempt so the same control can resume without reconnecting the stream.
-      this.publish({ phase: "paused", attemptId: id, pauseReason: "interrupted" });
+      // Retain this attempt so the overlay can resume the same native player
+      // without reconnecting the stream.
+      this.publish({
+        phase: "paused",
+        attemptId: id,
+        pauseReason: "interrupted",
+      });
     }
+  }
+  /**
+   * The overlay paused a started, seekable attempt in place. Returns false when
+   * the attempt cannot be retained, so the caller stops it instead.
+   */
+  userPaused(id: number): boolean {
+    if (!this.isCurrentAttempt(id) || this.startedAttempt !== id) return false;
+    this.clearTimer();
+    this.publish({ phase: "paused", attemptId: id, pauseReason: "manual" });
+    return true;
   }
   nativeEnded(id: number) {
     // An empty ExoPlayer (constructed with no source) reports ENDED at once.

@@ -77,9 +77,11 @@ export const ChannelRow = memo(function ChannelRow({
               ))}
             </View>
           )}
+          {/* No source name: the row stands for a logical channel, and the
+              source that actually plays is chosen at playback time. */}
           <Text numberOfLines={2} style={styles.muted}>
             {channel.active
-              ? `${displayGroups(channel.groupName)} · ${channel.sourceName}`
+              ? displayGroups(channel.groupName)
               : "来源已不再提供"}
           </Text>
         </View>

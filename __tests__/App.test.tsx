@@ -3,6 +3,7 @@ import {
   Alert,
   AppState,
   BackHandler,
+  StyleSheet,
   type AppStateStatus,
 } from "react-native";
 import * as Network from "expo-network";
@@ -1787,3 +1788,76 @@ test.each(["revocation", "unmount"])(
     }
   },
 );
+
+test("the docked player bar leaves the page usable and yields the back key to dialogs", async () => {
+  const channel = {
+    id: "cctv1",
+    groupKey: "iptv:cctv1.cn",
+    name: "CCTV-1",
+    active: true,
+    favorite: false,
+    sourceId: "s1",
+    sourceName: "来源一",
+    groupName: "新闻",
+  };
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" ? true : fallback,
+  );
+  repo.listSources.mockResolvedValue([
+    { ...checkSource, id: "s1", name: "来源一" },
+  ] as never[]);
+  (repo.listChannels as jest.Mock).mockImplementation(
+    async (query?: ChannelQuery) =>
+      query?.mode === "recent" ? [] : ([channel] as never[]),
+  );
+  repo.getChannel.mockImplementation(async (id) =>
+    id === channel.id ? channel : null,
+  );
+  (repo.listChannelSources as jest.Mock).mockImplementation(async () => [
+    channel,
+  ]);
+  let back: (() => boolean | null | undefined) | undefined;
+  const listener = jest
+    .spyOn(BackHandler, "addEventListener")
+    .mockImplementation((_event, handler) => {
+      back = () => handler({ type: "hardwareBackPress", timeStamp: 1 });
+      return { remove: jest.fn() };
+    });
+  try {
+    await render(<App />);
+    await fireEvent.press(await screen.findByLabelText("CCTV-1，播放"));
+    await waitFor(() => expect(mockPlayerProps).toHaveBeenCalled());
+    let player = mockPlayerProps.mock.calls.at(-1)![0];
+    expect(player.mini).toBe(false);
+    // Expanded: the page is hidden from TalkBack and the key is the player's.
+    expect(screen.queryByTestId("channel-list")).toBeNull();
+    expect(back?.()).toBe(false);
+    await act(() => player.onMinimize());
+    await waitFor(() =>
+      expect(mockPlayerProps.mock.calls.at(-1)![0].mini).toBe(true),
+    );
+    // Docked: the page is reachable again.
+    expect(screen.getByTestId("channel-list")).toBeTruthy();
+    expect(
+      StyleSheet.flatten(screen.getByTestId("player-container").props.style),
+    ).toMatchObject({ left: 8, right: 8 });
+    // Docked: the page's own dialog takes the key first…
+    await fireEvent.press(screen.getByRole("tab", { name: "设置" }));
+    await fireEvent.press(screen.getByText("管理节目来源"));
+    await act(() => expect(back?.()).toBe(true));
+    // …and with nothing open the key goes to the player (which stops).
+    await act(() => expect(back?.()).toBe(false));
+    player = mockPlayerProps.mock.calls.at(-1)![0];
+    await act(() => player.onExpand());
+    expect(mockPlayerProps.mock.calls.at(-1)![0].mini).toBe(false);
+    // Picking a channel from the page while docked opens the full player.
+    await act(() => mockPlayerProps.mock.calls.at(-1)![0].onMinimize());
+    await fireEvent.press(screen.getByRole("tab", { name: "频道" }));
+    await fireEvent.press(await screen.findByLabelText("CCTV-1，播放"));
+    await waitFor(() =>
+      expect(mockPlayerProps.mock.calls.at(-1)![0].mini).toBe(false),
+    );
+  } finally {
+    listener.mockRestore();
+  }
+});

@@ -6,6 +6,7 @@ import {
   type VideoPlayer,
   type VideoSource,
 } from "expo-video";
+import type { MediaHandle } from "./mediaHandle";
 import { PlaybackController } from "./playbackController";
 import { resolveContentType } from "./streamFormat";
 
@@ -13,10 +14,12 @@ interface Props {
   uri: string;
   attemptId: number;
   controller: PlaybackController;
+  /** The app's own overlay drives play/pause/seek through this handle. */
+  media?: MediaHandle;
 }
 
 /** Owns exactly one player for one attempt; never replaces a previous channel. */
-export function NativeAttempt({ uri, attemptId, controller }: Props) {
+export function NativeAttempt({ uri, attemptId, controller, media }: Props) {
   const [player, setPlayer] = useState<VideoPlayer | null>(null);
   const alive = useRef(false);
   const currentInstance = useRef<VideoPlayer | null>(null);
@@ -41,9 +44,17 @@ export function NativeAttempt({ uri, attemptId, controller }: Props) {
       ownedPlayer.allowsExternalPlayback = false;
       ownedPlayer.keepScreenOnWhilePlaying = true;
       ownedPlayer.loop = false;
+      // One sample per second feeds the overlay timeline (catch-up streams only).
+      ownedPlayer.timeUpdateEventInterval = 1;
+      media?.attach(ownedPlayer);
       subscriptions.push(
         ownedPlayer.addListener("statusChange", ({ status }) => {
-          if (current()) controller.nativeStatus(attemptId, status);
+          if (!current()) return;
+          media?.sample(ownedPlayer);
+          controller.nativeStatus(attemptId, status);
+        }),
+        ownedPlayer.addListener("timeUpdate", () => {
+          if (current()) media?.sample(ownedPlayer);
         }),
         ownedPlayer.addListener("playingChange", ({ isPlaying }) => {
           if (!current()) return;
@@ -97,6 +108,7 @@ export function NativeAttempt({ uri, attemptId, controller }: Props) {
       currentInstance.current = null;
       subscriptions.forEach((subscription) => subscription.remove());
       if (instance) {
+        media?.detach(instance);
         try {
           instance.pause();
         } catch {
@@ -109,7 +121,7 @@ export function NativeAttempt({ uri, attemptId, controller }: Props) {
         }
       }
     };
-  }, [uri, attemptId, controller]);
+  }, [uri, attemptId, controller, media]);
 
   if (!player) return null;
   return (
@@ -119,19 +131,9 @@ export function NativeAttempt({ uri, attemptId, controller }: Props) {
       style={StyleSheet.absoluteFill}
       contentFit="contain"
       surfaceType="textureView"
-      nativeControls
-      buttonOptions={{
-        showNext: false,
-        showPrevious: false,
-        showSeekForward: false,
-        showSeekBackward: false,
-        // Live playback has no meaningful speed control. Keep native
-        // play/pause and the timeline (useful for catch-up/DVR streams), but
-        // hide ExoPlayer's generic settings menu.
-        showSettings: false,
-        showPlayPause: true,
-      }}
-      controllerAutoShow
+      // The app draws one overlay for both modes; native controls would add a
+      // second, unsynchronised layer and swallow the zap gestures.
+      nativeControls={false}
       fullscreenOptions={{ enable: false }}
       allowsPictureInPicture={false}
       startsPictureInPictureAutomatically={false}

@@ -322,3 +322,27 @@ test("adjacent playable index skips marked channels and never wraps", () => {
   expect(adjacentPlayableIndex(items, 0, 1)).toBe(1);
   expect(adjacentPlayableIndex(items, -1, 1, dead)).toBeNull();
 });
+
+test("a user pause keeps a started attempt, and a later native stop keeps its reason", async () => {
+  const controller = new PlaybackController({
+    remoteAllowed: true,
+    mobileWarning: false,
+    checkNetwork: async () => ({ type: "WIFI", isConnected: true }),
+    isAppActive: () => true,
+    onStarted: () => {},
+  });
+  await controller.requestPlay();
+  const id = controller.getSnapshot().attemptId!;
+  expect(controller.userPaused(id)).toBe(false);
+  controller.nativeStarted(id);
+  expect(controller.userPaused(id)).toBe(true);
+  controller.nativeStopped(id);
+  expect(controller.getSnapshot()).toEqual({
+    phase: "paused",
+    attemptId: id,
+    pauseReason: "manual",
+  });
+  controller.nativeStarted(id);
+  expect(controller.getSnapshot()).toEqual({ phase: "playing", attemptId: id });
+  controller.dispose();
+});

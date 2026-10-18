@@ -38,20 +38,46 @@ jest.mock("react-native-safe-area-context", () => ({
     jest.requireActual<typeof import("react-native")>("react-native").View,
   useSafeAreaInsets: () => mockSafeAreaInsets,
 }));
+/** Stand-in native player the overlay drives through the media handle. */
+const mockNative = {
+  isLive: true,
+  duration: 30,
+  currentTime: 0,
+  play: jest.fn(),
+  pause: jest.fn(),
+};
+let mockAttempt: {
+  attemptId: number;
+  controller: { nativeStarted: (id: number) => void };
+} | null = null;
 jest.mock("../NativeAttempt", () => ({
   NativeAttempt: function MockNativeAttempt(props: {
     attemptId: number;
     uri: string;
+    controller: { nativeStarted: (id: number) => void };
+    media?: {
+      attach: (player: unknown) => void;
+      sample: (player: unknown) => void;
+      detach: (player: unknown) => void;
+    };
   }) {
     const { View } =
       jest.requireActual<typeof import("react-native")>("react-native");
     const { useEffect } = jest.requireActual<typeof import("react")>("react");
+    mockAttempt = props;
     useEffect(() => {
       mockMounts(props.uri);
       return () => {
         mockUnmounts(props.uri);
       };
     }, [props.uri]);
+    const { media } = props;
+    useEffect(() => {
+      if (!media) return;
+      media.attach(mockNative);
+      media.sample(mockNative);
+      return () => media.detach(mockNative);
+    }, [media]);
     return <View testID="mock-native-attempt" />;
   },
 }));
@@ -133,6 +159,8 @@ const props = (more: Partial<PlayerScreenProps> = {}): PlayerScreenProps => ({
 });
 beforeEach(() => {
   jest.clearAllMocks();
+  Object.assign(mockNative, { isLive: true, duration: 30, currentTime: 0 });
+  mockAttempt = null;
   Object.assign(mockSafeAreaInsets, {
     top: 0,
     right: 0,
@@ -194,13 +222,18 @@ test("the video is edge-to-edge and alternative sources can be selected", async 
       expect.objectContaining({ borderRadius: expect.any(Number) }),
     ]),
   );
-  await fireEvent.press(ui.getByRole("button", { name: "播放来源 2" }));
+  // Portrait: the source chip opens a bottom sheet; choosing closes it.
+  await fireEvent.press(
+    ui.getByRole("button", { name: "切换来源，当前标清，我的节目单，共 2 个" }),
+  );
+  expect(ui.getByTestId("source-sheet")).toBeTruthy();
   await fireEvent.press(
     within(ui.getByTestId("source-list")).getByRole("button", {
       name: "高清，备用节目单",
     }),
   );
   expect(onSelectSource).toHaveBeenCalledWith(high);
+  expect(ui.queryByTestId("source-sheet")).toBeNull();
 });
 
 test("mobile transition unmounts before confirmation and decline stays stopped", async () => {
@@ -261,10 +294,20 @@ test("fullscreen media stays edge-to-edge while controls and sheets respect disp
     StyleSheet.flatten(ui.getByTestId("fullscreen-controls").props.style),
   ).toMatchObject({ top: 27, right: 37, left: 43 });
   expect(
+    StyleSheet.flatten(
+      ui.getByTestId("fullscreen-bottom-controls").props.style,
+    ),
+  ).toMatchObject({ bottom: 33, right: 37, left: 43 });
+  // The gesture layer is the whole picture, not an edge strip.
+  expect(
     StyleSheet.flatten(ui.getByTestId("fullscreen-gesture-layer").props.style),
-  ).toMatchObject({ right: 13 });
+  ).toMatchObject({ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 });
 
-  await fireEvent.press(ui.getByRole("button", { name: "来源 2" }));
+  await fireEvent.press(
+    ui.getByRole("button", {
+      name: "切换来源，当前未知清晰度，我的节目单，共 2 个",
+    }),
+  );
   expect(
     StyleSheet.flatten(ui.getByTestId("fullscreen-sources").props.style),
   ).toMatchObject({ top: 93, right: 37, bottom: 33 });
@@ -293,7 +336,6 @@ test("the sheet shows the page's result in its order; the visible playable rows 
     ui.getByRole("button", { name: "下一台" }).props.accessibilityState
       .disabled,
   ).toBe(true);
-  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
   expect(ui.getByTestId("player-channel-list").props).toMatchObject({
     initialNumToRender: 12,
     maxToRenderPerBatch: 16,
@@ -330,12 +372,11 @@ test("the sheet uses the page's filter bar and switches the page's tab", async (
     }),
   });
   const ui = await render(<PlayerScreen {...options} />);
-  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
   expect(
     within(ui.getByTestId("player-scopes"))
       .getAllByRole("button")
       .map((item) => item.props.accessibilityLabel),
-  ).toEqual(["频道", "收藏", "最近"]);
+  ).toEqual(["频道", "收藏", "最近", "定位当前频道"]);
   expect(
     within(ui.getByTestId("player-facet-filters"))
       .getAllByRole("button")
@@ -363,7 +404,6 @@ test("the sheet uses the page's filter bar and switches the page's tab", async (
   ).toBe(true);
   expect(ui.queryByTestId("player-facet-filters")).toBeNull();
   expect(ui.getByLabelText("搜索频道名称")).toBeTruthy();
-  expect(ui.getByText("选择频道")).toBeTruthy();
   await ui.unmount();
   keyboardSpy.mockRestore();
 });
@@ -371,7 +411,6 @@ test("the sheet uses the page's filter bar and switches the page's tab", async (
 test("recent rows in the sheet have no history management actions", async () => {
   const options = props({ sheet: sheet([second, first], { tab: "recent" }) });
   const ui = await render(<PlayerScreen {...options} />);
-  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
   expect(
     ui.queryByRole("button", {
       name: /删除.*的观看记录|清空最近观看|管理观看记录/,
@@ -385,7 +424,6 @@ test("recent rows in the sheet have no history management actions", async () => 
 test("empty sheet: loading shows progress, otherwise a hint matching the filters", async () => {
   const options = props({ sheet: sheet([], { loading: true }) });
   const ui = await render(<PlayerScreen {...options} />);
-  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
   expect(ui.queryByText(/没有/)).toBeNull();
   await ui.rerender(
     <PlayerScreen {...options} sheet={sheet([], { search: "无" })} />,
@@ -404,7 +442,6 @@ test("locating asks the page to show everything only when the current channel is
     .mockImplementation(() => {});
   const options = props({ sheet: sheet([second], { tab: "favorites" }) });
   const ui = await render(<PlayerScreen {...options} />);
-  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
   await fireEvent.press(ui.getByRole("button", { name: "定位当前频道" }));
   expect(options.sheet.onLocate).toHaveBeenCalledTimes(1);
   // The page reloads: nothing while loading, then the full list.
@@ -448,7 +485,6 @@ test("sheet restores its offset until the range or current channel changes", asy
     .mockImplementation(() => {});
   const options = props({ channel: second });
   const ui = await render(<PlayerScreen {...options} />);
-  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
   expect(indexSpy).toHaveBeenLastCalledWith({
     index: 1,
     viewPosition: 0.35,
@@ -457,8 +493,9 @@ test("sheet restores its offset until the range or current channel changes", asy
   await fireEvent.scroll(ui.getByTestId("player-channel-list"), {
     nativeEvent: { contentOffset: { y: 240 } },
   });
-  await fireEvent.press(ui.getByRole("button", { name: "关闭频道列表" }));
-  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  // Fullscreen hides the inline list; the side panel restores its offset.
+  await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
+  await fireEvent.press(ui.getByRole("button", { name: "频道列表" }));
   expect(offsetSpy).toHaveBeenLastCalledWith({ offset: 240, animated: false });
   await ui.rerender(
     <PlayerScreen {...options} sheet={sheet([], { rangeKey: "search" })} />,
@@ -472,7 +509,7 @@ test("sheet restores its offset until the range or current channel changes", asy
   });
   await fireEvent.press(ui.getByRole("button", { name: "关闭频道列表" }));
   await ui.rerender(<PlayerScreen {...options} channel={first} />);
-  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  await fireEvent.press(ui.getByRole("button", { name: "频道列表" }));
   expect(indexSpy).toHaveBeenLastCalledWith({
     index: 0,
     viewPosition: 0.35,
@@ -539,7 +576,6 @@ test("sheet logos require both artwork permission and programme network permissi
   const channel = { ...first, logoUrl: "https://example.com/logo.png" };
   const initial = props({ channel, channels: [channel] });
   const ui = await render(<PlayerScreen {...initial} />);
-  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
   expect(
     ui.queryByTestId("channel-logo-image", { includeHiddenElements: true }),
   ).toBeNull();
@@ -565,7 +601,6 @@ test("variable-height current-channel scrolling falls back and cancels retries o
     .spyOn(FlatList.prototype, "scrollToOffset")
     .mockImplementation(() => {});
   const ui = await render(<PlayerScreen {...props({ channel: second })} />);
-  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
   await fireEvent(
     ui.getByTestId("player-channel-list"),
     "scrollToIndexFailed",
@@ -588,7 +623,8 @@ test("variable-height current-channel scrolling falls back and cancels retries o
       averageItemLength: 94,
     },
   );
-  await fireEvent.press(ui.getByRole("button", { name: "关闭频道列表" }));
+  // Entering fullscreen hides the inline list and cancels the pending retry.
+  await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
   await act(() => jest.advanceTimersByTime(100));
   expect(indexSpy).toHaveBeenCalledTimes(callsBeforeRetry + 1);
   await ui.unmount();
@@ -631,7 +667,6 @@ test("manual list dragging cancels a pending automatic location retry", async ()
     .spyOn(FlatList.prototype, "scrollToOffset")
     .mockImplementation(() => {});
   const ui = await render(<PlayerScreen {...props({ channel: second })} />);
-  await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
   await fireEvent(
     ui.getByTestId("player-channel-list"),
     "scrollToIndexFailed",
@@ -753,25 +788,6 @@ describe("zapping", () => {
     expect(plain.onSelect).toHaveBeenLastCalledWith(dead);
     await ui2.unmount();
   });
-
-  test("returning to the previous channel is one tap and hidden for the same or inactive channel", async () => {
-    const options = props({ previousChannel: second });
-    const ui = await render(<PlayerScreen {...options} />);
-    await fireEvent.press(
-      ui.getByRole("button", { name: "回到上一个频道 自然之声" }),
-    );
-    expect(options.onSelect).toHaveBeenLastCalledWith(second);
-    await ui.rerender(
-      <PlayerScreen
-        {...options}
-        previousChannel={{ ...second, active: false }}
-      />,
-    );
-    expect(ui.queryByRole("button", { name: /回到上一个频道/ })).toBeNull();
-    await ui.rerender(<PlayerScreen {...options} previousChannel={first} />);
-    expect(ui.queryByRole("button", { name: /回到上一个频道/ })).toBeNull();
-    await ui.unmount();
-  });
 });
 
 describe("waiting and failure", () => {
@@ -832,6 +848,255 @@ describe("waiting and failure", () => {
     expect(ui.getByText("连接超时")).toBeTruthy();
     await fireEvent.press(ui.getByRole("button", { name: "下一台" }));
     expect(options.onSelect).toHaveBeenLastCalledWith(second);
+    await ui.unmount();
+  });
+});
+
+describe("one overlay instead of native controls", () => {
+  const start = async () => {
+    await act(() => mockAttempt?.controller.nativeStarted(mockAttempt.attemptId));
+  };
+
+  test("fullscreen: zapping and play/pause sit in the centre cluster; the bars hold identity and choices", async () => {
+    const options = props({ previousChannel: second, sources: [first, second] });
+    const ui = await render(<PlayerScreen {...options} />);
+    await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
+    await start();
+    const cluster = within(ui.getByTestId("zap-cluster"));
+    expect(cluster.getByRole("button", { name: "上一台" })).toBeTruthy();
+    expect(cluster.getByRole("button", { name: "暂停" })).toBeTruthy();
+    expect(cluster.getByRole("button", { name: "下一台" })).toBeTruthy();
+    const top = within(ui.getByTestId("fullscreen-controls"));
+    expect(top.getByRole("button", { name: "退出全屏" })).toBeTruthy();
+    expect(top.getByRole("button", { name: "收藏当前频道" })).toBeTruthy();
+    const bottom = within(ui.getByTestId("fullscreen-bottom-controls"));
+    expect(bottom.getByLabelText("直播，不可回看")).toBeTruthy();
+    expect(
+      bottom.getByRole("button", {
+        name: "切换来源，当前未知清晰度，我的节目单，共 2 个",
+      }),
+    ).toBeTruthy();
+    expect(bottom.getByRole("button", { name: "频道列表" })).toBeTruthy();
+    expect(bottom.queryByRole("button", { name: /上一台|下一台/ })).toBeNull();
+    expect(ui.queryByRole("button", { name: /回到上一个频道/ })).toBeNull();
+    expect(ui.queryByTestId("media-timeline")).toBeNull();
+    await ui.unmount();
+  });
+
+  test("pausing plain live releases the attempt; playing again reconnects", async () => {
+    const ui = await render(<PlayerScreen {...props()} />);
+    await start();
+    await fireEvent.press(ui.getByTestId("center-play-pause"));
+    expect(mockNative.pause).not.toHaveBeenCalled();
+    expect(mockUnmounts).toHaveBeenCalledTimes(1);
+    expect(ui.getByText("已暂停")).toBeTruthy();
+    await fireEvent.press(ui.getByRole("button", { name: "播放" }));
+    expect(mockMounts).toHaveBeenCalledTimes(2);
+    await ui.unmount();
+  });
+
+  test("catch-up streams get a timeline and pause in place without reconnecting", async () => {
+    Object.assign(mockNative, { duration: 3600, currentTime: 1800 });
+    const ui = await render(<PlayerScreen {...props()} />);
+    await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
+    await start();
+    expect(ui.getByTestId("media-timeline")).toBeTruthy();
+    expect(ui.getByText("-30:00")).toBeTruthy();
+    await fireEvent.press(ui.getByRole("button", { name: "回到直播" }));
+    expect(mockNative.currentTime).toBe(3590);
+    await fireEvent.press(ui.getByTestId("center-play-pause"));
+    expect(mockNative.pause).toHaveBeenCalledTimes(1);
+    expect(mockUnmounts).not.toHaveBeenCalled();
+    expect(ui.getByTestId("center-play-pause").props.accessibilityLabel).toBe(
+      "播放",
+    );
+    await fireEvent.press(ui.getByTestId("center-play-pause"));
+    expect(mockNative.play).toHaveBeenCalledTimes(1);
+    expect(mockMounts).toHaveBeenCalledTimes(1);
+    await ui.unmount();
+  });
+
+  test("in portrait a tap on the picture toggles the play/pause overlay", async () => {
+    const ui = await render(<PlayerScreen {...props()} />);
+    await start();
+    expect(ui.getByTestId("center-play-pause")).toBeTruthy();
+    const layer = ui.getByTestId("video-tap-layer");
+    await act(() => {
+      layer.props.onResponderGrant({ nativeEvent: { pageX: 50, pageY: 50 } });
+      layer.props.onResponderRelease({ nativeEvent: { pageX: 50, pageY: 50 } });
+    });
+    expect(ui.queryByTestId("center-play-pause")).toBeNull();
+    // A vertical drag in portrait never changes channel.
+    await act(() => {
+      layer.props.onResponderGrant({ nativeEvent: { pageX: 50, pageY: 300 } });
+      layer.props.onResponderRelease({ nativeEvent: { pageX: 50, pageY: 100 } });
+    });
+    await ui.unmount();
+  });
+});
+
+describe("portrait layout", () => {
+  test("the channel list sits under the picture with no sheet to open", async () => {
+    const options = props({ sheet: sheet([first, second]) });
+    const ui = await render(<PlayerScreen {...options} />);
+    expect(ui.queryByRole("button", { name: /打开频道列表/ })).toBeNull();
+    expect(ui.queryByText("选择频道")).toBeNull();
+    expect(ui.getByTestId("player-channel-list")).toBeTruthy();
+    expect(ui.getByRole("button", { name: "定位当前频道" })).toBeTruthy();
+    // The heading names the channel and its groups; the source appears only
+    // on the chip that opens the alternatives. Zapping lives in the picture.
+    const info = within(ui.getByTestId("portrait-info"));
+    expect(info.getByText("山野纪实")).toBeTruthy();
+    expect(info.getByText("纪录片")).toBeTruthy();
+    expect(info.getAllByText(/我的节目单/)).toHaveLength(1);
+    expect(info.queryByRole("button", { name: /上一台|下一台/ })).toBeNull();
+    expect(
+      within(ui.getByTestId("zap-cluster")).getByRole("button", {
+        name: "下一台",
+      }),
+    ).toBeTruthy();
+    expect(
+      ui.getByRole("button", { name: "来源：未知清晰度，我的节目单" }).props
+        .accessibilityState.disabled,
+    ).toBe(true);
+    await fireEvent.press(ui.getByRole("button", { name: "返回频道" }));
+    expect(options.onClose).toHaveBeenCalledTimes(1);
+    await ui.unmount();
+  });
+
+  test("hardware back closes the source sheet before anything else", async () => {
+    let handler: (() => boolean | null | undefined) | undefined;
+    const spy = jest
+      .spyOn(BackHandler, "addEventListener")
+      .mockImplementation((_event, listener) => {
+        handler = () =>
+          listener({ type: "hardwareBackPress" } as Parameters<
+            typeof listener
+          >[0]);
+        return { remove: jest.fn() };
+      });
+    const options = props({ sources: [first, second] });
+    const ui = await render(<PlayerScreen {...options} />);
+    await fireEvent.press(
+      ui.getByRole("button", {
+        name: "切换来源，当前未知清晰度，我的节目单，共 2 个",
+      }),
+    );
+    expect(ui.getByTestId("source-sheet")).toBeTruthy();
+    await act(() => {
+      handler?.();
+    });
+    expect(ui.queryByTestId("source-sheet")).toBeNull();
+    expect(options.onClose).not.toHaveBeenCalled();
+    await act(() => {
+      handler?.();
+    });
+    expect(options.onClose).toHaveBeenCalledTimes(1);
+    await ui.unmount();
+    spy.mockRestore();
+  });
+});
+
+describe("docked bar", () => {
+  const start = async () => {
+    await act(() => mockAttempt?.controller.nativeStarted(mockAttempt.attemptId));
+  };
+  const backKey = () => {
+    let handler: (() => boolean | null | undefined) | undefined;
+    const spy = jest
+      .spyOn(BackHandler, "addEventListener")
+      .mockImplementation((_event, listener) => {
+        handler = () =>
+          listener({ type: "hardwareBackPress" } as Parameters<
+            typeof listener
+          >[0]);
+        return { remove: jest.fn() };
+      });
+    return { press: () => act(() => void handler?.()), spy };
+  };
+
+  test("portrait back minimizes when the owner allows it; the bar keeps the attempt", async () => {
+    const { press, spy } = backKey();
+    const options = props({ onMinimize: jest.fn(), onExpand: jest.fn() });
+    const ui = await render(<PlayerScreen {...options} />);
+    await start();
+    await press();
+    expect(options.onMinimize).toHaveBeenCalledTimes(1);
+    expect(options.onClose).not.toHaveBeenCalled();
+    await ui.rerender(<PlayerScreen {...options} mini />);
+    // Same session and stream: nothing was unmounted or reconnected.
+    expect(mockMounts).toHaveBeenCalledTimes(1);
+    expect(mockUnmounts).not.toHaveBeenCalled();
+    expect(ui.queryByTestId("player-channel-list")).toBeNull();
+    expect(ui.queryByTestId("video-tap-layer")).toBeNull();
+    expect(ui.getAllByRole("button", { name: "展开播放器，山野纪实" })).toHaveLength(2);
+    await fireEvent.press(
+      ui.getAllByRole("button", { name: "展开播放器，山野纪实" })[1],
+    );
+    expect(options.onExpand).toHaveBeenCalledTimes(1);
+    // While docked the bar stops on back; stop is also one tap away.
+    await press();
+    expect(options.onClose).toHaveBeenCalledTimes(1);
+    await fireEvent.press(ui.getByRole("button", { name: "停止播放" }));
+    expect(options.onClose).toHaveBeenCalledTimes(2);
+    await ui.rerender(<PlayerScreen {...options} />);
+    expect(ui.getByTestId("player-channel-list")).toBeTruthy();
+    expect(mockMounts).toHaveBeenCalledTimes(1);
+    await ui.unmount();
+    spy.mockRestore();
+  });
+
+  test("the bar's play/pause drives the same controller", async () => {
+    const options = props({ mini: true });
+    const ui = await render(<PlayerScreen {...options} />);
+    await start();
+    await fireEvent.press(ui.getByRole("button", { name: "暂停" }));
+    expect(mockUnmounts).toHaveBeenCalledTimes(1);
+    expect(ui.getByText("已暂停")).toBeTruthy();
+    await fireEvent.press(ui.getByRole("button", { name: "播放" }));
+    expect(mockMounts).toHaveBeenCalledTimes(2);
+    await ui.unmount();
+  });
+
+  test("without onMinimize, portrait back still closes the player", async () => {
+    const { press, spy } = backKey();
+    const options = props();
+    const ui = await render(<PlayerScreen {...options} />);
+    await press();
+    expect(options.onClose).toHaveBeenCalledTimes(1);
+    await ui.unmount();
+    spy.mockRestore();
+  });
+});
+
+describe("one round primary control", () => {
+  afterEach(() => jest.useRealTimers());
+
+  test("connecting shows a round cancel, failure a round retry, pause a round play", async () => {
+    jest.useFakeTimers();
+    const ui = await render(<PlayerScreen {...props()} />);
+    const round = () => ui.getByTestId("center-play-pause");
+    expect(round().props.accessibilityLabel).toBe("取消");
+    expect(within(round()).getByText("■")).toBeTruthy();
+    for (let i = 0; i < 30; i += 1)
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+    expect(ui.getByText("连接超时")).toBeTruthy();
+    expect(round().props.accessibilityLabel).toBe("重试播放");
+    expect(within(round()).getByText("↻")).toBeTruthy();
+    await fireEvent.press(round());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await act(() => mockAttempt?.controller.nativeStarted(mockAttempt.attemptId));
+    expect(round().props.accessibilityLabel).toBe("暂停");
+    expect(within(round()).getByText("❚❚")).toBeTruthy();
+    await fireEvent.press(round());
+    expect(ui.getByText("已暂停")).toBeTruthy();
+    expect(round().props.accessibilityLabel).toBe("播放");
+    expect(within(round()).getByText("▶")).toBeTruthy();
+    expect(ui.queryByRole("button", { name: "重试播放" })).toBeNull();
     await ui.unmount();
   });
 });

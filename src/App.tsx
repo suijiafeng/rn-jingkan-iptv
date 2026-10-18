@@ -71,6 +71,8 @@ import {
 
 // The empty state is a sentinel row so it renders below the header overlay.
 const EMPTY_ROW = { kind: "empty" } as const;
+/** Bar height plus its margins, reserved under the list while docked. */
+const MINI_BAR_SPACE = 88;
 type ListItem = Channel | typeof EMPTY_ROW;
 // A screenful is shown first; the rest of a 10k-row list follows in a second
 // read so switching tabs or filters does not wait for the whole table.
@@ -135,6 +137,10 @@ export default function App() {
   const [headerHeight, setHeaderHeight] = useState(0),
     [titleSpace, setTitleSpace] = useState(0);
   const [playing, setPlaying] = useState<Channel | null>(null),
+    // Docked bar over the channel page; the stream keeps playing (foreground
+    // only, leaving the app still pauses). Height of the tab bar it sits above.
+    [playerMini, setPlayerMini] = useState(false),
+    [tabsHeight, setTabsHeight] = useState(0),
     [playingSources, setPlayingSources] = useState<Channel[]>([]),
     // For "回到上一个频道": the channel watched before the current one.
     [previousChannel, setPreviousChannel] = useState<Channel | null>(null),
@@ -494,7 +500,9 @@ export default function App() {
   };
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (playing) return false;
+      // The expanded player owns the key; the docked bar yields to the page's
+      // own dialogs first and stops playback only when nothing else is open.
+      if (playing && !playerMini) return false;
       if (rename) {
         setRename(null);
         return true;
@@ -645,7 +653,9 @@ export default function App() {
           await reconcilePlayingSources();
         } catch {
           if (mounted.current)
-            setError("节目单已保存，但播放器来源列表更新失败，请重新打开频道。");
+            setError(
+              "节目单已保存，但播放器来源列表更新失败，请重新打开频道。",
+            );
         }
       } else {
         const name =
@@ -941,6 +951,8 @@ export default function App() {
       const from = playing ?? lastWatched.current;
       if (from && from.id !== playable.id) setPreviousChannel(from);
       setPlaying(playable);
+      // A pick from the page (or the bar's own list) opens the full player.
+      setPlayerMini(false);
     } catch {
       if (
         mounted.current &&
@@ -1216,11 +1228,14 @@ export default function App() {
       style={styles.screen}
       edges={["top", "bottom", "left", "right"]}
     >
-      {/* The player overlays this content; hide it from TalkBack meanwhile. */}
+      {/* The expanded player overlays this content; hide it from TalkBack
+          meanwhile. The docked bar leaves the page usable. */}
       <View
         style={{ flex: 1 }}
-        importantForAccessibility={playing ? "no-hide-descendants" : "auto"}
-        accessibilityElementsHidden={!!playing}
+        importantForAccessibility={
+          playing && !playerMini ? "no-hide-descendants" : "auto"
+        }
+        accessibilityElementsHidden={!!playing && !playerMini}
       >
         {!!error && !manage && !rename && !form && (
           <View style={{ padding: 12 }}>
@@ -1309,6 +1324,8 @@ export default function App() {
               contentContainerStyle={[
                 styles.content,
                 { paddingTop: headerHeight + 12 },
+                // Keep the last rows clear of the docked player bar.
+                playing && playerMini && { paddingBottom: MINI_BAR_SPACE },
               ]}
               ItemSeparatorComponent={ListSeparator}
               renderItem={({ item }) => {
@@ -1375,7 +1392,9 @@ export default function App() {
             </Animated.View>
           </View>
         )}
-        <BottomTabs tab={tab} onChange={changeTab} />
+        <View onLayout={(e) => setTabsHeight(e.nativeEvent.layout.height)}>
+          <BottomTabs tab={tab} onChange={changeTab} />
+        </View>
       </View>
       <SourceManagerModal
         visible={manage}
@@ -1444,17 +1463,20 @@ export default function App() {
         onClose={() => void closeForm()}
       />
       {playing && (
+        // One tree position for both sizes, so shrinking to the bar and
+        // expanding again never remounts the session or its native player.
         <View
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: colors.bg,
-          }}
+          testID="player-container"
+          style={
+            playerMini
+              ? [s.miniContainer, { bottom: tabsHeight + 8 }]
+              : s.playerOverlay
+          }
         >
           <PlayerScreen
+            mini={playerMini}
+            onMinimize={() => setPlayerMini(true)}
+            onExpand={() => setPlayerMini(false)}
             error={error}
             onDismissError={() => setError("")}
             channel={playing}
@@ -1488,7 +1510,10 @@ export default function App() {
             }}
             onSelect={(channel, queue) => void play(channel, queue)}
             onSelectSource={(source) => {
-              if ((source.groupKey ?? source.id) !== (playing.groupKey ?? playing.id))
+              if (
+                (source.groupKey ?? source.id) !==
+                (playing.groupKey ?? playing.id)
+              )
                 return;
               setPlaying(source);
             }}
@@ -1496,6 +1521,7 @@ export default function App() {
               lastWatched.current = playing;
               setPlaying(null);
               setPlayingSources([]);
+              setPlayerMini(false);
             }}
             onFavorite={(c) => void favorite(c)}
             onStarted={(c) => {
@@ -1530,6 +1556,23 @@ export default function App() {
 }
 
 const s = StyleSheet.create({
+  playerOverlay: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.bg,
+  },
+  miniContainer: {
+    position: "absolute",
+    left: 8,
+    right: 8,
+    borderRadius: 14,
+    backgroundColor: colors.raised,
+    // Elevation keeps the bar above list rows on Android.
+    elevation: 6,
+  },
   headerOverlay: {
     position: "absolute",
     top: 0,

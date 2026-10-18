@@ -2,6 +2,7 @@ import React from "react";
 import { AppState } from "react-native";
 import { act, render } from "@testing-library/react-native";
 import { NativeAttempt } from "../NativeAttempt";
+import { MediaHandle } from "../mediaHandle";
 import { PlaybackController } from "../playbackController";
 
 type Handler = (payload?: Record<string, unknown>) => void;
@@ -84,7 +85,7 @@ afterEach(() => {
   createdControllers.splice(0).forEach((controller) => controller.dispose());
 });
 
-test("constructs empty, configures safe native controls, and loads one HLS attempt", async () => {
+test("constructs empty, leaves controls to the app overlay, and loads one HLS attempt", async () => {
   const { controller, id, onStarted } = await readyController();
   const ui = await render(
     <NativeAttempt
@@ -105,15 +106,7 @@ test("constructs empty, configures safe native controls, and loads one HLS attem
   expect(native.play).toHaveBeenCalledTimes(1);
   expect(onStarted).not.toHaveBeenCalled();
   expect(ui.getByTestId("native-video-view").props).toMatchObject({
-    nativeControls: true,
-    buttonOptions: {
-      showNext: false,
-      showPrevious: false,
-      showSeekForward: false,
-      showSeekBackward: false,
-      showSettings: false,
-      showPlayPause: true,
-    },
+    nativeControls: false,
     fullscreenOptions: { enable: false },
     allowsPictureInPicture: false,
   });
@@ -131,6 +124,42 @@ test("constructs empty, configures safe native controls, and loads one HLS attem
   expect(native.removed.every((remove) => remove.mock.calls.length === 1)).toBe(
     true,
   );
+  controller.dispose();
+});
+
+test("the media handle samples only catch-up windows and detaches at teardown", async () => {
+  const { controller, id } = await readyController();
+  const media = new MediaHandle();
+  const ui = await render(
+    <NativeAttempt
+      uri="https://example.test/live.m3u8"
+      attemptId={id}
+      controller={controller}
+      media={media}
+    />,
+  );
+  const native = mockPlayers[0] as (typeof mockPlayers)[number] & {
+    isLive: boolean;
+    duration: number;
+    currentTime: number;
+    timeUpdateEventInterval?: number;
+  };
+  expect(native.timeUpdateEventInterval).toBe(1);
+  Object.assign(native, { isLive: true, duration: 30, currentTime: 25 });
+  await act(() => native.handlers.timeUpdate({}));
+  expect(media.getInfo()).toEqual({ isLive: true, seekable: false });
+  expect(media.getTimeline()).toBeNull();
+  Object.assign(native, { duration: 3600, currentTime: 1800 });
+  await act(() => native.handlers.timeUpdate({}));
+  expect(media.getInfo()).toEqual({ isLive: true, seekable: true });
+  expect(media.getTimeline()).toEqual({ position: 1800, duration: 3600 });
+  expect(media.goLive()).toBe(true);
+  expect(native.currentTime).toBe(3590);
+  expect(media.pause()).toBe(true);
+  expect(native.pause).toHaveBeenCalledTimes(1);
+  await ui.unmount();
+  expect(media.getInfo()).toEqual({ isLive: false, seekable: false });
+  expect(media.play()).toBe(false);
   controller.dispose();
 });
 
