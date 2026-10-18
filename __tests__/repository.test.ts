@@ -52,13 +52,20 @@ class TestDatabase implements SqlDatabase {
 }
 
 const content = (
-  items: { name: string; url: string; id?: string; group?: string }[],
+  items: {
+    name: string;
+    url: string;
+    id?: string;
+    group?: string;
+    country?: string;
+    language?: string;
+  }[],
 ) =>
   "#EXTM3U\n" +
   items
     .map(
       (c) =>
-        `#EXTINF:-1 tvg-id="${c.id ?? ""}" group-title="${c.group ?? "新闻"}",${c.name}\n${c.url}`,
+        `#EXTINF:-1 tvg-id="${c.id ?? ""}" group-title="${c.group ?? "新闻"}" tvg-country="${c.country ?? ""}" tvg-language="${c.language ?? ""}",${c.name}\n${c.url}`,
     )
     .join("\n");
 const initialText = content([
@@ -99,12 +106,15 @@ afterEach(() => {
 
 describe("SQLite repository with real SQLite", () => {
   it("batches large imports across statement boundaries and keeps order and IDs on refresh", async () => {
+    const run = jest.spyOn(db, "runAsync");
     const many = (prefix: string) =>
       content(
         Array.from({ length: 250 }, (_, i) => ({
           name: `${prefix}${i}`,
           id: `ch${i}`,
           url: `https://a.example.com/${prefix}${i}`,
+          country: "CN;US",
+          language: "zh;en",
         })),
       );
     const first = many("旧");
@@ -134,6 +144,17 @@ describe("SQLite repository with real SQLite", () => {
     const after = await repo.listChannels();
     expect(after.map((c) => c.id)).toEqual(before.map((c) => c.id));
     expect(after[249]).toMatchObject({ name: "新249", sortIndex: 249 });
+    expect(after[249]).toMatchObject({
+      countries: ["CN", "US"],
+      languages: ["zh", "en"],
+    });
+    const inserts = run.mock.calls.filter(([sql]) =>
+      sql.startsWith("INSERT INTO channels"),
+    );
+    expect(inserts.length).toBeGreaterThan(2);
+    expect(inserts.every(([, params]) => (params?.length ?? 0) <= 900)).toBe(
+      true,
+    );
   });
 
   it("migrates once, stores file source privately and reopens without data loss", async () => {
@@ -153,7 +174,7 @@ describe("SQLite repository with real SQLite", () => {
       { id: channel.id, favorite: true },
     ]);
     expect(await db.getFirstAsync("PRAGMA user_version")).toEqual({
-      user_version: 2,
+      user_version: 3,
     });
   });
 
@@ -513,12 +534,12 @@ describe("SQLite repository with real SQLite", () => {
   });
 
   it("does not rewrite a database newer than this app", async () => {
-    await db.execAsync("PRAGMA user_version = 3");
+    await db.execAsync("PRAGMA user_version = 4");
     await expect(createRepository(db)).rejects.toMatchObject({
       code: "newer_schema",
     });
     expect(await db.getFirstAsync("PRAGMA user_version")).toEqual({
-      user_version: 3,
+      user_version: 4,
     });
   });
 
@@ -543,7 +564,7 @@ describe("SQLite repository with real SQLite", () => {
     `);
     const migrated = await createRepository(legacy);
     expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
-      user_version: 2,
+      user_version: 3,
     });
     expect(await migrated.listGroups()).toEqual(
       ["纪录片", "旅游", "文化", UNGROUPED].sort((a, b) =>
@@ -588,6 +609,215 @@ describe("SQLite repository with real SQLite", () => {
       (await repo.listChannels({ groupName: "100%_x" })).map((c) => c.name),
     ).toEqual(["丙"]);
     expect(await repo.listChannels({ groupName: "100" })).toEqual([]);
+  });
+
+  it("combines source/country/language/content/search and preserves whole-token filters", async () => {
+    const text = content([
+      {
+        name: "双语新闻",
+        url: "https://a.example.com/1",
+        country: "CN;US",
+        language: "zh;en",
+        group: "News;Kids",
+      },
+      {
+        name: "美国新闻",
+        url: "https://a.example.com/2",
+        country: "US",
+        language: "en-US",
+        group: "News",
+      },
+      { name: "未标注", url: "https://a.example.com/3", group: "" },
+    ]);
+    const source = await repo.importSource({
+      name: "维度",
+      kind: "url",
+      location: "https://a.example.com/list",
+      preview: await parseM3U(text),
+    });
+    const other = await repo.importSource({
+      name: "其他",
+      kind: "file",
+      location: "other.m3u",
+      content: text,
+      preview: await parseM3U(text),
+    });
+    expect(
+      await repo.listChannels({
+        sourceId: source.id,
+        country: "US",
+        language: "en",
+        groupName: "少儿",
+        search: "新闻",
+      }),
+    ).toMatchObject([{ name: "双语新闻" }]);
+    expect(
+      await repo.listChannels({
+        sourceId: source.id,
+        country: "US",
+        language: "en",
+      }),
+    ).toHaveLength(1);
+    expect(
+      await repo.listChannels({ sourceId: source.id, country: "U" }),
+    ).toEqual([]);
+    expect(
+      await repo.listChannels({ sourceId: source.id, language: "en-US" }),
+    ).toMatchObject([{ name: "美国新闻" }]);
+    expect(
+      await repo.listChannels({
+        sourceId: source.id,
+        country: "",
+        language: "",
+        groupName: "",
+      }),
+    ).toMatchObject([{ name: "未标注", countries: [], languages: [] }]);
+    for (const escaped of ["%", "_", "' OR 1=1 --", "US;CN", "en\\"]) {
+      expect(await repo.listChannels({ country: escaped })).toEqual([]);
+      expect(await repo.listChannels({ language: escaped })).toEqual([]);
+    }
+    const facets = await repo.listFacets(source.id);
+    expect(facets.countries).toEqual(expect.arrayContaining(["CN", "US", ""]));
+    expect(facets.languages).toEqual(
+      expect.arrayContaining(["zh", "en", "en-US", ""]),
+    );
+    expect(facets.contents).toEqual(
+      expect.arrayContaining(["新闻", "少儿", ""]),
+    );
+    expect(await repo.listFacets("missing-source")).toEqual({
+      countries: [],
+      languages: [],
+      contents: [],
+    });
+    const token = await repo.beginRefresh(source.id);
+    await repo.refreshSource(
+      source.id,
+      token.revision,
+      await parseM3U(
+        content([
+          {
+            name: "日本",
+            id: "jp",
+            url: "https://a.example.com/jp",
+            country: "JP",
+            language: "ja",
+          },
+        ]),
+      ),
+    );
+    expect((await repo.listFacets(source.id)).countries).toEqual(["JP"]);
+    expect((await repo.listFacets(other.id)).countries).toEqual(
+      facets.countries,
+    );
+    expect((await repo.listFacets()).countries).toEqual(
+      expect.arrayContaining(["CN", "US", "JP", ""]),
+    );
+  });
+
+  it("migrates v2 without guessing metadata or changing IDs, favorites, recents or checks", async () => {
+    const legacy = new TestDatabase();
+    legacy.native.exec(`
+      CREATE TABLE sources (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL,
+        location TEXT NOT NULL, content TEXT, createdAt INTEGER NOT NULL, lastSuccessAt INTEGER NOT NULL,
+        lastErrorCategory TEXT, revision INTEGER NOT NULL DEFAULT 1);
+      CREATE TABLE channels (id TEXT PRIMARY KEY NOT NULL, sourceId TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+        identityKey TEXT NOT NULL, name TEXT NOT NULL, groupName TEXT NOT NULL, tvgId TEXT, logoUrl TEXT,
+        streamUrl TEXT NOT NULL, sortIndex INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1,
+        lastSeenRevision INTEGER NOT NULL, checkStatus TEXT, checkedAt INTEGER, UNIQUE(sourceId, identityKey));
+      CREATE TABLE favorites (channelId TEXT PRIMARY KEY NOT NULL REFERENCES channels(id) ON DELETE CASCADE, createdAt INTEGER NOT NULL);
+      CREATE TABLE recents (channelId TEXT PRIMARY KEY NOT NULL REFERENCES channels(id) ON DELETE CASCADE, lastPlayedAt INTEGER NOT NULL);
+      CREATE TABLE settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
+      INSERT INTO sources VALUES ('legacy-source','旧来源','url','https://a.example.com/list',NULL,1,1,NULL,1);
+      INSERT INTO channels VALUES ('legacy-channel','legacy-source','id:news','美国中文频道','新闻','news',NULL,'https://a.example.com/1',0,1,1,'ok',10);
+      INSERT INTO favorites VALUES ('legacy-channel',5);
+      INSERT INTO recents VALUES ('legacy-channel',6);
+      PRAGMA user_version = 2;
+    `);
+    try {
+      const migrated = await createRepository(legacy);
+      const before = await migrated.getChannel("legacy-channel");
+      expect(before).toMatchObject({
+        countries: [],
+        languages: [],
+        favorite: true,
+        lastPlayedAt: 6,
+        checkStatus: "ok",
+        checkedAt: 10,
+      });
+      expect(await migrated.listFacets()).toEqual({
+        countries: [""],
+        languages: [""],
+        contents: ["新闻"],
+      });
+      await createRepository(legacy);
+      const replacement = content([
+        {
+          name: "新名称",
+          id: "news",
+          url: "https://a.example.com/1",
+          country: "CN;US",
+          language: "zh;en",
+        },
+      ]);
+      await migrated.refreshSource(
+        "legacy-source",
+        1,
+        await parseM3U(replacement),
+      );
+      expect(await migrated.getChannel("legacy-channel")).toMatchObject({
+        identityKey: "id:news",
+        countries: ["CN", "US"],
+        languages: ["zh", "en"],
+        favorite: true,
+        lastPlayedAt: 6,
+        checkStatus: "ok",
+        checkedAt: 10,
+      });
+      expect(await migrated.listChannels()).toHaveLength(1);
+      expect(await migrated.listFavorites()).toMatchObject([
+        { id: "legacy-channel" },
+      ]);
+      expect(await migrated.listRecent()).toMatchObject([
+        { id: "legacy-channel" },
+      ]);
+      expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
+        user_version: 3,
+      });
+      expect(await legacy.getAllAsync("PRAGMA foreign_key_check")).toEqual([]);
+    } finally {
+      legacy.native.close();
+    }
+  });
+
+  it("normalizes optional legacy preview metadata and clears old labels on an explicit refresh", async () => {
+    const text = content([
+      {
+        name: "新闻",
+        id: "news",
+        url: "https://a.example.com/1",
+        country: "CN",
+        language: "zh",
+      },
+    ]);
+    const source = await repo.importSource({
+      name: "来源",
+      kind: "url",
+      location: "https://a.example.com/list",
+      preview: await parseM3U(text),
+    });
+    const [channel] = await repo.listChannels();
+    await repo.toggleFavorite(channel.id);
+    await repo.recordRecent(channel.id);
+    const replacement = await parseM3U(text);
+    delete replacement.channels[0].countries;
+    delete replacement.channels[0].languages;
+    await repo.refreshSource(source.id, source.revision, replacement);
+    expect(await repo.getChannel(channel.id)).toMatchObject({
+      countries: [],
+      languages: [],
+      favorite: true,
+    });
+    expect(await repo.listRecent()).toMatchObject([{ id: channel.id }]);
   });
 
   it("stores manual check results only for the URL that was checked, and clears them when the URL changes", async () => {

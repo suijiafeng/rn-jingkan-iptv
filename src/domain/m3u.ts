@@ -6,6 +6,7 @@ import type {
 } from "./types";
 import { normalizeRemoteUrl, UrlValidationError } from "./url";
 import { normalizeGroups } from "./channelLabels";
+import { normalizeCountries, normalizeLanguages } from "./channelFacets";
 
 // 8 MiB fits the full iptv-org index (~2.5 MiB, 11k+ entries) with headroom;
 // still bounded because the text is held in memory while parsing.
@@ -80,6 +81,8 @@ interface PendingChannel {
   groupName: string;
   tvgId: string | null;
   logoUrl: string | null;
+  countries: string[];
+  languages: string[];
   line: number;
 }
 interface Candidate extends PendingChannel {
@@ -121,8 +124,14 @@ function parseExtinf(line: string, lineNumber: number): PendingChannel | null {
       line.slice(comma + 1).trim() || attributes["tvg-name"] || "未命名频道",
     groupName: normalizeGroups(attributes["group-title"]),
     tvgId: attributes["tvg-id"] || null,
-    // Remote logos are metadata only; the application does not request them.
+    // Loading remote artwork requires a separate informed application consent.
     logoUrl: attributes["tvg-logo"] || null,
+    countries: normalizeCountries(
+      attributes["tvg-country"] || attributes.country,
+    ),
+    languages: normalizeLanguages(
+      attributes["tvg-language"] || attributes.language,
+    ),
     line: lineNumber,
   };
 }
@@ -254,6 +263,8 @@ export async function parseM3U(
         groupName: candidate.groupName,
         tvgId: candidate.tvgId,
         logoUrl: candidate.logoUrl,
+        countries: candidate.countries,
+        languages: candidate.languages,
         streamUrl: candidate.streamUrl,
         sortIndex: channels.length,
       });

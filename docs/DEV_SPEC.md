@@ -109,7 +109,7 @@ URL 令牌更新且没有可靠 tvg-id 时，无法无损判断是否还是同�
 v0.2：URL 接受公网 HTTP 与 HTTPS，禁止 userinfo 用户名密码字段和非网络协议；局域网、本机与特殊用途地址明确拒绝。端口只拒绝敏感服务端口：WHATWG Fetch 标准的“bad port”列表（如 21、22、25、110、554、10080）加常见局域网与数据库服务端口（445、1900、2375、3306、3389、5353、5432、5900、6379、9200、11211）；81、82、85、98 等流媒体常用的非标准低端口放行（v0.2 修订：此前拒绝 80/443 以外全部低于 1024 的端口，会误拦 iptv-org 中文列表里 24 个实测可解码的 CCTV 频道）。任何联网（含 HTTPS）前须经过应用内知情许可，详见第 8 章。本地文件由 expo-document-picker 调用系统选择器，设置 copyToCacheDirectory 为 true 以便文件 API 读取；校验大小后复制到私有受限暂存区并清理缓存，不把 content URI 当普通路径。[5]
 优先读取 UTF-8，可处理 UTF-8 BOM、CRLF、LF、空行和中文名称。非法编码给出可理解错误，不静默生成乱码。v0.2 上限：输入 8 MiB（按实际字节计数，下载与文件读取一致，单一常量）、单行 64 KiB、条目 20,000 条。曾设为 2 MiB，但 iptv-org 完整列表 index.m3u 为 2.46 MiB、11,356 条，会被整体拒绝；8 MiB 留有余量且仍有边界。每项可调整但必须有边界。网络 Content-Length 只作参考，读取时实际计数。
 ## 解析规则
-验证 #EXTM3U，解析 #EXTINF 属性和逗号后的名称，并关联下一条合法媒体 URL。支持 tvg-id、tvg-name、tvg-logo、group-title；无分组归入“未分组”，无可用名称时使用安全占位名。属性解析器必须处理引号与名称里的逗号，不能简单用 split(",") 拆整行。
+验证 #EXTM3U，解析 #EXTINF 属性和逗号后的名称，并关联下一条合法媒体 URL。支持 tvg-id、tvg-name、tvg-logo、group-title、tvg-country/country、tvg-language/language；无分组归入“未分组”，无可用名称时使用安全占位名。属性解析器必须处理引号与名称里的逗号，不能简单用 split(",") 拆整行。
 忽略空行和未知注释，记录行号及错误类别。悬空 EXTINF、非法 URL、超长行计为无效条目。v0.2：HTTP 条目可以导入，预览单独显示 HTTP 频道数量，不改写成 HTTPS；文件列表内相对 URL 首版拒绝，网络列表可按最终列表 URL 解析相对引用，再执行同一安全检查。
 列表如果包含定义 HLS 清单结构的标记（TARGETDURATION、MEDIA-SEQUENCE、DISCONTINUITY-SEQUENCE、STREAM-INF、I-FRAME-STREAM-INF、MEDIA、KEY、MAP、BYTERANGE、PLAYLIST-TYPE、ENDLIST、PART-INF、PART、SERVER-CONTROL），按 HLS 播放清单识别，提示“这是播放地址，不是频道目录”；不可把分片当成频道。v0.2：其他 #EXT-X-* 行（如 VERSION）按未知注释忽略，避免手工拼接的频道目录整体被拒。首版通过频道目录导入 HLS 地址，不额外增加直接播放地址页面。v0.2：刷新同样需要预览并确认后提交。
 ## 流式处理与确认
@@ -165,7 +165,7 @@ v0.2 做法：打包时开启平台明文能力（usesCleartextTraffic=true，�
 虽然没有服务器，恶意列表仍可能诱导手机访问路由器、内网设备或本机服务，这是客户端的非预期网络访问风险。入口校验拒绝显式 loopback、私网、链路本地、组播等地址；首版不提供局域网开关；确有需求时再设计受限范围的独立授权。
 v0.2 限个人自用、由用户明确选择并信任的 HTTP(S) 来源。导入前说明：目录、播放服务器及其重定向可能接收到 IP 地址和访问请求；不应导入陌生人发送的未知列表。JS 层拒绝显式本机或私网 IP、异常端口和危险 scheme，但这只是基础输入校验。
 现成 expo-video 的原生 HLS 请求不一定经过 JS fetch。不能把顶层 URL 校验说成能阻断全部子清单、分片、密钥、重定向和 DNS 重绑定。首版不承诺完整内网隔离；它是可信来源条件下仍需知晓的残余风险。若要接受未知第三方列表或公开推广，需先研究并实现原生全链路网络适配，再单独安全验收。
-默认不支持自定义 Cookie、Authorization 或 Referer，不主动向其他主机附加认证信息。URL 中自带令牌及服务端重定向由可信源规则约束，无法宣称客户端能完全控制服务端行为。拒绝 file、javascript、intent、data 等 scheme，首版不请求远程台标。
+默认不支持自定义 Cookie、Authorization 或 Referer，不主动向其他主机附加认证信息。URL 中自带令牌及服务端重定向由可信源规则约束，无法宣称客户端能完全控制服务端行为。拒绝 file、javascript、intent、data 等 scheme，远程台标默认关闭；用户分别允许节目来源联网和台标访问后，才加载经过校验的 HTTPS 台标主地址，原生重定向不能由 JS 完全隔离。
 ## 日志与备份
 日志仅保留内部来源 ID、频道 ID、错误类别、HTTP 状态和耗时，不打印查询参数、请求头、完整 URL、M3U 原文或观看记录。release 关闭详细日志；错误报告由用户查看后主动分享，首版无遥测、分析和自动崩溃上传。
 源地址可能包含访问令牌，设置页默认只展示名称和主机。若需要复制地址，由用户明确操作，不自动复制到剪贴板。数据库、来源副本及日志排除系统备份。v0.2 明确实现：allowBackup=false 只覆盖 Android 11 及以下与云备份；Android 12 起（targetSdk ≥ 31）设备间迁移（如三星 Smart Switch）只看 dataExtractionRules，因此 config plugin 同时写入 dataExtractionRules（cloud-backup 与 device-transfer 均排除全部数据域，含 device_* 域）和 fullBackupContent（Android 11 及以下）。仍须在三星真机用 Smart Switch 验证。
@@ -319,3 +319,9 @@ iptv-org 项目：https://github.com/iptv-org/iptv
 | 导入上限 | 2 MiB | 8 MiB | iptv-org 完整列表 2.46 MiB、11,356 条 |
 | 打开播放器 | 先读完整目录 | 只读所选频道，目录后台加载并缓存 | 万级目录不阻塞起播；模拟器点按到播放器创建 0.12–0.17 秒 |
 | 列表吸顶 | 头部随列表滚走 | 标题滚走，筛选栏吸顶 | 万级列表中直接搜索和切换分组 |
+
+## 2026-10-18 三维分类与地区推荐
+
+国别、语言、内容并列为三个下拉菜单，各自提供全部和未标注；收藏和最近仅保留搜索，避免重复功能。内容延续分组的多标签和中文化。台标是频道标识，不是正在播出节目的封面。
+
+自动国别只在有可靠交叉证据且当前来源提供相应元数据时应用。手选（含全部）不被重新识别覆盖；IP/位置分别授权，失败和冲突回退全部，并给出状态。无默认远程节目源、后台定位、统计服务，最终偏好仅存 SQLite。

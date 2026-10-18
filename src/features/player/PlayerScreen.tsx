@@ -26,15 +26,16 @@ import { StatusBar } from "expo-status-bar";
 import { NavigationBar } from "expo-navigation-bar";
 import * as Network from "expo-network";
 import * as Orientation from "expo-screen-orientation";
-import { GroupTabs } from "../../components/GroupTabs";
-import { Button, Heading } from "../../components/ui";
+import { FacetFilters } from "../../components/FacetFilters";
+import { ChannelLogo } from "../../components/ChannelLogo";
+import {
+  buildFacetOptions,
+  matchesChannelFacets,
+} from "../../domain/channelFacets";
+import { Button, Heading, Notice } from "../../components/ui";
 import { colors, styles as theme } from "../../theme";
 import type { Channel } from "../../domain/types";
-import {
-  channelTitle,
-  displayGroups,
-  splitGroups,
-} from "../../domain/channelLabels";
+import { channelTitle, displayGroups } from "../../domain/channelLabels";
 import { NativeAttempt } from "./NativeAttempt";
 import {
   adjacentPlayableIndex,
@@ -64,6 +65,15 @@ export interface PlayerScreenProps {
   skipUnreachable?: boolean;
   /** The channel watched just before this one, for a one-tap return. */
   previousChannel?: Channel | null;
+  artworkEnabled?: boolean;
+  countryCode?: string | null;
+  countrySelectionKey?: string;
+  countryHint?: string;
+  autoCountryBusy?: boolean;
+  onCountryChange?: (value: string | null) => void;
+  onAutoCountry?: () => void;
+  error?: string;
+  onDismissError?: () => void;
 }
 
 const descriptions: Record<
@@ -113,6 +123,11 @@ export function PlayerScreen(props: PlayerScreenProps) {
   const [scope, setScope] = useState<"all" | "favorites" | "recent">("all");
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState<string | null>(null);
+  const [language, setLanguage] = useState<string | null>(null);
+  const [countryBypassKey, setCountryBypassKey] = useState<string | null>(null);
+  const countrySelectionKey =
+    props.countrySelectionKey ?? JSON.stringify(props.countryCode ?? null);
+  const ignoreCountry = countryBypassKey === countrySelectionKey;
   const [locateRequest, setLocateRequest] = useState(0);
   const { width } = useWindowDimensions();
   const channelList = useRef<FlatList<Channel>>(null);
@@ -194,30 +209,30 @@ export function PlayerScreen(props: PlayerScreenProps) {
           : allActiveChannels,
     [scope, props.recentChannels, allActiveChannels],
   );
-  const groups = useMemo(
-    () => [
-      ...new Set(
-        allActiveChannels.flatMap((channel) => splitGroups(channel.groupName)),
-      ),
-    ],
+  const facets = useMemo(
+    () => buildFacetOptions(allActiveChannels),
     [allActiveChannels],
   );
+  const country = ignoreCountry ? null : (props.countryCode ?? null);
   const query = search.trim().toLocaleLowerCase();
   const shownChannels = useMemo(
     () =>
       scopeChannels.filter(
         (channel) =>
           (scope !== "all" ||
-            !group ||
-            splitGroups(channel.groupName).includes(group)) &&
+            matchesChannelFacets(channel, {
+              country,
+              language,
+              content: group,
+            })) &&
           (!query ||
             `${channel.name} ${displayGroups(channel.groupName)} ${channel.sourceName}`
               .toLocaleLowerCase()
               .includes(query)),
       ),
-    [scopeChannels, scope, query, group],
+    [scopeChannels, scope, query, group, country, language],
   );
-  const range = JSON.stringify([scope, query, group]);
+  const range = JSON.stringify([scope, query, group, language, country]);
   const currentIndex = shownChannels.findIndex(
     (channel) => channel.id === props.channel.id,
   );
@@ -231,6 +246,8 @@ export function PlayerScreen(props: PlayerScreenProps) {
     setScope(next);
     setSearch("");
     setGroup(null);
+    setLanguage(null);
+    setCountryBypassKey(null);
   };
   useEffect(() => {
     if (!sheetOpen) return;
@@ -333,6 +350,8 @@ export function PlayerScreen(props: PlayerScreenProps) {
                     setScope("all");
                     setSearch("");
                     setGroup(null);
+                    setLanguage(null);
+                    setCountryBypassKey(countrySelectionKey);
                   }
                   setLocateRequest((value) => value + 1);
                 }}
@@ -392,16 +411,37 @@ export function PlayerScreen(props: PlayerScreenProps) {
               )}
             </View>
             {scope === "all" && (
-              <GroupTabs
-                groups={groups}
-                selected={group}
-                onChange={(nextGroup) => {
+              <FacetFilters
+                options={facets}
+                selected={{ country, language, content: group }}
+                onChange={(selection, kind) => {
                   Keyboard.dismiss();
-                  setGroup(nextGroup);
+                  setGroup(selection.content);
+                  setLanguage(selection.language);
+                  if (kind === "country") {
+                    setCountryBypassKey(null);
+                    props.onCountryChange?.(selection.country);
+                  }
                 }}
-                buttonStyle={s.sheetButton}
-                testID="player-group-tabs"
+                onAutoCountry={props.onAutoCountry}
+                countryHint={
+                  ignoreCountry
+                    ? "定位当前频道，暂时显示全部国别"
+                    : props.countryHint
+                }
+                autoCountryBusy={props.autoCountryBusy}
+                testID="player-facet-filters"
               />
+            )}
+            {!!props.error && (
+              <View>
+                <Notice title={props.error} error />
+                <Button
+                  secondary
+                  label="关闭选台提示"
+                  onPress={() => props.onDismissError?.()}
+                />
+              </View>
             )}
             <FlatList
               ref={channelList}
@@ -449,8 +489,10 @@ export function PlayerScreen(props: PlayerScreenProps) {
               contentContainerStyle={s.listContent}
               ListEmptyComponent={
                 <Text style={s.empty}>
-                  {query || (scope === "all" && group)
-                    ? `没有匹配频道，试试清除搜索${scope === "all" ? "或切换分组" : ""}`
+                  {query ||
+                  (scope === "all" &&
+                    (group !== null || country !== null || language !== null))
+                    ? `没有匹配频道，试试清除搜索${scope === "all" ? "或调整筛选" : ""}`
                     : scope === "recent"
                       ? "还没有最近观看记录"
                       : scope === "favorites"
@@ -482,11 +524,11 @@ export function PlayerScreen(props: PlayerScreenProps) {
                       );
                     }}
                   >
-                    <View style={s.channelMark}>
-                      <Text style={s.markText}>
-                        {Array.from(channelTitle(item.name).title)[0] || "台"}
-                      </Text>
-                    </View>
+                    <ChannelLogo
+                      uri={item.logoUrl}
+                      title={channelTitle(item.name).title}
+                      enabled={!!props.artworkEnabled && props.remoteAllowed}
+                    />
                     <View style={s.flex}>
                       <Text numberOfLines={1} style={theme.heading}>
                         {channelTitle(item.name).title}
@@ -1153,15 +1195,6 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  channelMark: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.raised,
-  },
-  markText: { color: colors.accent, fontSize: 18, fontWeight: "500" },
   favoriteHit: {
     minWidth: 48,
     minHeight: 48,

@@ -13,8 +13,14 @@ import {
   splitGroups,
   UNGROUPED,
 } from "../domain/channelLabels";
+import {
+  buildFacetOptions,
+  normalizeCountries,
+  normalizeLanguages,
+  type ChannelFacetOptions,
+} from "../domain/channelFacets";
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export type SqlValue = string | number | null;
 export interface SqlExecutor {
@@ -59,9 +65,14 @@ export class RepositoryError extends Error {
 interface RawSource extends Source {
   content?: string | null;
 }
-interface RawChannel extends Omit<Channel, "active" | "favorite"> {
+interface RawChannel extends Omit<
+  Channel,
+  "active" | "favorite" | "countries" | "languages"
+> {
   active: number;
   favorite: number;
+  countries: string;
+  languages: string;
 }
 export interface RefreshOptions {
   content?: string;
@@ -82,7 +93,22 @@ const CHANNEL_SELECT = `SELECT c.*, s.name AS sourceName,
   CASE WHEN f.channelId IS NOT NULL THEN 1 ELSE 0 END AS favorite,
   r.lastPlayedAt AS lastPlayedAt FROM channels c JOIN sources s ON s.id = c.sourceId
   LEFT JOIN favorites f ON f.channelId = c.id LEFT JOIN recents r ON r.channelId = c.id`;
-const INSERT_BATCH = 90;
+// Use a conservative bound below SQLite's historical 999-variable limit.
+const MAX_INSERT_PARAMETERS = 900;
+const CHANNEL_BOUND_COLUMNS = [
+  "id",
+  "sourceId",
+  "identityKey",
+  "name",
+  "groupName",
+  "tvgId",
+  "logoUrl",
+  "countries",
+  "languages",
+  "streamUrl",
+  "sortIndex",
+  "lastSeenRevision",
+];
 const CLEAN_UNREFERENCED = `DELETE FROM channels WHERE active = 0
   AND NOT EXISTS (SELECT 1 FROM favorites WHERE channelId = channels.id)
   AND NOT EXISTS (SELECT 1 FROM recents WHERE channelId = channels.id)`;
@@ -114,6 +140,15 @@ function assertContent(content: string): void {
     utf8ByteLength(content) > M3U_LIMITS.maxBytes
   )
     throw new RepositoryError("invalid_input");
+}
+function mapChannel(row: RawChannel): Channel {
+  return {
+    ...row,
+    countries: normalizeCountries(row.countries),
+    languages: normalizeLanguages(row.languages),
+    active: row.active === 1,
+    favorite: row.favorite === 1,
+  };
 }
 
 export class Repository {
@@ -150,6 +185,7 @@ export class Repository {
         if (current === SCHEMA_VERSION) return;
         if (current < 1) await this.createV1(tx);
         if (current < 2) await this.migrateV2(tx);
+        if (current < 3) await this.migrateV3(tx);
         await tx.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
       });
     });
@@ -196,6 +232,14 @@ export class Repository {
     }
   }
 
+  /** Metadata is populated only by an explicit import/refresh, never guessed. */
+  private async migrateV3(tx: SqlExecutor): Promise<void> {
+    await tx.execAsync(`
+      ALTER TABLE channels ADD COLUMN countries TEXT NOT NULL DEFAULT '';
+      ALTER TABLE channels ADD COLUMN languages TEXT NOT NULL DEFAULT '';
+    `);
+  }
+
   async listSources(): Promise<Source[]> {
     return this.db.getAllAsync<Source>(
       `${SOURCE_SELECT} ORDER BY s.createdAt, s.id`,
@@ -229,10 +273,26 @@ export class Repository {
       where.push("c.sourceId = ?");
       params.push(query.sourceId);
     }
-    if (query.groupName) {
-      // groupName holds a ";"-joined list; match one whole member.
-      where.push("(';' || c.groupName || ';') LIKE ? ESCAPE '\\'");
-      params.push(`%;${query.groupName.replace(/[\\%_]/g, "\\$&")};%`);
+    if (query.groupName !== undefined) {
+      if (!query.groupName || query.groupName === UNGROUPED) {
+        where.push("(c.groupName = ? OR c.groupName = '')");
+        params.push(UNGROUPED);
+      } else {
+        // groupName holds a ";"-joined list; match one whole member.
+        where.push("(';' || c.groupName || ';') LIKE ? ESCAPE '\\'");
+        params.push(`%;${query.groupName.replace(/[\\%_]/g, "\\$&")};%`);
+      }
+    }
+    for (const [column, value] of [
+      ["countries", query.country],
+      ["languages", query.language],
+    ] as const) {
+      if (value === undefined) continue;
+      if (value === "") where.push(`c.${column} = ''`);
+      else {
+        where.push(`(';' || c.${column} || ';') LIKE ? ESCAPE '\\'`);
+        params.push(`%;${value.replace(/[\\%_]/g, "\\$&")};%`);
+      }
     }
     if (query.search?.trim()) {
       where.push("c.name LIKE ? ESCAPE '\\' COLLATE NOCASE");
@@ -250,11 +310,7 @@ export class Repository {
       `${CHANNEL_SELECT}${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY ${order}`,
       params,
     );
-    return rows.map((row) => ({
-      ...row,
-      active: row.active === 1,
-      favorite: row.favorite === 1,
-    }));
+    return rows.map(mapChannel);
   }
 
   /** One channel by id (any state), for starting playback without the catalog. */
@@ -263,9 +319,7 @@ export class Repository {
       `${CHANNEL_SELECT} WHERE c.id = ?`,
       [id],
     );
-    return row
-      ? { ...row, active: row.active === 1, favorite: row.favorite === 1 }
-      : null;
+    return row ? mapChannel(row) : null;
   }
 
   listFavorites(): Promise<Channel[]> {
@@ -284,6 +338,24 @@ export class Repository {
     const ungrouped = groups.delete(UNGROUPED);
     const sorted = [...groups].sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
     return ungrouped ? [...sorted, UNGROUPED] : sorted;
+  }
+
+  async listFacets(sourceId?: string): Promise<ChannelFacetOptions> {
+    const rows = await this.db.getAllAsync<{
+      countries: string;
+      languages: string;
+      groupName: string;
+    }>(
+      `SELECT DISTINCT countries, languages, groupName FROM channels WHERE active = 1${sourceId ? " AND sourceId = ?" : ""}`,
+      sourceId ? [sourceId] : [],
+    );
+    return buildFacetOptions(
+      rows.map((row) => ({
+        ...row,
+        countries: normalizeCountries(row.countries),
+        languages: normalizeLanguages(row.languages),
+      })),
+    );
   }
 
   async importSource(input: ImportSourceInput): Promise<Source> {
@@ -414,14 +486,13 @@ export class Repository {
     const identities = new Map(
       existing.map((row) => [row.identityKey, row.id]),
     );
-    // Multi-row statements: one native round trip per batch instead of per
-    // channel. 10 bound values per row stays under SQLite's 999 default limit.
-    for (
-      let start = 0;
-      start < preview.channels.length;
-      start += INSERT_BATCH
-    ) {
-      const batch = preview.channels.slice(start, start + INSERT_BATCH);
+    // Derive batch capacity from the bound columns so adding metadata cannot
+    // silently exceed SQLite's variable limit.
+    const batchSize = Math.floor(
+      MAX_INSERT_PARAMETERS / CHANNEL_BOUND_COLUMNS.length,
+    );
+    for (let start = 0; start < preview.channels.length; start += batchSize) {
+      const batch = preview.channels.slice(start, start + batchSize);
       const params: SqlValue[] = [];
       batch.forEach((channel, offset) => {
         params.push(
@@ -432,15 +503,18 @@ export class Repository {
           channel.groupName,
           channel.tvgId,
           channel.logoUrl,
+          normalizeCountries(channel.countries?.join(";")).join(";"),
+          normalizeLanguages(channel.languages?.join(";")).join(";"),
           channel.streamUrl,
           start + offset,
           revision,
         );
       });
       await tx.runAsync(
-        `INSERT INTO channels(id,sourceId,identityKey,name,groupName,tvgId,logoUrl,streamUrl,sortIndex,active,lastSeenRevision)
-        VALUES${batch.map(() => "(?,?,?,?,?,?,?,?,?,1,?)").join(",")} ON CONFLICT(sourceId, identityKey) DO UPDATE SET
+        `INSERT INTO channels(${CHANNEL_BOUND_COLUMNS.join(",")},active)
+        VALUES${batch.map(() => `(${CHANNEL_BOUND_COLUMNS.map(() => "?").join(",")},1)`).join(",")} ON CONFLICT(sourceId, identityKey) DO UPDATE SET
         name=excluded.name,groupName=excluded.groupName,tvgId=excluded.tvgId,logoUrl=excluded.logoUrl,
+        countries=excluded.countries,languages=excluded.languages,
         checkStatus=CASE WHEN channels.streamUrl=excluded.streamUrl THEN channels.checkStatus END,
         checkedAt=CASE WHEN channels.streamUrl=excluded.streamUrl THEN channels.checkedAt END,
         streamUrl=excluded.streamUrl,sortIndex=excluded.sortIndex,active=1,lastSeenRevision=excluded.lastSeenRevision`,

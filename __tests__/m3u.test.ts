@@ -40,6 +40,33 @@ describe("M3U bounded import parser", () => {
     );
   });
 
+  it("reads explicit country/language metadata and prefers non-empty tvg attributes", async () => {
+    const result = await parseM3U(
+      m3u(
+        line(
+          "新闻",
+          "https://a.example.com/1",
+          'tvg-country="CN;US" country="JP" tvg-language="eng;中文" language="ja"',
+        ),
+        line(
+          "备用",
+          "https://a.example.com/2",
+          'tvg-country=" " country="Japan" tvg-language="" language="zh-Hant-TW"',
+        ),
+        line(
+          "美国中文频道",
+          "https://cn.example.com/3",
+          'tvg-id="CN" tvg-country="unknown" country="US" language="unknown"',
+        ),
+      ),
+    );
+    expect(result.channels).toMatchObject([
+      { countries: ["CN", "US"], languages: ["en", "zh"] },
+      { countries: ["JP"], languages: ["zh-Hant-TW"] },
+      { identityKey: "id:CN", countries: [], languages: [] },
+    ]);
+  });
+
   it("uses unique tvg-id, falls back to exact URL for repeated IDs, and retains same-name different URLs", async () => {
     const result = await parseM3U(
       m3u(

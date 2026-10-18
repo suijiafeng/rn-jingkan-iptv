@@ -1,6 +1,6 @@
 # 架构与边界
 
-Expo Router 仅提供薄入口，src/App.tsx 持有状态与流程（导入、刷新、播放、许可、检测），界面拆在 features/source（表单、来源管理、改名、可用性检测）、features/settings、features/channel（列表头、空状态、底部导航）与 features/common（确认框、风险说明）。domain/channelLabels 负责分组拆分翻译与频道名标记。数据库 schema v2（检测结果列 + 分组规范化迁移）。使用 React 状态，不引入额外全局状态框架。底层状态只存 SQLite，UI 的结果快照由 revision 触发重查。
+Expo Router 仅提供薄入口，src/App.tsx 持有状态与流程（导入、刷新、播放、许可、检测），界面拆在 features/source（表单、来源管理、改名、可用性检测）、features/settings、features/channel（列表头、空状态、底部导航）与 features/common（确认框、风险说明）。domain/channelLabels 负责分组拆分翻译与频道名标记。数据库 schema v3（检测结果、分组规范化和国别／语言元数据迁移）。使用 React 状态，不引入额外全局状态框架。底层状态只存 SQLite，UI 的结果快照由 revision 触发重查。
 
 - domain/m3u：异步解析、资源上限、重复/坏行统计；不自动探测频道。
 - domain/url：HTTP(S) 输入检查，只拒绝显式危险目标（私网/本机地址、Fetch bad port 与常见局域网服务端口；81/82/85/98 等流媒体端口放行）；不是 DNS/重定向/原生请求防火墙。
@@ -23,7 +23,7 @@ Expo Router 仅提供薄入口，src/App.tsx 持有状态与流程（导入、�
 plugins/withPrivacy.js 写入 allowBackup=false、dataExtractionRules（cloud-backup 与 device-transfer 排除全部数据域）和 fullBackupContent（Android 11 及以下）。Android 12+ 的设备间迁移不受 allowBackup 控制，必须靠 dataExtractionRules。
 
 
-无统计/广告/错误上报，不加载远程台标，不默认订阅任何节目源。Android allowBackup=false；应继续在三星真机验证厂商备份和迁移路径。源地址含令牌时仅出现在用户编辑链接字段和私有 SQLite，不写日志、列表或错误详情。
+无统计/广告/错误上报，台标默认关闭，单独许可和节目来源联网许可齐备时加载有效 HTTPS 主地址，原生重定向受平台能力限制，不默认订阅任何节目源。Android allowBackup=false；应继续在三星真机验证厂商备份和迁移路径。源地址含令牌时仅出现在用户编辑链接字段和私有 SQLite，不写日志、列表或错误详情。
 
 ## 原型对应
 
@@ -37,3 +37,11 @@ Figma：https://www.figma.com/design/5oX9LZla0jzHQevtEEFpLc
 - HTTP 示例原型被扩展为真实的应用级知情联网许可，避免虚假的原生子请求安全承诺。
 
 Figma 中的固定模拟视频不作为真实播放内容。收藏插画是节点 2:1207 导出的自有设计资产；UI 文本、颜色与 48dp 触控来自设计变量，使用平台中文字体适应字体缩放。
+
+## 维度筛选与地区推荐
+
+channelFacets 规范化明确的 tvg-country/country、tvg-language/language 元数据。group-title 仍为内容分类；每个维度内任一标签命中，维度间取交集。缺失值显示“未标注”，每个菜单的“全部”只清除该维度。Repository.listFacets 按完整活动来源生成选项，不随搜索或其他维度收缩。v3 迁移不猜测旧频道，保留身份、收藏和最近，手动刷新时才补元数据。
+
+features/region 将纯证据决策、原生适配、SQLite 偏好分开。设备地区和时区须一致才作为本机推荐，语言不是国籍证据；获准后才用 ipapi.co/country/ 和前台单次位置交叉核对，冲突回退全部。手选全部也记为 manual。异步识别在手选、后台、撤销、清空或卸载时失效，不保存 IP/坐标/原始响应，不开启后台服务。
+
+官方接口参考：[Expo Localization](https://docs.expo.dev/versions/latest/sdk/localization/)、[Expo Location](https://docs.expo.dev/versions/latest/sdk/location/)、[ipapi 字段接口](https://ipapi.co/api/)、[IANA 多地区时区表](https://data.iana.org/time-zones/tzdb/zone1970.tab)。

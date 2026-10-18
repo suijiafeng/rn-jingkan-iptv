@@ -17,6 +17,16 @@ import * as DocumentPicker from "expo-document-picker";
 import * as Network from "expo-network";
 import { openRepository, Repository } from "./data/repository";
 import { Channel, Source, SourceKind } from "./domain/types";
+import {
+  buildFacetOptions,
+  countryLabel,
+  EMPTY_FACET_OPTIONS,
+  type ChannelFacetOptions,
+} from "./domain/channelFacets";
+import {
+  effectiveCountry,
+  useRegionPreference,
+} from "./features/region/useRegionPreference";
 import { MAX_MIB, parseM3U } from "./domain/m3u";
 import {
   downloadPlaylist,
@@ -53,7 +63,12 @@ import {
   Tab,
 } from "./features/channel/ChannelListParts";
 
-type ListFilters = { sourceId: string; group: string; search: string };
+type ListFilters = {
+  sourceId: string;
+  group: string | null;
+  language: string | null;
+  search: string;
+};
 // Sentinel rows: the sticky filter bar and the empty state live inside the
 // list data so the one virtualized list keeps its header pinned.
 const FILTER_ROW = { kind: "filters" } as const;
@@ -66,7 +81,9 @@ export default function App() {
     [loadedRequest, setLoadedRequest] = useState<{
       tab: Tab;
       sourceId: string;
-      group: string;
+      group: string | null;
+      language: string | null;
+      countryKey: string;
       query: string;
     } | null>(null),
     [listError, setListError] = useState(""),
@@ -76,15 +93,30 @@ export default function App() {
     [recent, setRecent] = useState<Channel[]>([]);
   const [tab, setTab] = useState<Tab>("all"),
     [sourceId, setSourceId] = useState(""),
-    [group, setGroup] = useState(""),
+    [group, setGroup] = useState<string | null>(null),
+    [language, setLanguage] = useState<string | null>(null),
     [search, setSearch] = useState(""),
     [query, setQuery] = useState(""),
-    [groups, setGroups] = useState<string[]>([]);
+    [facets, setFacets] = useState<ChannelFacetOptions>(EMPTY_FACET_OPTIONS);
+  const region = useRegionPreference(repo, setError);
+  const country = effectiveCountry(
+    region.preference,
+    region.result,
+    facets.countries,
+  );
+  const countryKey = JSON.stringify([
+    region.preference.mode,
+    region.preference.countryCode,
+    region.result.countryCode,
+  ]);
   const [remoteAllowed, setRemoteAllowed] = useState(false),
     [revokePending, setRevokePending] = useState(false),
     [mobileWarning, setMobileWarning] = useState(true),
     [swipeReverse, setSwipeReverse] = useState(false),
     [skipUnreachable, setSkipUnreachable] = useState(true),
+    [artworkAllowed, setArtworkAllowed] = useState(false),
+    [artworkSaving, setArtworkSaving] = useState(false),
+    [artworkRevokePending, setArtworkRevokePending] = useState(false),
     // One confirmation covers this metered connection until Wi-Fi returns.
     [mobileAccepted, setMobileAccepted] = useState(false),
     [form, setForm] = useState<SourceFormState | null>(null),
@@ -121,6 +153,7 @@ export default function App() {
     mounted = useRef(true),
     remoteRef = useRef(false),
     permissionEpoch = useRef(0);
+  const artworkMutation = useRef(false);
   // Each bottom tab keeps its own scroll position across tab switches.
   const listRef = useRef<FlatList<ListItem>>(null),
     tabOffsets = useRef<Partial<Record<Tab, number>>>({}),
@@ -128,14 +161,25 @@ export default function App() {
     restoreTab = useRef<Tab | null>(null);
   const changed = useCallback(() => setRevision((v) => v + 1), []);
   const loadRequest = useMemo(
-    () => ({ repo, tab, sourceId, group, query, revision }),
-    [repo, tab, sourceId, group, query, revision],
+    () => ({
+      repo,
+      tab,
+      sourceId,
+      group,
+      language,
+      countryKey,
+      query,
+      revision,
+    }),
+    [repo, tab, sourceId, group, language, countryKey, query, revision],
   );
   const listLoading = loadedRequest !== loadRequest;
   const hasCurrentList =
     loadedRequest?.tab === tab &&
     loadedRequest.sourceId === sourceId &&
     loadedRequest.group === group &&
+    loadedRequest.language === language &&
+    loadedRequest.countryKey === countryKey &&
     loadedRequest.query === query;
   const cancelTask = useCallback(() => {
     generation.current++;
@@ -157,6 +201,7 @@ export default function App() {
         const warning = await r.getSetting("mobileWarning", true);
         const reverse = await r.getSetting("swipeReverse", false);
         const skipDead = await r.getSetting("skipUnreachable", true);
+        const artwork = await r.getSetting("artworkAllowed", false);
         const favorites = await r.listChannels({ mode: "favorites" });
         if (active) {
           remoteRef.current = allowed;
@@ -164,6 +209,7 @@ export default function App() {
           setMobileWarning(warning);
           setSwipeReverse(reverse);
           setSkipUnreachable(skipDead);
+          setArtworkAllowed(artwork);
           setTab(favorites.length ? "favorites" : "all");
           setRepo(r);
         }
@@ -183,28 +229,40 @@ export default function App() {
     return () => clearTimeout(id);
   }, [search]);
   useEffect(() => {
-    if (!repo) return;
+    if (!repo || !region.ready) return;
     let active = true;
     const id = ++loadGeneration.current;
-    Promise.all([
-      repo.listSources(),
-      repo.listChannels({
-        mode: tab === "settings" ? "all" : tab,
-        sourceId: tab === "all" ? sourceId || undefined : undefined,
-        groupName: tab === "all" ? group || undefined : undefined,
-        search: query,
-      }),
-      tab === "all"
-        ? repo.listGroups(sourceId || undefined)
-        : Promise.resolve([]),
-      repo.listChannels({ mode: "recent" }),
-    ])
-      .then(([s, c, g, r]) => {
+    const load = async () => {
+      const nextFacets =
+        tab === "all"
+          ? await repo.listFacets(sourceId || undefined)
+          : EMPTY_FACET_OPTIONS;
+      const selectedCountry = effectiveCountry(
+        region.preference,
+        region.result,
+        nextFacets.countries,
+      );
+      const [s, c, r] = await Promise.all([
+        repo.listSources(),
+        repo.listChannels({
+          mode: tab === "settings" ? "all" : tab,
+          sourceId: tab === "all" ? sourceId || undefined : undefined,
+          groupName: tab === "all" ? (group ?? undefined) : undefined,
+          country: tab === "all" ? (selectedCountry ?? undefined) : undefined,
+          language: tab === "all" ? (language ?? undefined) : undefined,
+          search: query,
+        }),
+        repo.listChannels({ mode: "recent" }),
+      ]);
+      return { s, c, r, nextFacets };
+    };
+    void load()
+      .then(({ s, c, r, nextFacets }) => {
         if (active && id === loadGeneration.current) {
           setListError("");
           setSources(s);
           setChannels(c);
-          setGroups(g);
+          setFacets(nextFacets);
           setRecent(r);
           if (restoreTab.current === tab) {
             restoreTab.current = null;
@@ -227,7 +285,19 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [repo, tab, sourceId, group, query, revision, loadRequest]);
+  }, [
+    repo,
+    tab,
+    sourceId,
+    group,
+    language,
+    query,
+    revision,
+    loadRequest,
+    region.ready,
+    region.preference,
+    region.result,
+  ]);
   useEffect(() => {
     const sub = Network.addNetworkStateListener((net) => {
       if (!isOffline(net) && !mightUseMobileData(net)) setMobileAccepted(false);
@@ -451,7 +521,8 @@ export default function App() {
       setTab("all");
       setRecentEditing(false);
       setSourceId("");
-      setGroup("");
+      setGroup(null);
+      setLanguage(null);
       setSearch("");
       setQuery("");
       changed();
@@ -697,11 +768,17 @@ export default function App() {
       for (const key of ["all", "favorites", "recent"] as const) {
         const saved = tabFilters.current[key];
         if (saved?.sourceId === s.id)
-          tabFilters.current[key] = { ...saved, sourceId: "", group: "" };
+          tabFilters.current[key] = {
+            ...saved,
+            sourceId: "",
+            group: null,
+            language: null,
+          };
       }
       if (sourceId === s.id) {
         setSourceId("");
-        setGroup("");
+        setGroup(null);
+        setLanguage(null);
       }
       changed();
     } catch {
@@ -727,11 +804,54 @@ export default function App() {
     setPlaying(null);
     cancelTask();
     stopCheck();
+    region.cancel();
     try {
       await repo.setSetting("remoteAllowed", false);
       setRevokePending(false);
     } catch {
       setError("许可已在本次运行中撤销，但未能保存。请重试撤销。");
+    }
+  };
+  const changeArtwork = async (enabled: boolean) => {
+    if (!repo || artworkMutation.current) return;
+    artworkMutation.current = true;
+    setArtworkSaving(true);
+    const epoch = permissionEpoch.current;
+    try {
+      if (enabled) {
+        if (!remoteRef.current || revokePending || artworkRevokePending) return;
+        const accepted = await confirm(
+          "显示频道台标？",
+          "将加载节目单提供的 HTTPS 台标，图片服务器会看到你的访问 IP，可能消耗移动数据。仅用于显示台标，不提供节目封面；缺图或失败时显示频道首字。原生图片请求可能跟随服务端重定向，无法保证后续连接仍是 HTTPS。可随时在设置中关闭。",
+          "允许显示",
+        );
+        if (
+          !accepted ||
+          epoch !== permissionEpoch.current ||
+          !remoteRef.current ||
+          !mounted.current
+        )
+          return;
+      } else {
+        // Stop visible requests immediately, even if persisting revocation fails.
+        setArtworkAllowed(false);
+        setArtworkRevokePending(true);
+      }
+      await repo.setSetting("artworkAllowed", enabled);
+      if (mounted.current && epoch === permissionEpoch.current) {
+        setArtworkAllowed(enabled);
+        setArtworkRevokePending(false);
+      }
+    } catch {
+      if (mounted.current)
+        setError(
+          enabled
+            ? "台标许可未能保存，请重试"
+            : "台标已关闭，但设置未能保存，重启前请重试关闭",
+        );
+    } finally {
+      artworkMutation.current = false;
+      if (mounted.current) setArtworkSaving(false);
     }
   };
   const clearAll = async () => {
@@ -751,6 +871,7 @@ export default function App() {
     setPlaying(null);
     cancelTask();
     stopCheck();
+    region.cancel();
     try {
       await repo.clearAll();
       invalidateCatalog();
@@ -759,13 +880,17 @@ export default function App() {
       setMobileAccepted(false);
       setSwipeReverse(false);
       setSkipUnreachable(true);
+      setArtworkAllowed(false);
+      setArtworkRevokePending(false);
+      region.reset();
       setPreviousChannel(null);
       lastWatched.current = null;
       setCheckSummaries({});
       tabFilters.current = {};
       tabOffsets.current = {};
       setSourceId("");
-      setGroup("");
+      setGroup(null);
+      setLanguage(null);
       setSearch("");
       setQuery("");
       setTab("all");
@@ -780,13 +905,15 @@ export default function App() {
     if (tab !== "settings")
       tabFilters.current[tab] = {
         sourceId: tab === "all" ? sourceId : "",
-        group: tab === "all" ? group : "",
+        group: tab === "all" ? group : null,
+        language: tab === "all" ? language : null,
         search,
       };
     if (key !== "settings") {
       const saved = tabFilters.current[key];
       setSourceId(key === "all" ? (saved?.sourceId ?? "") : "");
-      setGroup(key === "all" ? (saved?.group ?? "") : "");
+      setGroup(key === "all" ? (saved?.group ?? null) : null);
+      setLanguage(key === "all" ? (saved?.language ?? null) : null);
       setSearch(saved?.search ?? "");
       setQuery(saved?.search.trim() ?? "");
     }
@@ -822,8 +949,16 @@ export default function App() {
     channelCount: channels.length,
     search,
     sourceId,
-    group,
-    groups,
+    facets,
+    facetSelection: { country, language, content: group },
+    countryHint:
+      region.preference.mode === "manual"
+        ? "手动选择"
+        : region.result.countryCode && country === null
+          ? "当前来源暂无识别地区的国别标注，显示全部"
+          : region.result.message,
+    autoCountryBusy: region.busy,
+    onAutoCountry: () => void region.detectWithConsent(),
     recentBusy,
     recentEditing,
     recentCount: recent.length,
@@ -856,12 +991,16 @@ export default function App() {
       tabOffsets.current[tab] = 0;
       restoreTab.current = tab;
       setSourceId(id);
-      setGroup("");
+      setGroup(null);
+      setLanguage(null);
     },
-    onGroupChange: (name) => {
+    onFacetChange: (selection, kind) => {
       tabOffsets.current[tab] = 0;
       restoreTab.current = tab;
-      setGroup(name);
+      setGroup(selection.content);
+      setLanguage(selection.language);
+      if (kind === "country")
+        void region.selectManualCountry(selection.country);
     },
   };
   const rows = !hasCurrentList || listError ? [] : channels;
@@ -891,6 +1030,23 @@ export default function App() {
           <SettingsScreen
             remoteAllowed={remoteAllowed}
             revokePending={revokePending}
+            artworkAllowed={artworkAllowed}
+            artworkSaving={artworkSaving}
+            artworkRevokePending={artworkRevokePending}
+            onRetryArtworkRevoke={() => void changeArtwork(false)}
+            onArtworkChange={(value) => void changeArtwork(value)}
+            regionMessage={
+              region.preference.mode === "manual"
+                ? `已手动选择${region.preference.countryCode === null ? "全部国别" : region.preference.countryCode === "" ? "未标注" : countryLabel(region.preference.countryCode)}，自动识别不会覆盖。`
+                : region.result.message
+            }
+            regionConsented={
+              region.preference.ipAllowed ||
+              region.preference.locationAllowed ||
+              region.revokePending
+            }
+            regionBusy={region.busy}
+            onRevokeRegion={() => void region.revokeConsent()}
             mobileWarning={mobileWarning}
             onManageSources={() => {
               setError("");
@@ -958,7 +1114,13 @@ export default function App() {
                     loading={listLoading}
                     error={listError}
                     hasSources={sources.length > 0}
-                    filtered={!!(query || sourceId || group)}
+                    filtered={
+                      !!query ||
+                      !!sourceId ||
+                      group !== null ||
+                      language !== null ||
+                      country !== null
+                    }
                     onRetry={changed}
                     onAddUrl={() => startForm("url")}
                     onAddFile={() => startForm("file")}
@@ -966,7 +1128,9 @@ export default function App() {
                       setRecentEditing(false);
                       setTab("all");
                       setSourceId("");
-                      setGroup("");
+                      setGroup(null);
+                      setLanguage(null);
+                      void region.selectManualCountry(null);
                       setSearch("");
                       setQuery("");
                     }}
@@ -976,6 +1140,9 @@ export default function App() {
               return (
                 <ChannelRow
                   channel={channel}
+                  artworkEnabled={
+                    artworkAllowed && remoteAllowed && !revokePending
+                  }
                   onPlay={() => void play(channel)}
                   onFavorite={() => void favorite(channel)}
                   onRemoveRecent={
@@ -1070,10 +1237,28 @@ export default function App() {
           }}
         >
           <PlayerScreen
+            error={error}
+            onDismissError={() => setError("")}
             channel={playing}
             channels={playQueue}
             allChannels={allChannels.length ? allChannels : undefined}
             recentChannels={recent}
+            artworkEnabled={artworkAllowed && remoteAllowed && !revokePending}
+            countryCode={effectiveCountry(
+              region.preference,
+              region.result,
+              buildFacetOptions(allChannels.length ? allChannels : playQueue)
+                .countries,
+            )}
+            countrySelectionKey={countryKey}
+            countryHint={
+              region.preference.mode === "manual"
+                ? "手动选择"
+                : region.result.message
+            }
+            autoCountryBusy={region.busy}
+            onCountryChange={(value) => void region.selectManualCountry(value)}
+            onAutoCountry={() => void region.detectWithConsent()}
             onSelect={(channel, queue) => {
               if (queue) setPlayQueue(queue);
               if (channel.id !== playing.id) setPreviousChannel(playing);

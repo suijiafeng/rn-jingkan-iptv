@@ -1,5 +1,4 @@
 import React from "react";
-import { ScrollView } from "react-native";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import {
   BottomTabs,
@@ -27,12 +26,20 @@ function props() {
     channelCount: 2,
     search: "",
     sourceId: "",
-    group: "",
-    groups: ["新闻", "体育"],
+    facets: {
+      countries: ["CN", "US", ""],
+      languages: ["zh", "en", ""],
+      contents: ["新闻", "体育"],
+    },
+    facetSelection: { country: null, language: null, content: null } as {
+      country: string | null;
+      language: string | null;
+      content: string | null;
+    },
     onSearchChange: jest.fn(),
     onClearSearch: jest.fn(),
     onSourceChange: jest.fn(),
-    onGroupChange: jest.fn(),
+    onFacetChange: jest.fn(),
     onClearRecent: jest.fn(),
     recentBusy: false,
     recentEditing: false,
@@ -48,27 +55,23 @@ test("favorites and recent contain no duplicate category, source, or resume cont
       {...callbacks}
       tab="favorites"
       sourceId="s"
-      group="体育"
+      facetSelection={{ country: "CN", language: null, content: "体育" }}
     />,
   );
   expect(screen.getByRole("header", { name: "收藏" })).toBeTruthy();
   expect(screen.getByLabelText("搜索频道名称")).toBeTruthy();
-  expect(screen.queryByTestId("channel-group-tabs")).toBeNull();
+  expect(screen.queryByTestId("channel-facet-filters")).toBeNull();
   expect(screen.queryByRole("button", { name: "展开来源筛选" })).toBeNull();
-  expect(
-    screen.queryByRole("button", { name: "清空来源和分组筛选" }),
-  ).toBeNull();
+  expect(screen.queryByRole("button", { name: "清除来源筛选" })).toBeNull();
   expect(screen.queryByText(/继续观看|上次看到/)).toBeNull();
   await ui.rerender(
-    <ChannelListHeader {...callbacks} tab="recent" sourceId="s" group="体育" />,
+    <ChannelListHeader {...callbacks} tab="recent" sourceId="s" />,
   );
   expect(screen.getByRole("header", { name: "最近观看" })).toBeTruthy();
   expect(screen.getByLabelText("搜索频道名称")).toBeTruthy();
-  expect(screen.queryByTestId("channel-group-tabs")).toBeNull();
+  expect(screen.queryByTestId("channel-facet-filters")).toBeNull();
   expect(screen.queryByRole("button", { name: "展开来源筛选" })).toBeNull();
-  expect(
-    screen.queryByRole("button", { name: "清空来源和分组筛选" }),
-  ).toBeNull();
+  expect(screen.queryByRole("button", { name: "清除来源筛选" })).toBeNull();
 });
 
 test("channel sources expand on demand and selecting one collapses the chooser", async () => {
@@ -98,43 +101,50 @@ test("search clear and channel scope reset preserve their distinct actions", asy
       {...callbacks}
       search="新闻"
       sourceId="s"
-      group="体育"
+      facetSelection={{ country: "CN", language: "zh", content: "体育" }}
     />,
   );
   await fireEvent.press(screen.getByRole("button", { name: "清除搜索" }));
   expect(callbacks.onClearSearch).toHaveBeenCalledTimes(1);
   expect(callbacks.onSourceChange).not.toHaveBeenCalled();
-  expect(
-    screen.getByRole("button", { name: "体育" }).props.accessibilityState
-      .selected,
-  ).toBe(true);
-  await fireEvent.press(
-    screen.getByRole("button", { name: "清空来源和分组筛选" }),
-  );
+  expect(screen.getByRole("button", { name: "内容：体育" })).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "清除来源筛选" }));
   expect(callbacks.onSourceChange).toHaveBeenCalledWith("");
-  expect(callbacks.onGroupChange).toHaveBeenCalledWith("");
+  expect(callbacks.onFacetChange).not.toHaveBeenCalled();
   expect(callbacks.onClearSearch).toHaveBeenCalledTimes(1);
 });
 
-test("all clears the category without changing sources and repeated category taps keep selection", async () => {
+test("each facet clears independently and keeps the source selection", async () => {
   const callbacks = props();
   const ui = await render(
-    <ChannelListHeader {...callbacks} group="体育" sourceId="s" />,
+    <ChannelListHeader
+      {...callbacks}
+      facetSelection={{ country: "CN", language: "zh", content: "体育" }}
+      sourceId="s"
+    />,
   );
   expect(screen.queryByRole("button", { name: "全部分组" })).toBeNull();
   expect(screen.queryByRole("button", { name: "最近" })).toBeNull();
-  expect(screen.getByTestId("channel-group-tabs").props.horizontal).toBe(true);
+  expect(screen.getByTestId("channel-facet-filters")).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "内容：体育" }));
   await fireEvent.press(screen.getByRole("button", { name: "体育" }));
-  expect(callbacks.onGroupChange).not.toHaveBeenCalled();
+  expect(callbacks.onFacetChange).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole("button", { name: "内容：体育" }));
   await fireEvent.press(screen.getByRole("button", { name: "全部" }));
-  expect(callbacks.onGroupChange).toHaveBeenCalledWith("");
+  expect(callbacks.onFacetChange).toHaveBeenCalledWith(
+    { country: "CN", language: "zh", content: null },
+    "content",
+  );
   expect(callbacks.onSourceChange).not.toHaveBeenCalled();
-  await ui.rerender(<ChannelListHeader {...callbacks} group="体育" />);
-  expect(
-    screen.queryByRole("button", { name: "清空来源和分组筛选" }),
-  ).toBeNull();
-  await ui.rerender(<ChannelListHeader {...callbacks} groups={[]} />);
-  expect(screen.queryByTestId("channel-group-tabs")).toBeNull();
+  await ui.rerender(<ChannelListHeader {...callbacks} />);
+  expect(screen.queryByRole("button", { name: "清除来源筛选" })).toBeNull();
+  await ui.rerender(
+    <ChannelListHeader
+      {...callbacks}
+      facets={{ countries: [], languages: [], contents: [] }}
+    />,
+  );
+  expect(screen.getByTestId("channel-facet-filters")).toBeTruthy();
 });
 
 test("recent management replaces search and exposes only its editing actions", async () => {
@@ -197,35 +207,26 @@ test("recent actions use the full history count and disable mutations while busy
   ).not.toBeDisabled();
 });
 
-test("returning to channels restores its saved category to the visible region", async () => {
-  const scroll = jest
-    .spyOn(ScrollView.prototype, "scrollTo")
-    .mockImplementation(() => {});
+test("returning to channels restores the selected facets without duplicating controls", async () => {
   const callbacks = props();
-  const layoutGroupStrip = async () => {
-    const strip = screen.getByTestId("channel-group-tabs");
-    await fireEvent(strip, "layout", {
-      nativeEvent: { layout: { width: 100 } },
-    });
-    await fireEvent(strip, "contentSizeChange", 260, 48);
-    await fireEvent(screen.getByTestId("channel-group-tabs-item-1"), "layout", {
-      nativeEvent: { layout: { x: 160, width: 100 } },
-    });
-  };
-  try {
-    const ui = await render(<ChannelListHeader {...callbacks} group="体育" />);
-    await layoutGroupStrip();
-    expect(scroll).toHaveBeenLastCalledWith({ x: 160, animated: false });
-    await ui.rerender(
-      <ChannelListHeader {...callbacks} tab="favorites" group="体育" />,
-    );
-    scroll.mockClear();
-    await ui.rerender(<ChannelListHeader {...callbacks} group="体育" />);
-    await layoutGroupStrip();
-    expect(scroll).toHaveBeenLastCalledWith({ x: 160, animated: false });
-  } finally {
-    scroll.mockRestore();
-  }
+  const selection = { country: "CN", language: "zh", content: "体育" };
+  const ui = await render(
+    <ChannelListHeader {...callbacks} facetSelection={selection} />,
+  );
+  expect(screen.getByRole("button", { name: "内容：体育" })).toBeTruthy();
+  await ui.rerender(
+    <ChannelListHeader
+      {...callbacks}
+      tab="favorites"
+      facetSelection={selection}
+    />,
+  );
+  expect(screen.queryByTestId("channel-facet-filters")).toBeNull();
+  await ui.rerender(
+    <ChannelListHeader {...callbacks} facetSelection={selection} />,
+  );
+  expect(screen.getByRole("button", { name: "内容：体育" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "语言：中文" })).toBeTruthy();
 });
 
 test("empty history and an empty search have distinct next steps", async () => {

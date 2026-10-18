@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Channel } from "../domain/types";
 import { channelTitle, displayGroups } from "../domain/channelLabels";
 import { colors, styles } from "../theme";
+import { ChannelLogo } from "./ChannelLogo";
 export function ChannelRow({
   channel,
   onPlay,
@@ -10,6 +11,7 @@ export function ChannelRow({
   current = false,
   onRemoveRecent,
   recentBusy = false,
+  artworkEnabled = false,
 }: {
   channel: Channel;
   onPlay: () => void;
@@ -17,6 +19,7 @@ export function ChannelRow({
   current?: boolean;
   onRemoveRecent?: () => void;
   recentBusy?: boolean;
+  artworkEnabled?: boolean;
 }) {
   const { title, tags } = channelTitle(channel.name);
   const unreachable = channel.active && channel.checkStatus === "unreachable";
@@ -39,11 +42,11 @@ export function ChannelRow({
         disabled={playbackDisabled}
         style={({ pressed }) => [s.main, pressed && { opacity: 0.65 }]}
       >
-        <View style={s.badge}>
-          <Text style={[styles.heading, { color: colors.accent }]}>
-            {Array.from(title)[0] || "台"}
-          </Text>
-        </View>
+        <ChannelLogo
+          uri={channel.logoUrl}
+          title={title}
+          enabled={artworkEnabled}
+        />
         <View style={{ flex: 1, gap: 3 }}>
           <Text numberOfLines={2} style={styles.heading}>
             {title}
@@ -120,14 +123,6 @@ const s = StyleSheet.create({
     gap: 10,
     paddingVertical: 12,
     minHeight: 72,
-  },
-  badge: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: colors.raised,
-    alignItems: "center",
-    justifyContent: "center",
   },
   tags: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tag: {

@@ -18,6 +18,14 @@ import { openRepository } from "../src/data/repository";
 import * as DocumentPicker from "expo-document-picker";
 import { downloadPlaylist, readPickedFile } from "../src/data/importIO";
 import { checkChannels } from "../src/features/source/availability";
+import {
+  buildFacetOptions,
+  matchesChannelFacets,
+  type ChannelFacetOptions,
+} from "../src/domain/channelFacets";
+import type { Channel, ChannelQuery } from "../src/domain/types";
+import * as Localization from "expo-localization";
+import * as Location from "expo-location";
 jest.mock("../src/data/repository", () => ({ openRepository: jest.fn() }));
 jest.mock("../src/data/importIO", () => ({
   downloadPlaylist: jest.fn(),
@@ -45,6 +53,21 @@ jest.mock("../src/features/player/PlayerScreen", () => ({
   },
 }));
 jest.mock("expo-document-picker", () => ({ getDocumentAsync: jest.fn() }));
+jest.mock("expo-localization", () => ({
+  getLocales: jest.fn(() => [{ regionCode: null, languageCode: "zh" }]),
+  getCalendars: jest.fn(() => [{ timeZone: "UTC" }]),
+}));
+jest.mock("expo-location", () => ({
+  getForegroundPermissionsAsync: jest.fn(async () => ({
+    status: "undetermined",
+  })),
+  requestForegroundPermissionsAsync: jest.fn(async () => ({
+    status: "denied",
+  })),
+  getCurrentPositionAsync: jest.fn(),
+  reverseGeocodeAsync: jest.fn(),
+  Accuracy: { Balanced: 3 },
+}));
 jest.mock("../src/features/source/availability", () => ({
   checkChannels: jest.fn(),
 }));
@@ -63,7 +86,11 @@ const repo = {
   getSetting: jest.fn(),
   listChannels: jest.fn(async () => []),
   listSources: jest.fn(async () => []),
-  listGroups: jest.fn(async () => []),
+  listFacets: jest.fn(async (): Promise<ChannelFacetOptions> => ({
+    countries: [],
+    languages: [],
+    contents: [],
+  })),
   setSetting: jest.fn(async () => {}),
   importSource: jest.fn(async () => ({ id: "s" })),
   cancelRefresh: jest.fn(),
@@ -81,6 +108,7 @@ const repo = {
   removeRecent: jest.fn(async (_channelId: string) => {}),
   clearRecent: jest.fn(async () => {}),
   recordRecent: jest.fn(async (_channelId: string) => {}),
+  clearAll: jest.fn(async () => {}),
 };
 const checkSource = {
   id: "s1",
@@ -111,7 +139,12 @@ beforeEach(() => {
   repo.getSetting.mockImplementation(async (_k, fallback) => fallback);
   repo.listChannels.mockImplementation(async () => []);
   repo.listSources.mockImplementation(async () => []);
-  repo.listGroups.mockImplementation(async () => []);
+  repo.listFacets.mockImplementation(async () => ({
+    countries: [],
+    languages: [],
+    contents: [],
+  }));
+  repo.clearAll.mockReset().mockResolvedValue(undefined);
   repo.setSetting.mockImplementation(async () => {});
   repo.toggleFavorite.mockReset();
   repo.deleteSource.mockReset().mockResolvedValue(undefined);
@@ -120,6 +153,12 @@ beforeEach(() => {
   repo.clearRecent.mockReset().mockResolvedValue(undefined);
   repo.recordRecent.mockReset().mockResolvedValue(undefined);
   repo.saveCheckResults.mockReset().mockResolvedValue(undefined);
+  (Localization.getLocales as jest.Mock).mockReturnValue([
+    { regionCode: null, languageCode: "zh" },
+  ]);
+  (Localization.getCalendars as jest.Mock).mockReturnValue([
+    { timeZone: "UTC" },
+  ]);
   (checkChannels as jest.Mock).mockReset().mockResolvedValue([]);
   (Network.getNetworkStateAsync as jest.Mock)
     .mockReset()
@@ -134,6 +173,13 @@ beforeEach(() => {
     .mockImplementation(() => ({ remove: jest.fn() }));
   (openRepository as jest.Mock).mockResolvedValue(repo);
 });
+
+async function chooseFacet(kind: "国别" | "语言" | "内容", option: string) {
+  await fireEvent.press(
+    await screen.findByRole("button", { name: new RegExp(`^${kind}：`) }),
+  );
+  await fireEvent.press(await screen.findByRole("button", { name: option }));
+}
 test("startup failure can retry opening local data without restarting", async () => {
   (openRepository as jest.Mock).mockRejectedValueOnce(new Error("unavailable"));
   await render(<App />);
@@ -323,7 +369,7 @@ test("favorites has no duplicate continue-watching shortcut and recent keeps una
   await render(<App />);
   expect(await screen.findByLabelText("可用频道，播放")).toBeTruthy();
   expect(screen.queryByText("继续观看")).toBeNull();
-  expect(screen.queryByTestId("channel-group-tabs")).toBeNull();
+  expect(screen.queryByTestId("channel-facet-filters")).toBeNull();
   await fireEvent.press(screen.getByRole("tab", { name: "最近" }));
   expect(await screen.findByLabelText("失效频道，来源已不再提供")).toBeTruthy();
   expect(screen.queryByLabelText("删除失效频道的观看记录")).toBeNull();
@@ -365,7 +411,11 @@ test("tabs remember independent search, source and group filters", async () => {
     { ...checkSource, name: "来源甲" },
     { ...checkSource, id: "s2", name: "来源乙" },
   ]);
-  (repo.listGroups as jest.Mock).mockResolvedValue(["新闻", "体育"]);
+  repo.listFacets.mockResolvedValue({
+    countries: [],
+    languages: [],
+    contents: ["新闻", "体育"],
+  });
   await render(<App />);
   await waitFor(() =>
     expect(screen.getByLabelText("频道甲，播放")).toBeTruthy(),
@@ -374,7 +424,7 @@ test("tabs remember independent search, source and group filters", async () => {
   await fireEvent.changeText(screen.getByLabelText("搜索频道名称"), "频道甲");
   await fireEvent.press(screen.getByRole("button", { name: "展开来源筛选" }));
   await fireEvent.press(screen.getByRole("button", { name: "来源甲" }));
-  await fireEvent.press(screen.getByRole("button", { name: "体育" }));
+  await chooseFacet("内容", "体育");
   await waitFor(() =>
     expect(repo.listChannels).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -426,7 +476,7 @@ test("initial empty UI offers import without any remote access", async () => {
   );
   expect(downloadPlaylist).not.toHaveBeenCalled();
   await fireEvent.press(screen.getByText("设置"));
-  expect(screen.getByText("联网与 HTTP 许可")).toBeTruthy();
+  expect(screen.getByText("节目来源联网与 HTTP 许可")).toBeTruthy();
 });
 test("declining informed consent never downloads the playlist", async () => {
   jest
@@ -858,7 +908,11 @@ function setupRecentHistory() {
     { ...checkSource, name: "自己的来源" },
     { ...checkSource, id: "s2", name: "其他来源" },
   ]);
-  (repo.listGroups as jest.Mock).mockResolvedValue(["新闻", "体育"]);
+  repo.listFacets.mockResolvedValue({
+    countries: [],
+    languages: [],
+    contents: ["新闻", "体育"],
+  });
   (repo.listChannels as jest.Mock).mockImplementation(async (query) => {
     const items =
       query?.mode === "recent"
@@ -893,9 +947,9 @@ test("navigation separates types from history and restores channel filters witho
   setupRecentHistory();
   await render(<App />);
   expect(await screen.findByLabelText("最新新闻台，播放")).toBeTruthy();
-  expect(screen.queryByTestId("channel-group-tabs")).toBeNull();
+  expect(screen.queryByTestId("channel-facet-filters")).toBeNull();
   await fireEvent.press(await screen.findByRole("tab", { name: "频道" }));
-  await fireEvent.press(screen.getByRole("button", { name: "体育" }));
+  await chooseFacet("内容", "体育");
   await fireEvent.changeText(screen.getByLabelText("搜索频道名称"), "体育");
   expect(screen.queryByRole("button", { name: "最近" })).toBeNull();
   await fireEvent.press(screen.getByRole("tab", { name: "最近" }));
@@ -905,7 +959,7 @@ test("navigation separates types from history and restores channel filters witho
   expect(screen.getByLabelText("搜索频道名称").props.value).toBe("");
   expect(screen.getByLabelText("最新新闻台，播放")).toBeTruthy();
   expect(screen.getByLabelText("体育台，播放")).toBeTruthy();
-  expect(screen.queryByTestId("channel-group-tabs")).toBeNull();
+  expect(screen.queryByTestId("channel-facet-filters")).toBeNull();
   expect(screen.queryByRole("button", { name: "展开来源筛选" })).toBeNull();
   expect(
     screen.getByRole("tab", { name: "最近" }).props.accessibilityState.selected,
@@ -916,10 +970,7 @@ test("navigation separates types from history and restores channel filters witho
     expect(screen.getByLabelText("体育台，播放")).toBeTruthy(),
   );
   expect(screen.queryByLabelText("最新新闻台，播放")).toBeNull();
-  expect(
-    screen.getByRole("button", { name: "体育" }).props.accessibilityState
-      .selected,
-  ).toBe(true);
+  expect(screen.getByRole("button", { name: "内容：体育" })).toBeTruthy();
 });
 
 test("the all-type filter clears only the category while keeping the selected source", async () => {
@@ -930,12 +981,12 @@ test("the all-type filter clears only the category while keeping the selected so
     await screen.findByRole("button", { name: "展开来源筛选" }),
   );
   await fireEvent.press(screen.getByRole("button", { name: "自己的来源" }));
-  await fireEvent.press(screen.getByRole("button", { name: "体育" }));
+  await chooseFacet("内容", "体育");
   await waitFor(() =>
     expect(screen.queryByLabelText("最新新闻台，播放")).toBeNull(),
   );
   repo.listChannels.mockClear();
-  await fireEvent.press(screen.getByRole("button", { name: "全部" }));
+  await chooseFacet("内容", "全部");
   expect(await screen.findByLabelText("最新新闻台，播放")).toBeTruthy();
   expect(screen.getByLabelText("体育台，播放")).toBeTruthy();
   expect(repo.listChannels).toHaveBeenCalledWith(
@@ -945,10 +996,7 @@ test("the all-type filter clears only the category while keeping the selected so
       groupName: undefined,
     }),
   );
-  expect(
-    screen.getByRole("button", { name: "全部" }).props.accessibilityState
-      .selected,
-  ).toBe(true);
+  expect(screen.getByRole("button", { name: "内容：全部" })).toBeTruthy();
 });
 
 test("history deletion failures preserve the row and allow retry without changing favorites or channels", async () => {
@@ -1177,3 +1225,285 @@ test("the filter bar is pinned while the title scrolls away", async () => {
   expect(list.props.data[0]).toEqual({ kind: "filters" });
   expect(screen.getByLabelText("搜索频道名称")).toBeTruthy();
 });
+
+function setupFacetCatalog() {
+  const base = {
+    sourceId: "s1",
+    sourceName: "维度来源",
+    active: true,
+    favorite: false,
+    logoUrl: "https://images.example.com/logo.png",
+    groupName: "新闻",
+    countries: ["CN"],
+    languages: ["zh"],
+  };
+  const catalog = [
+    { ...base, id: "cn-zh", name: "中文新闻" },
+    {
+      ...base,
+      id: "cn-en",
+      name: "英语体育",
+      languages: ["en"],
+      groupName: "体育",
+    },
+    { ...base, id: "us-zh", name: "美国中文", countries: ["US"] },
+    {
+      ...base,
+      id: "us-en",
+      name: "美国英语",
+      countries: ["US"],
+      languages: ["en"],
+    },
+    {
+      ...base,
+      id: "unknown",
+      name: "未知频道",
+      countries: [],
+      languages: [],
+      groupName: "未分组",
+    },
+  ] as Channel[];
+  repo.listSources.mockResolvedValue([
+    { ...checkSource, name: "维度来源" },
+  ] as never[]);
+  (repo.listFacets as jest.Mock).mockImplementation(async (sourceId?: string) =>
+    buildFacetOptions(
+      catalog.filter((channel) => !sourceId || channel.sourceId === sourceId),
+    ),
+  );
+  (repo.listChannels as jest.Mock).mockImplementation(
+    async (query: ChannelQuery = {}) => {
+      if (query.mode === "favorites" || query.mode === "recent") return [];
+      return catalog.filter(
+        (channel) =>
+          (!query.sourceId || query.sourceId === channel.sourceId) &&
+          (!query.search || channel.name.includes(query.search)) &&
+          matchesChannelFacets(channel, {
+            country: query.country ?? null,
+            language: query.language ?? null,
+            content: query.groupName ?? null,
+          }),
+      );
+    },
+  );
+  return catalog;
+}
+
+test("country/language/content menus form an intersection without shrinking available options", async () => {
+  setupFacetCatalog();
+  await render(<App />);
+  await screen.findByLabelText("中文新闻，播放");
+  await chooseFacet("国别", "中国");
+  await chooseFacet("语言", "英语");
+  expect(await screen.findByLabelText("英语体育，播放")).toBeTruthy();
+  expect(screen.queryByLabelText("美国英语，播放")).toBeNull();
+  await chooseFacet("内容", "新闻");
+  await waitFor(() =>
+    expect(screen.queryByLabelText("英语体育，播放")).toBeNull(),
+  );
+  await chooseFacet("内容", "体育");
+  expect(await screen.findByLabelText("英语体育，播放")).toBeTruthy();
+  expect(repo.listChannels).toHaveBeenCalledWith(
+    expect.objectContaining({
+      mode: "all",
+      country: "CN",
+      language: "en",
+      groupName: "体育",
+    }),
+  );
+  await chooseFacet("语言", "全部");
+  expect(repo.listChannels).toHaveBeenCalledWith(
+    expect.objectContaining({
+      country: "CN",
+      language: undefined,
+      groupName: "体育",
+    }),
+  );
+  expect(screen.getByRole("button", { name: "国别：中国" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "内容：体育" })).toBeTruthy();
+});
+
+test("unlabelled facet values reach SQLite queries as empty strings instead of all", async () => {
+  setupFacetCatalog();
+  await render(<App />);
+  await screen.findByLabelText("未知频道，播放");
+  await chooseFacet("国别", "未标注");
+  await chooseFacet("语言", "未标注");
+  await chooseFacet("内容", "未标注");
+  expect(await screen.findByLabelText("未知频道，播放")).toBeTruthy();
+  expect(screen.queryByLabelText("中文新闻，播放")).toBeNull();
+  expect(repo.listChannels).toHaveBeenCalledWith(
+    expect.objectContaining({ country: "", language: "", groupName: "" }),
+  );
+});
+
+test("manual country all persists over a matching device recommendation and app reopening", async () => {
+  setupFacetCatalog();
+  (Localization.getLocales as jest.Mock).mockReturnValue([
+    { regionCode: "CN", languageCode: "zh" },
+  ]);
+  (Localization.getCalendars as jest.Mock).mockReturnValue([
+    { timeZone: "Asia/Shanghai" },
+  ]);
+  let preference: unknown;
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "countryPreference" && preference ? preference : fallback,
+  );
+  (repo.setSetting as jest.Mock).mockImplementation(async (key, value) => {
+    if (key === "countryPreference") preference = value;
+  });
+  const ui = await render(<App />);
+  await screen.findByLabelText("中文新闻，播放");
+  expect(screen.queryByLabelText("美国中文，播放")).toBeNull();
+  await chooseFacet("国别", "全部");
+  expect(await screen.findByLabelText("美国中文，播放")).toBeTruthy();
+  expect(preference).toEqual({
+    mode: "manual",
+    countryCode: null,
+    ipAllowed: false,
+    locationAllowed: false,
+  });
+  expect(Location.requestForegroundPermissionsAsync).not.toHaveBeenCalled();
+  await ui.unmount();
+  await render(<App />);
+  expect(await screen.findByLabelText("美国中文，播放")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "国别：全部" })).toBeTruthy();
+});
+
+test("channel artwork stays absent by default and a failed consent save does not mount images", async () => {
+  setupFacetCatalog();
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" ? true : fallback,
+  );
+  (repo.setSetting as jest.Mock).mockImplementation(async (key) => {
+    if (key === "artworkAllowed") throw new Error("disk unavailable");
+  });
+  jest
+    .spyOn(Alert, "alert")
+    .mockImplementation((_title, _message, buttons) =>
+      buttons?.[1]?.onPress?.(),
+    );
+  await render(<App />);
+  await screen.findByLabelText("中文新闻，播放");
+  expect(
+    screen.queryByTestId("channel-logo-image", { includeHiddenElements: true }),
+  ).toBeNull();
+  await fireEvent.press(screen.getByRole("tab", { name: "设置" }));
+  await fireEvent(screen.getByLabelText("显示频道台标"), "valueChange", true);
+  expect(await screen.findByText("台标许可未能保存，请重试")).toBeTruthy();
+  expect(screen.getByLabelText("显示频道台标").props.value).toBe(false);
+  await fireEvent.press(screen.getByRole("tab", { name: "频道" }));
+  await screen.findByLabelText("中文新闻，播放");
+  expect(
+    screen.queryByTestId("channel-logo-image", { includeHiddenElements: true }),
+  ).toBeNull();
+});
+
+test("revoking networking removes previously authorized channel artwork", async () => {
+  setupFacetCatalog();
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" || key === "artworkAllowed" ? true : fallback,
+  );
+  jest
+    .spyOn(Alert, "alert")
+    .mockImplementation((_title, _message, buttons) =>
+      buttons?.[1]?.onPress?.(),
+    );
+  await render(<App />);
+  await screen.findByLabelText("中文新闻，播放");
+  expect(
+    screen.getAllByTestId("channel-logo-image", { includeHiddenElements: true })
+      .length,
+  ).toBeGreaterThan(0);
+  await fireEvent.press(screen.getByRole("tab", { name: "设置" }));
+  await fireEvent.press(screen.getByRole("button", { name: "撤销联网许可" }));
+  await screen.findByRole("button", { name: "阅读风险并允许" });
+  await fireEvent.press(screen.getByRole("tab", { name: "频道" }));
+  await screen.findByLabelText("中文新闻，播放");
+  expect(
+    screen.queryByTestId("channel-logo-image", { includeHiddenElements: true }),
+  ).toBeNull();
+});
+
+test("failed artwork revocation unmounts images immediately and retries saving false without re-enabling", async () => {
+  setupFacetCatalog();
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" || key === "artworkAllowed" ? true : fallback,
+  );
+  repo.setSetting.mockRejectedValueOnce(new Error("disk unavailable"));
+  const alert = jest.spyOn(Alert, "alert");
+  await render(<App />);
+  await screen.findByLabelText("中文新闻，播放");
+  expect(
+    screen.getAllByTestId("channel-logo-image", { includeHiddenElements: true })
+      .length,
+  ).toBeGreaterThan(0);
+  await fireEvent.press(screen.getByRole("tab", { name: "设置" }));
+  await fireEvent(screen.getByLabelText("显示频道台标"), "valueChange", false);
+  expect(
+    await screen.findByRole("button", { name: "重试保存台标关闭" }),
+  ).toBeTruthy();
+  expect(screen.getByLabelText("显示频道台标").props.value).toBe(false);
+  expect(screen.getByLabelText("显示频道台标").props.disabled).toBe(true);
+  await fireEvent.press(screen.getByRole("tab", { name: "频道" }));
+  await screen.findByLabelText("中文新闻，播放");
+  expect(
+    screen.queryByTestId("channel-logo-image", { includeHiddenElements: true }),
+  ).toBeNull();
+  await fireEvent.press(screen.getByRole("tab", { name: "设置" }));
+  await fireEvent.press(
+    screen.getByRole("button", { name: "重试保存台标关闭" }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("button", { name: "重试保存台标关闭" }),
+    ).toBeNull(),
+  );
+  expect(screen.getByLabelText("显示频道台标").props.value).toBe(false);
+  expect(screen.getByLabelText("显示频道台标").props.disabled).toBe(false);
+  expect(repo.setSetting.mock.calls).toEqual([
+    ["artworkAllowed", false],
+    ["artworkAllowed", false],
+  ]);
+  expect(alert).not.toHaveBeenCalled();
+});
+
+test.each(["revocation", "unmount"])(
+  "a late artwork consent cannot enable images after %s",
+  async (action) => {
+    setupFacetCatalog();
+    repo.getSetting.mockImplementation(async (key, fallback) =>
+      key === "remoteAllowed" ? true : fallback,
+    );
+    let grantArtwork: (() => void) | undefined;
+    jest
+      .spyOn(Alert, "alert")
+      .mockImplementation((title, _message, buttons) => {
+        if (title === "显示频道台标？")
+          grantArtwork = () => buttons?.[1]?.onPress?.();
+        else buttons?.[1]?.onPress?.();
+      });
+    const ui = await render(<App />);
+    await screen.findByLabelText("中文新闻，播放");
+    await fireEvent.press(screen.getByRole("tab", { name: "设置" }));
+    await fireEvent(screen.getByLabelText("显示频道台标"), "valueChange", true);
+    await waitFor(() => expect(grantArtwork).toBeDefined());
+    if (action === "revocation") {
+      await fireEvent.press(
+        screen.getByRole("button", { name: "撤销联网许可" }),
+      );
+      await screen.findByRole("button", { name: "阅读风险并允许" });
+    } else await ui.unmount();
+    await act(async () => grantArtwork?.());
+    expect(repo.setSetting).not.toHaveBeenCalledWith("artworkAllowed", true);
+    if (action === "revocation") {
+      await fireEvent.press(screen.getByRole("tab", { name: "频道" }));
+      await screen.findByLabelText("中文新闻，播放");
+      expect(
+        screen.queryByTestId("channel-logo-image", {
+          includeHiddenElements: true,
+        }),
+      ).toBeNull();
+    }
+  },
+);

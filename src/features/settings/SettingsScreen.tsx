@@ -8,6 +8,15 @@ interface Props {
   remoteAllowed: boolean;
   revokePending: boolean;
   mobileWarning: boolean;
+  artworkAllowed: boolean;
+  artworkSaving: boolean;
+  artworkRevokePending: boolean;
+  onRetryArtworkRevoke: () => void;
+  onArtworkChange: (value: boolean) => void;
+  regionMessage: string;
+  regionConsented: boolean;
+  regionBusy: boolean;
+  onRevokeRegion: () => void;
   onManageSources: () => void;
   onRevoke: () => void;
   onAllowRemote: () => void;
@@ -25,7 +34,7 @@ export function SettingsScreen(props: Props) {
       <Heading title="设置" subtitle="简单一点，安静地看" />
       <Button label="管理节目来源" secondary onPress={props.onManageSources} />
       <Card>
-        <Text style={styles.heading}>联网与 HTTP 许可</Text>
+        <Text style={styles.heading}>节目来源联网与 HTTP 许可</Text>
         <Text style={styles.body}>
           {props.revokePending
             ? "联网已停止，撤销尚未保存。请重试保存，避免重启后恢复旧许可。"
@@ -48,6 +57,54 @@ export function SettingsScreen(props: Props) {
               : props.onAllowRemote
           }
         />
+      </Card>
+      <Card>
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.heading}>频道台标</Text>
+            <Text style={styles.muted}>
+              {props.remoteAllowed
+                ? "开启前会单独说明图片访问。仅加载有效的 HTTPS 台标，缺图时显示首字。"
+                : props.artworkAllowed
+                  ? "台标许可已保留，节目来源联网关闭期间不加载；可关闭台标许可。"
+                  : "先允许节目来源联网，再单独开启台标。"}
+            </Text>
+          </View>
+          <Switch
+            accessibilityLabel="显示频道台标"
+            value={props.artworkAllowed}
+            disabled={
+              props.artworkSaving ||
+              props.artworkRevokePending ||
+              props.revokePending ||
+              (!props.remoteAllowed && !props.artworkAllowed)
+            }
+            trackColor={{ true: colors.accent }}
+            onValueChange={props.onArtworkChange}
+          />
+        </View>
+        {props.artworkRevokePending && (
+          <Button
+            secondary
+            label="重试保存台标关闭"
+            onPress={props.onRetryArtworkRevoke}
+          />
+        )}
+      </Card>
+      <Card>
+        <Text style={styles.heading}>国别识别</Text>
+        <Text style={styles.body}>{props.regionMessage}</Text>
+        <Text style={styles.muted}>
+          在频道页“国别”菜单中识别或手动选择。IP
+          查询与系统定位分别授权；只保存地区与选择方式，不保存 IP 或经纬度。
+        </Text>
+        {props.regionConsented && (
+          <Button
+            secondary
+            label={props.regionBusy ? "停止并撤销识别授权" : "撤销识别授权"}
+            onPress={props.onRevokeRegion}
+          />
+        )}
       </Card>
       <Card>
         <View style={styles.row}>

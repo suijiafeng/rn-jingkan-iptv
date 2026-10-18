@@ -65,12 +65,27 @@ const withBackupRuleFiles = (config) =>
 module.exports = (config) =>
   withBackupRuleFiles(
     withAndroidManifest(config, (config) => {
-      const app = config.modResults.manifest.application[0].$;
+      const application = config.modResults.manifest.application[0];
+      const app = application.$;
       app["android:allowBackup"] = "false";
       app["android:dataExtractionRules"] = "@xml/jingkan_data_extraction_rules";
       app["android:fullBackupContent"] = "@xml/jingkan_backup_rules";
       // HTTP is a deliberate v0.2 capability behind in-app informed consent.
       app["android:usesCleartextTraffic"] = "true";
+      // expo-location also ships background/foreground task services. This app
+      // only uses a one-fix foreground watcher, so exclude those components.
+      const locationServices = [
+        "expo.modules.location.services.LocationTaskService",
+        "expo.modules.location.next.locationForegroundService.LocationForegroundService",
+      ];
+      application.service = [
+        ...(application.service ?? []).filter(
+          (service) => !locationServices.includes(service.$?.["android:name"]),
+        ),
+        ...locationServices.map((name) => ({
+          $: { "android:name": name, "tools:node": "remove" },
+        })),
+      ];
       return config;
     }),
   );

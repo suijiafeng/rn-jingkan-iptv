@@ -21,6 +21,9 @@ export interface ParsedChannel {
   groupName: string;
   tvgId: string | null;
   logoUrl: string | null;
+  /** Explicit playlist metadata only; absent metadata stays unlabelled. */
+  countries?: string[];
+  languages?: string[];
   streamUrl: string;
   sortIndex: number;
 }
@@ -92,6 +95,9 @@ export interface ImportSourceInput {
 export interface ChannelQuery {
   sourceId?: string;
   groupName?: string;
+  /** Undefined means all; an empty string selects unlabelled channels. */
+  country?: string;
+  language?: string;
   search?: string;
   mode?: "all" | "favorites" | "recent";
   includeInactive?: boolean;

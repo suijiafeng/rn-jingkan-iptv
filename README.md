@@ -4,16 +4,16 @@
 
 ## 当前交付状态
 
-完整可构建的 Expo / React Native 源码。已经完成 TypeScript、ESLint、114 项自动测试、Android Hermes JS bundle 与 Android 原生工程生成检查。需求规格见 docs/DEV_SPEC.md（v0.2，含与 v0.1 的变更汇总）。
+完整可构建的 Expo / React Native 源码。最新 TypeScript、ESLint、21 组 308 项自动测试、Android Hermes JS bundle 与 Android arm64 release 构建均通过。需求规格见 docs/DEV_SPEC.md，分阶段验证记录见 docs/TEST_REPORT.md。
 
-**尚未生成 APK，也没有完成 Android 模拟器或 S25 Ultra 真机播放验收。** 当前云环境没有 Android SDK，安装前需接受 Google Android SDK 条款；不会代替你自动接受。JS bundle 成功不能替代 APK 编译或实际播放验证。
+本机已生成可独立安装的 APK，使用 Android Debug 测试签名；它不是正式分发签名包。三星 S25 Ultra 真机、长时间播放和真实定位/IP 服务验收仍需分别验证，构建成功不能替代这些证据。
 
 真实来源另行做过云端清单/分片读取与 ffmpeg 解码：Apple 官方控制样本、CGTN Global Biz、DAAI TV 解码约 20 秒成功；CCTV-4 America 在云网络返回 502。两路真实频道有时间戳警告，需要真机看音画同步。详见 docs/stream-tests/REPORT.md。这不是本应用实际播放通过的证明。
 
 ## 已实现
 
 - M3U HTTP(S) 链接或系统文件导入；2 MiB 实际字节限制、UTF-8 严格解析、统计预览后确认保存
-- 来源/分组/中文名称筛选（分组按“;”拆分并中文化，[Geo-blocked] 等标记显示为标签），独立收藏按钮，最近 100 个成功播放频道
+- 来源选择、国别／语言／内容下拉筛选和中文名称搜索（分组按“;”拆分并中文化，[Geo-blocked] 等标记显示为标签），独立收藏按钮，最近 100 个成功播放频道
 - 来源管理中手动“检测可用性”（每频道 1 KiB 请求、8 秒、4 并发，可停止；结果只代表服务器有响应）
 - SQLite 事务刷新，稳定频道 ID；消失的收藏保留为失效条目，旧任务不能覆盖新数据或复活已删除来源
 - expo-video 原生播放器、暂停/重新连接直播、上一台/下一台、底部选台、横屏全屏与返回优先级
@@ -24,7 +24,7 @@
 - 备份与换机迁移排除：allowBackup=false + dataExtractionRules（含 device-transfer）+ fullBackupContent
 - 来源改名/刷新/命名删除确认；清理观看记录/全部资料；深色薄荷绿界面，48 dp 触控目标
 
-不内置频道，不自动下载列表或台标；不提供版权破解、付费节目授权、录制、后台播放、EPG、投屏和电视端。
+不内置频道，不自动下载列表；台标默认关闭，单独授权后可显示有效 HTTPS 台标，缺图回退首字；不提供版权破解、付费节目授权、录制、后台播放、EPG、投屏和电视端。
 
 ## 开发与验证
 
@@ -91,3 +91,5 @@ fixtures/example.m3u 是自有结构测试夹具，example.com 地址是占位�
 实际首帧与声音、连续播放、弱网与切台、明文 HLS 子资源、证书失败、来电/耳机/蓝牙音频焦点、旋转与方向锁、字体放大/TalkBack、三星省电、60 分钟内存耗电，以及数据库升级/杀进程恢复。完整清单见 docs/TEST_REPORT.md。
 
 设计：[Figma 静看](https://www.figma.com/design/5oX9LZla0jzHQevtEEFpLc)。架构及映射见 docs/ARCHITECTURE.md。
+
+国别默认推荐交叉核对手机地区、语言和时区；IP 查询（ipapi.co）与前台单次定位分别在应用内授权后使用。手动选择（含全部）优先；证据冲突或当前节目单没有相应国别标注时回退全部。国别、语言仅使用节目单明确提供的属性，旧资料需要手动刷新才能补充，不能从频道名或地址猜测。
