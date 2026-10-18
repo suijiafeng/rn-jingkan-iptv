@@ -1,5 +1,10 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import {
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react-native";
 import {
   BottomTabs,
   ChannelListEmpty,
@@ -46,6 +51,14 @@ function props() {
     onToggleRecentEditing: jest.fn(),
     recentCount: 2,
   };
+}
+
+function selectedContent(): string | undefined {
+  const tabs = screen.getByTestId("channel-facet-filters-content-tabs");
+  return within(tabs)
+    .getAllByRole("button")
+    .find((tab) => tab.props.accessibilityState?.selected)?.props
+    .accessibilityLabel;
 }
 
 test("favorites and recent contain no duplicate category, source, or resume controls", async () => {
@@ -107,7 +120,7 @@ test("search clear and channel scope reset preserve their distinct actions", asy
   await fireEvent.press(screen.getByRole("button", { name: "清除搜索" }));
   expect(callbacks.onClearSearch).toHaveBeenCalledTimes(1);
   expect(callbacks.onSourceChange).not.toHaveBeenCalled();
-  expect(screen.getByRole("button", { name: "内容：体育" })).toBeTruthy();
+  expect(selectedContent()).toBe("体育");
   await fireEvent.press(screen.getByRole("button", { name: "清除来源筛选" }));
   expect(callbacks.onSourceChange).toHaveBeenCalledWith("");
   expect(callbacks.onFacetChange).not.toHaveBeenCalled();
@@ -126,11 +139,9 @@ test("each facet clears independently and keeps the source selection", async () 
   expect(screen.queryByRole("button", { name: "全部分组" })).toBeNull();
   expect(screen.queryByRole("button", { name: "最近" })).toBeNull();
   expect(screen.getByTestId("channel-facet-filters")).toBeTruthy();
-  await fireEvent.press(screen.getByRole("button", { name: "内容：体育" }));
-  await fireEvent.press(screen.getByRole("button", { name: "体育" }));
-  expect(callbacks.onFacetChange).not.toHaveBeenCalled();
-  await fireEvent.press(screen.getByRole("button", { name: "内容：体育" }));
-  await fireEvent.press(screen.getByRole("button", { name: "全部" }));
+  // One tap on the content tabs; tapping the selected tab clears it.
+  const tabs = screen.getByTestId("channel-facet-filters-content-tabs");
+  await fireEvent.press(within(tabs).getByRole("button", { name: "全部" }));
   expect(callbacks.onFacetChange).toHaveBeenCalledWith(
     { country: "CN", language: "zh", content: null },
     "content",
@@ -213,7 +224,7 @@ test("returning to channels restores the selected facets without duplicating con
   const ui = await render(
     <ChannelListHeader {...callbacks} facetSelection={selection} />,
   );
-  expect(screen.getByRole("button", { name: "内容：体育" })).toBeTruthy();
+  expect(selectedContent()).toBe("体育");
   await ui.rerender(
     <ChannelListHeader
       {...callbacks}
@@ -225,7 +236,7 @@ test("returning to channels restores the selected facets without duplicating con
   await ui.rerender(
     <ChannelListHeader {...callbacks} facetSelection={selection} />,
   );
-  expect(screen.getByRole("button", { name: "内容：体育" })).toBeTruthy();
+  expect(selectedContent()).toBe("体育");
   expect(screen.getByRole("button", { name: "语言：中文" })).toBeTruthy();
 });
 

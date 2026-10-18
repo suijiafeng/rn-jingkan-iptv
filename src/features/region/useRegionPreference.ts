@@ -112,7 +112,7 @@ export function useRegionPreference(
       } catch {
         if (generation.current === operation && !request.signal.aborted)
           onErrorRef.current(
-            "国别识别或保存未完成，当前选择保持不变，请稍后重试。",
+            "国家/地区识别或保存未完成，当前选择保持不变，请稍后重试。",
           );
       } finally {
         if (generation.current === operation) setBusy(false);
@@ -168,7 +168,7 @@ export function useRegionPreference(
           if (initialization.current !== initializationId) return;
           setReady(true);
           readyRef.current = true;
-          onErrorRef.current("无法读取国别偏好，请重试；当前显示全部。");
+          onErrorRef.current("无法读取国家/地区偏好，请重试；当前显示全部。");
         }
       }
     })();
@@ -192,7 +192,7 @@ export function useRegionPreference(
       cancel();
       if (!ready || !repo) return;
       if (value !== null && value !== "" && !isCountryCode(value)) {
-        onErrorRef.current("无效的国别选择。");
+        onErrorRef.current("无效的国家/地区选择。");
         return;
       }
       const operation = generation.current;
@@ -221,7 +221,9 @@ export function useRegionPreference(
               ? resolveRegion(readDeviceEvidence())
               : { ...NO_REGION },
           );
-          onErrorRef.current("国别选择未能保存，当前选择保持不变，请重试。");
+          onErrorRef.current(
+            "国家/地区选择未能保存，当前选择保持不变，请重试。",
+          );
         }
       }
     },
@@ -231,7 +233,7 @@ export function useRegionPreference(
   const detectWithConsent = useCallback(async () => {
     if (!ready || !repo || AppState.currentState !== "active") return;
     if (revokePendingRef.current) {
-      onErrorRef.current("请先重试保存国别识别授权的撤销。");
+      onErrorRef.current("请先重试保存国家/地区识别授权的撤销。");
       return;
     }
     cancel();
@@ -245,7 +247,7 @@ export function useRegionPreference(
         ? "allow"
         : await consent(
             "使用访问 IP 辅助识别？",
-            "应用将访问 ipapi.co 的 HTTPS 国别查询接口。该服务商会看到本次访问 IP，并用它返回国家/地区；应用不保存 IP。此许可只用于国别识别，与节目来源联网许可独立。可跳过并使用手机设置或可选定位。",
+            "应用将访问 ipapi.co 的 HTTPS 国家/地区查询接口。该服务商会看到本次访问 IP，并用它返回国家/地区；应用不保存 IP。此许可只用于国家/地区识别，与节目来源联网许可独立。可跳过并使用手机设置或可选定位。",
           );
       if (!isCurrent() || ipChoice === "cancel") return;
       const locationChoice = previous.locationAllowed

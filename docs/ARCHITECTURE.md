@@ -1,6 +1,6 @@
 # 架构与边界
 
-Expo Router 仅提供薄入口，src/App.tsx 持有状态与流程（导入、刷新、播放、许可、检测），界面拆在 features/source（表单、来源管理、改名、可用性检测）、features/settings、features/channel（列表头、空状态、底部导航）与 features/common（确认框、风险说明）。domain/channelLabels 负责分组拆分翻译与频道名标记。数据库 schema v3（检测结果、分组规范化和国别／语言元数据迁移）。使用 React 状态，不引入额外全局状态框架。底层状态只存 SQLite，UI 的结果快照由 revision 触发重查。
+Expo Router 仅提供薄入口，src/App.tsx 持有状态与流程（导入、刷新、播放、许可、检测），界面拆在 features/source（表单、来源管理、改名、可用性检测）、features/settings、features/channel（列表头、空状态、底部导航）与 features/common（确认框、风险说明）。domain/channelLabels 负责分组拆分翻译与频道名标记。数据库 schema v3（检测结果、分组规范化和国家/地区／语言元数据迁移）。使用 React 状态，不引入额外全局状态框架。底层状态只存 SQLite，UI 的结果快照由 revision 触发重查。
 
 - domain/m3u：异步解析、资源上限、重复/坏行统计；不自动探测频道。
 - domain/url：HTTP(S) 输入检查，只拒绝显式危险目标（私网/本机地址、Fetch bad port 与常见局域网服务端口；81/82/85/98 等流媒体端口放行）；不是 DNS/重定向/原生请求防火墙。

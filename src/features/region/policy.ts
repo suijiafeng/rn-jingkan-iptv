@@ -29,7 +29,7 @@ export const DEFAULT_COUNTRY_PREFERENCE: CountryPreference = {
 export const NO_REGION: RegionResult = {
   countryCode: null,
   source: "none",
-  message: "地区信息不足，显示全部。可手动选择国别，或使用自动识别。",
+  message: "地区信息不足，显示全部。",
 };
 
 // Single-country zones from IANA zone1970.tab (2026-10-18), with backward aliases

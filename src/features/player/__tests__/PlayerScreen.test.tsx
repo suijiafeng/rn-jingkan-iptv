@@ -291,7 +291,7 @@ test("sheet groups split multiple categories and selection uses the visible queu
     within(ui.getByTestId("player-facet-filters"))
       .getAllByRole("button")
       .map((item) => item.props.accessibilityLabel),
-  ).toEqual(["国别：全部", "语言：全部", "内容：全部"]);
+  ).toEqual(["国家/地区：全部", "语言：全部", "内容：全部"]);
   expect(
     ui.getByTestId("player-facet-filters-content").props.accessibilityLabel,
   ).toBe("内容：全部");
@@ -442,7 +442,7 @@ test("locating a channel bypasses country locally without changing the saved cho
   ).toBeTruthy();
   expect(
     ui.getByTestId("player-facet-filters-country").props.accessibilityLabel,
-  ).toBe("国别：全部");
+  ).toBe("国家/地区：全部");
   expect(onCountryChange).not.toHaveBeenCalled();
   await ui.unmount();
 });

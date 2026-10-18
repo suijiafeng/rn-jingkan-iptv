@@ -23,6 +23,8 @@ export type ListTab = Exclude<Tab, "settings">;
 
 export interface HeaderProps {
   tab: ListTab;
+  /** Background availability check after a category switch. */
+  autoCheck?: { done: number; total: number } | null;
   sources: Source[];
   channelCount: number;
   search: string;
@@ -33,8 +35,6 @@ export interface HeaderProps {
   onClearSearch: () => void;
   onSourceChange: (sourceId: string) => void;
   onFacetChange: (selection: ChannelFacetSelection, kind?: FacetKind) => void;
-  onAutoCountry?: () => void;
-  autoCountryBusy?: boolean;
   countryHint?: string;
   onClearRecent: () => void;
   recentBusy: boolean;
@@ -211,11 +211,18 @@ export function ChannelFilterBar(props: HeaderProps) {
           options={props.facets}
           selected={props.facetSelection}
           onChange={props.onFacetChange}
-          onAutoCountry={props.onAutoCountry}
-          autoCountryBusy={props.autoCountryBusy}
           countryHint={props.countryHint}
+          contentAsTabs
           testID="channel-facet-filters"
         />
+      )}
+      {tab === "all" && props.autoCheck && (
+        <View style={s.checkRow} accessibilityLiveRegion="polite">
+          <ActivityIndicator size="small" color={colors.muted} />
+          <Text style={styles.muted}>
+            检测可用性 {props.autoCheck.done}/{props.autoCheck.total}
+          </Text>
+        </View>
       )}
       {tab === "all" && !!props.sourceId && (
         <View style={s.scopeRow}>
@@ -406,6 +413,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   clearText: { color: colors.accent, fontSize: 12, lineHeight: 18 },
+  checkRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   scopeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   reset: {
     minHeight: 48,

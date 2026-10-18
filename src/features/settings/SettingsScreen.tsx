@@ -13,7 +13,6 @@ interface Props {
   artworkRevokePending: boolean;
   onRetryArtworkRevoke: () => void;
   onArtworkChange: (value: boolean) => void;
-  regionMessage: string;
   regionConsented: boolean;
   regionBusy: boolean;
   onRevokeRegion: () => void;
@@ -91,21 +90,16 @@ export function SettingsScreen(props: Props) {
           />
         )}
       </Card>
-      <Card>
-        <Text style={styles.heading}>国别识别</Text>
-        <Text style={styles.body}>{props.regionMessage}</Text>
-        <Text style={styles.muted}>
-          在频道页“国别”菜单中识别或手动选择。IP
-          查询与系统定位分别授权；只保存地区与选择方式，不保存 IP 或经纬度。
-        </Text>
-        {props.regionConsented && (
+      {props.regionConsented && (
+        <Card>
+          <Text style={styles.heading}>国家/地区识别授权</Text>
           <Button
             secondary
             label={props.regionBusy ? "停止并撤销识别授权" : "撤销识别授权"}
             onPress={props.onRevokeRegion}
           />
-        )}
-      </Card>
+        </Card>
+      )}
       <Card>
         <View style={styles.row}>
           <Text style={[styles.body, { flex: 1 }]}>移动网络提醒</Text>

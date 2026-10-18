@@ -177,11 +177,34 @@ beforeEach(() => {
   (openRepository as jest.Mock).mockResolvedValue(repo);
 });
 
-async function chooseFacet(kind: "国别" | "语言" | "内容", option: string) {
+async function chooseFacet(
+  kind: "国家/地区" | "语言" | "内容",
+  option: string,
+) {
+  if (kind === "内容") {
+    // Content is a row of one-tap tabs; unlabeled shows as 未分组.
+    const tabs = await screen.findByTestId(
+      "channel-facet-filters-content-tabs",
+    );
+    await fireEvent.press(
+      within(tabs).getByRole("button", {
+        name: option === "未标注" ? "未分组" : option,
+      }),
+    );
+    return;
+  }
   await fireEvent.press(
     await screen.findByRole("button", { name: new RegExp(`^${kind}：`) }),
   );
-  await fireEvent.press(await screen.findByRole("button", { name: option }));
+  const menu = await screen.findByTestId("channel-facet-filters-modal");
+  await fireEvent.press(within(menu).getByRole("button", { name: option }));
+}
+function selectedContent(): string | undefined {
+  const tabs = screen.getByTestId("channel-facet-filters-content-tabs");
+  return within(tabs)
+    .getAllByRole("button")
+    .find((tab) => tab.props.accessibilityState?.selected)?.props
+    .accessibilityLabel;
 }
 test("startup failure can retry opening local data without restarting", async () => {
   (openRepository as jest.Mock).mockRejectedValueOnce(new Error("unavailable"));
@@ -639,9 +662,7 @@ test("availability check shows progress, can be stopped, and saves finished resu
     ]),
   );
   await waitFor(() =>
-    expect(
-      screen.getByText(/检测已停止。可访问 1 个，不可达 0 个/),
-    ).toBeTruthy(),
+    expect(screen.getByText(/已停止：可访问 1 个，不可达 0 个/)).toBeTruthy(),
   );
 });
 
@@ -1075,7 +1096,7 @@ test("navigation separates types from history and restores channel filters witho
     expect(screen.getByLabelText("体育台，播放")).toBeTruthy(),
   );
   expect(screen.queryByLabelText("最新新闻台，播放")).toBeNull();
-  expect(screen.getByRole("button", { name: "内容：体育" })).toBeTruthy();
+  expect(selectedContent()).toBe("体育");
 });
 
 test("the all-type filter clears only the category while keeping the selected source", async () => {
@@ -1101,7 +1122,7 @@ test("the all-type filter clears only the category while keeping the selected so
       groupName: undefined,
     }),
   );
-  expect(screen.getByRole("button", { name: "内容：全部" })).toBeTruthy();
+  expect(selectedContent()).toBe("全部");
 });
 
 test("history deletion failures preserve the row and allow retry without changing favorites or channels", async () => {
@@ -1400,7 +1421,7 @@ test("country/language/content menus form an intersection without shrinking avai
   setupFacetCatalog();
   await render(<App />);
   await screen.findByLabelText("中文新闻，播放");
-  await chooseFacet("国别", "中国");
+  await chooseFacet("国家/地区", "中国");
   await chooseFacet("语言", "英语");
   expect(await screen.findByLabelText("英语体育，播放")).toBeTruthy();
   expect(screen.queryByLabelText("美国英语，播放")).toBeNull();
@@ -1426,15 +1447,15 @@ test("country/language/content menus form an intersection without shrinking avai
       groupName: "体育",
     }),
   );
-  expect(screen.getByRole("button", { name: "国别：中国" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "内容：体育" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "国家/地区：中国" })).toBeTruthy();
+  expect(selectedContent()).toBe("体育");
 });
 
 test("unlabelled facet values reach SQLite queries as empty strings instead of all", async () => {
   setupFacetCatalog();
   await render(<App />);
   await screen.findByLabelText("未知频道，播放");
-  await chooseFacet("国别", "未标注");
+  await chooseFacet("国家/地区", "未标注");
   await chooseFacet("语言", "未标注");
   await chooseFacet("内容", "未标注");
   expect(await screen.findByLabelText("未知频道，播放")).toBeTruthy();
@@ -1462,7 +1483,7 @@ test("manual country all persists over a matching device recommendation and app 
   const ui = await render(<App />);
   await screen.findByLabelText("中文新闻，播放");
   expect(screen.queryByLabelText("美国中文，播放")).toBeNull();
-  await chooseFacet("国别", "全部");
+  await chooseFacet("国家/地区", "全部");
   expect(await screen.findByLabelText("美国中文，播放")).toBeTruthy();
   expect(preference).toEqual({
     mode: "manual",
@@ -1474,7 +1495,7 @@ test("manual country all persists over a matching device recommendation and app 
   await ui.unmount();
   await render(<App />);
   expect(await screen.findByLabelText("美国中文，播放")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "国别：全部" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "国家/地区：全部" })).toBeTruthy();
 });
 
 test("channel artwork stays absent by default and a failed consent save does not mount images", async () => {

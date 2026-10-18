@@ -21,7 +21,6 @@ import { openRepository, Repository } from "./data/repository";
 import { Channel, Source, SourceKind } from "./domain/types";
 import {
   buildFacetOptions,
-  countryLabel,
   EMPTY_FACET_OPTIONS,
   type ChannelFacetOptions,
 } from "./domain/channelFacets";
@@ -53,6 +52,7 @@ import {
   SourceManagerModal,
 } from "./features/source/SourceManagerModal";
 import { checkChannels } from "./features/source/availability";
+import { useAutoAvailabilityCheck } from "./features/channel/useAutoAvailabilityCheck";
 import { lookupIptvOrgLanguages } from "./features/source/iptvOrgLanguages";
 import { isIptvOrgId } from "./domain/channelFacets";
 import { SettingsScreen } from "./features/settings/SettingsScreen";
@@ -216,6 +216,7 @@ export default function App() {
     [repo, tab, sourceId, group, language, countryKey, query, revision],
   );
   const listLoading = loadedRequest !== loadRequest;
+
   // Native-driven: moves the header overlay without a JS listener.
   const onListScroll = useMemo(
     () =>
@@ -231,22 +232,42 @@ export default function App() {
     loadedRequest.language === language &&
     loadedRequest.countryKey === countryKey &&
     loadedRequest.query === query;
+  // Background check of the shown channels after a category switch.
+  const { progress: autoCheck, cancel: cancelAutoCheck } =
+    useAutoAvailabilityCheck({
+      filterKey:
+        tab === "all" &&
+        (country !== null || language !== null || group !== null || !!sourceId)
+          ? JSON.stringify([sourceId, country, language, group, query])
+          : null,
+      listComplete: !listLoading && channelTotal === null,
+      channels,
+      paused: !!playing,
+      remoteAllowed: remoteAllowed && !revokePending,
+      mobileWarning,
+      mobileAccepted,
+      save: async (results) => {
+        await repo?.saveCheckResults(results);
+      },
+      onFinished: changed,
+    });
   const cancelTask = useCallback(() => {
     generation.current++;
     controller.current?.abort();
     controller.current = null;
     setBusy(false);
-  }, []);
+  }, [setBusy]);
   const stopCheck = useCallback(() => {
     checkController.current?.abort();
     checkController.current = null;
     setCheck(null);
-  }, []);
+  }, [setCheck]);
   const stopLanguageLookup = useCallback(() => {
     languageController.current?.abort();
     languageController.current = null;
     setLanguageLookup(null);
-  }, []);
+  }, [setLanguageLookup]);
+
   useEffect(() => {
     mounted.current = true;
     let active = true;
@@ -391,9 +412,10 @@ export default function App() {
       if (controller.current) cancelTask();
       stopCheck();
       stopLanguageLookup();
+      cancelAutoCheck();
     });
     return () => sub.remove();
-  }, [cancelTask, stopCheck, stopLanguageLookup]);
+  }, [cancelTask, stopCheck, stopLanguageLookup, cancelAutoCheck]);
   const guardRemote = async (signal?: AbortSignal) => {
     if (signal?.aborted) return false;
     if (remoteRef.current) return true;
@@ -661,7 +683,7 @@ export default function App() {
       );
       if (!current()) return;
       if (!targets.length) {
-        say("没有需要补全语言的 iptv-org 频道。");
+        say("没有需要补全的频道");
         return;
       }
       const found = await lookupIptvOrgLanguages(
@@ -677,12 +699,7 @@ export default function App() {
             : [];
         }),
       );
-      say(
-        `已为 ${changedCount} 个频道补全语言` +
-          (targets.length > changedCount
-            ? `，${targets.length - changedCount} 个在数据库中没有语言记录。`
-            : "。"),
-      );
+      say(`已补全 ${changedCount} 个频道的语言`);
       invalidateCatalog();
       changed();
     } catch (e) {
@@ -965,6 +982,7 @@ export default function App() {
     cancelTask();
     stopCheck();
     stopLanguageLookup();
+    cancelAutoCheck();
     region.cancel();
     try {
       await repo.setSetting("remoteAllowed", false);
@@ -1033,6 +1051,7 @@ export default function App() {
     cancelTask();
     stopCheck();
     stopLanguageLookup();
+    cancelAutoCheck();
     region.cancel();
     try {
       await repo.clearAll();
@@ -1127,10 +1146,9 @@ export default function App() {
       region.preference.mode === "manual"
         ? "手动选择"
         : region.result.countryCode && country === null
-          ? "当前来源暂无识别地区的国别标注，显示全部"
+          ? "当前来源暂无识别地区的国家/地区标注，显示全部"
           : region.result.message,
-    autoCountryBusy: region.busy,
-    onAutoCountry: () => void region.detectWithConsent(),
+    autoCheck,
     recentBusy,
     recentEditing,
     recentCount: recent.length,
@@ -1212,11 +1230,6 @@ export default function App() {
             artworkRevokePending={artworkRevokePending}
             onRetryArtworkRevoke={() => void changeArtwork(false)}
             onArtworkChange={(value) => void changeArtwork(value)}
-            regionMessage={
-              region.preference.mode === "manual"
-                ? `已手动选择${region.preference.countryCode === null ? "全部国别" : region.preference.countryCode === "" ? "未标注" : countryLabel(region.preference.countryCode)}，自动识别不会覆盖。`
-                : region.result.message
-            }
             regionConsented={
               region.preference.ipAllowed ||
               region.preference.locationAllowed ||
@@ -1456,9 +1469,7 @@ export default function App() {
                 ? "手动选择"
                 : region.result.message
             }
-            autoCountryBusy={region.busy}
             onCountryChange={(value) => void region.selectManualCountry(value)}
-            onAutoCountry={() => void region.detectWithConsent()}
             onSelect={(channel, queue) => {
               if (queue) setPlayQueue(queue);
               if (channel.id !== playing.id) setPreviousChannel(playing);

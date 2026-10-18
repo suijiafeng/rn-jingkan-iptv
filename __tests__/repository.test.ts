@@ -1049,3 +1049,35 @@ it("v4 migration backfills countries from stored iptv-org tvg-ids only", async (
   expect(byId).toEqual({ a: ["CN"], b: [] });
   legacy.native.close();
 });
+
+it("lists unreachable channels last while unchecked and reachable keep their order", async () => {
+  const text = content([
+    { name: "一", url: "https://a.example.com/1" },
+    { name: "二", url: "https://a.example.com/2" },
+    { name: "三", url: "https://a.example.com/3" },
+    { name: "四", url: "https://a.example.com/4" },
+  ]);
+  await repo.importSource({
+    name: "排序",
+    kind: "file",
+    location: "o.m3u",
+    content: text,
+    preview: await parseM3U(text),
+  });
+  const [one, two, three] = await repo.listChannels();
+  await repo.saveCheckResults([
+    { channelId: one.id, streamUrl: one.streamUrl, ok: false },
+    { channelId: three.id, streamUrl: three.streamUrl, ok: true },
+  ]);
+  expect((await repo.listChannels()).map((c) => c.name)).toEqual([
+    "二",
+    "三",
+    "四",
+    "一",
+  ]);
+  await repo.toggleFavorite(one.id);
+  await repo.toggleFavorite(two.id);
+  expect(
+    (await repo.listChannels({ mode: "favorites" })).map((c) => c.name),
+  ).toEqual(["二", "一"]);
+});

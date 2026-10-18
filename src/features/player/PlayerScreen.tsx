@@ -96,9 +96,7 @@ export interface PlayerScreenProps {
   countryCode?: string | null;
   countrySelectionKey?: string;
   countryHint?: string;
-  autoCountryBusy?: boolean;
   onCountryChange?: (value: string | null) => void;
-  onAutoCountry?: () => void;
   error?: string;
   onDismissError?: () => void;
 }
@@ -447,13 +445,11 @@ export function PlayerScreen(props: PlayerScreenProps) {
                     props.onCountryChange?.(selection.country);
                   }
                 }}
-                onAutoCountry={props.onAutoCountry}
                 countryHint={
                   ignoreCountry
-                    ? "定位当前频道，暂时显示全部国别"
+                    ? "定位当前频道，暂时显示全部国家/地区"
                     : props.countryHint
                 }
-                autoCountryBusy={props.autoCountryBusy}
                 testID="player-facet-filters"
               />
             )}

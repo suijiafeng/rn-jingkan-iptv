@@ -15,20 +15,23 @@ import {
   type ChannelFacetSelection,
   type FacetKind,
 } from "../domain/channelFacets";
-import { colors, styles } from "../theme";
+import { colors } from "../theme";
+import { UNGROUPED } from "../domain/channelLabels";
+import { GroupTabs } from "./GroupTabs";
 
 export interface FacetFiltersProps {
   options: ChannelFacetOptions;
   selected: ChannelFacetSelection;
   onChange: (selection: ChannelFacetSelection, kind?: FacetKind) => void;
-  onAutoCountry?: () => void;
-  autoCountryBusy?: boolean;
+  /** Kept for callers; status text is no longer shown inside the menu. */
   countryHint?: string;
+  /** Content categories as one-tap tabs instead of a third menu. */
+  contentAsTabs?: boolean;
   testID?: string;
 }
 
 const KINDS = ["country", "language", "content"] as const;
-const LABELS = { country: "国别", language: "语言", content: "内容" };
+const LABELS = { country: "国家/地区", language: "语言", content: "内容" };
 const OPTION_KEYS = {
   country: "countries",
   language: "languages",
@@ -40,9 +43,7 @@ export function FacetFilters({
   options,
   selected,
   onChange,
-  onAutoCountry,
-  autoCountryBusy = false,
-  countryHint,
+  contentAsTabs = false,
   testID = "facet-filters",
 }: FacetFiltersProps) {
   const [open, setOpen] = useState<FacetKind | null>(null);
@@ -90,157 +91,136 @@ export function FacetFilters({
     Math.min(desiredTop, height - 24 - Math.min(240, panelHeight)),
   );
   const maxHeight = Math.max(1, Math.min(panelHeight, height - top - 24));
+  const menuKinds = contentAsTabs
+    ? KINDS.filter((k) => k !== "content")
+    : KINDS;
+  // "" (unlabeled) is shown as 未分组 among the tabs.
+  const contentTabs = options.contents.map((value) => value || UNGROUPED);
+  const selectedTab = selected.content === "" ? UNGROUPED : selected.content;
   return (
-    <View ref={bar} testID={testID} style={s.bar} collapsable={false}>
-      {KINDS.map((kind) => (
-        <Pressable
-          key={kind}
-          testID={`${testID}-${kind}`}
-          accessibilityRole="button"
-          accessibilityLabel={`${LABELS[kind]}：${facetLabel(kind, selected[kind])}`}
-          accessibilityState={{ expanded: open === kind }}
-          onPress={() => toggle(kind)}
-          style={({ pressed }) => [
-            s.trigger,
-            selected[kind] !== null && s.selectedTrigger,
-            pressed && { opacity: 0.7 },
-          ]}
-        >
-          <View style={s.triggerText}>
-            <Text style={s.dimension}>{LABELS[kind]}</Text>
-            <Text numberOfLines={1} style={s.value}>
-              {facetLabel(kind, selected[kind])}
-            </Text>
-          </View>
-          <Text style={s.arrow}>{open === kind ? "▴" : "▾"}</Text>
-        </Pressable>
-      ))}
-      <Modal
-        testID={`${testID}-native-modal`}
-        visible={open !== null}
-        transparent
-        statusBarTranslucent
-        animationType="fade"
-        onRequestClose={dismiss}
-      >
-        {open && (
-          <View
-            accessibilityViewIsModal
-            style={s.overlay}
-            testID={`${testID}-modal`}
+    <View style={s.column}>
+      <View ref={bar} testID={testID} style={s.bar} collapsable={false}>
+        {menuKinds.map((kind) => (
+          <Pressable
+            key={kind}
+            testID={`${testID}-${kind}`}
+            accessibilityRole="button"
+            accessibilityLabel={`${LABELS[kind]}：${facetLabel(kind, selected[kind])}`}
+            accessibilityState={{ expanded: open === kind }}
+            onPress={() => toggle(kind)}
+            style={({ pressed }) => [
+              s.trigger,
+              selected[kind] !== null && s.selectedTrigger,
+              pressed && { opacity: 0.7 },
+            ]}
           >
-            <Pressable
-              style={StyleSheet.absoluteFill}
-              accessibilityRole="button"
-              accessibilityLabel="关闭筛选菜单"
-              onPress={dismiss}
-            />
+            <Text numberOfLines={1} style={s.triggerText}>
+              <Text style={s.dimension}>{LABELS[kind]} </Text>
+              <Text style={s.value}>{facetLabel(kind, selected[kind])}</Text>
+            </Text>
+            <Text style={s.arrow}>{open === kind ? "▴" : "▾"}</Text>
+          </Pressable>
+        ))}
+        <Modal
+          testID={`${testID}-native-modal`}
+          visible={open !== null}
+          transparent
+          statusBarTranslucent
+          animationType="fade"
+          onRequestClose={dismiss}
+        >
+          {open && (
             <View
-              style={[
-                s.panel,
-                {
-                  width: panelWidth,
-                  maxHeight,
-                  left: Math.max(
-                    16,
-                    Math.min(anchor.x, width - panelWidth - 16),
-                  ),
-                  top,
-                },
-              ]}
+              accessibilityViewIsModal
+              style={s.overlay}
+              testID={`${testID}-modal`}
             >
-              <View style={s.menuHeading}>
-                <Text accessibilityRole="header" style={styles.heading}>
-                  选择{LABELS[open]}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`收起${LABELS[open]}筛选`}
-                  onPress={dismiss}
-                  style={s.close}
-                >
-                  <Text style={s.closeText}>收起</Text>
-                </Pressable>
-              </View>
-              <ScrollView
-                testID={`${testID}-options`}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator
-                contentContainerStyle={s.menuContent}
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                accessibilityRole="button"
+                accessibilityLabel="关闭筛选菜单"
+                onPress={dismiss}
+              />
+              <View
+                style={[
+                  s.panel,
+                  {
+                    width: panelWidth,
+                    maxHeight,
+                    left: Math.max(
+                      16,
+                      Math.min(anchor.x, width - panelWidth - 16),
+                    ),
+                    top,
+                  },
+                ]}
               >
-                {open === "country" && onAutoCountry && (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="自动识别国别"
-                    accessibilityState={{ disabled: autoCountryBusy }}
-                    disabled={autoCountryBusy}
-                    style={s.autoOption}
-                    onPress={() => {
-                      dismiss();
-                      onAutoCountry();
-                    }}
-                  >
-                    <Text style={s.closeText}>
-                      {autoCountryBusy ? "正在识别…" : "自动识别"}
-                    </Text>
-                    <Text style={styles.muted}>可随时手动选择</Text>
-                  </Pressable>
-                )}
-                {open === "country" && !!countryHint && (
-                  <Text style={s.hint} accessibilityLiveRegion="polite">
-                    {countryHint}
-                  </Text>
-                )}
-                {available.every((value) => !value) && (
-                  <Text style={s.hint}>
-                    {available.length
-                      ? `节目单未提供${LABELS[open]}标注，可选择全部或未标注。` +
-                        (open === "language"
-                          ? "iptv-org 列表可在 设置 › 管理节目来源 中补全语言。"
-                          : "")
-                      : `当前来源暂无${LABELS[open]}选项。`}
-                  </Text>
-                )}
-                {[null, ...available].map((value, index) => {
-                  const label = facetLabel(open, value);
-                  const isSelected = selected[open] === value;
-                  return (
-                    <Pressable
-                      key={value === null ? "all" : `value:${value}`}
-                      testID={`${testID}-option-${index}`}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${label}${value === "全部" ? "（内容分类）" : ""}`}
-                      accessibilityState={{ selected: isSelected }}
-                      onPress={() => choose(value)}
-                      style={({ pressed }) => [
-                        s.option,
-                        isSelected && s.chosenOption,
-                        pressed && { opacity: 0.7 },
-                      ]}
-                    >
-                      <Text style={[s.optionText, isSelected && s.chosenText]}>
-                        {label}
-                        {value === "全部" ? "（内容分类）" : ""}
-                      </Text>
-                      {isSelected && <Text style={s.chosenText}>✓</Text>}
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
+                <ScrollView
+                  testID={`${testID}-options`}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator
+                  contentContainerStyle={s.menuContent}
+                >
+                  {[null, ...available].map((value, index) => {
+                    const label = facetLabel(open, value);
+                    const isSelected = selected[open] === value;
+                    return (
+                      <Pressable
+                        key={value === null ? "all" : `value:${value}`}
+                        testID={`${testID}-option-${index}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${label}${value === "全部" ? "（内容分类）" : ""}`}
+                        accessibilityState={{ selected: isSelected }}
+                        onPress={() => choose(value)}
+                        style={({ pressed }) => [
+                          s.option,
+                          isSelected && s.chosenOption,
+                          pressed && { opacity: 0.7 },
+                        ]}
+                      >
+                        <Text
+                          style={[s.optionText, isSelected && s.chosenText]}
+                        >
+                          {label}
+                          {value === "全部" ? "（内容分类）" : ""}
+                        </Text>
+                        {isSelected && <Text style={s.chosenText}>✓</Text>}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
             </View>
-          </View>
-        )}
-      </Modal>
+          )}
+        </Modal>
+      </View>
+      {contentAsTabs && (
+        <GroupTabs
+          groups={contentTabs}
+          selected={selectedTab}
+          onChange={(name) =>
+            onChange(
+              {
+                ...selected,
+                content: name === null ? null : name === UNGROUPED ? "" : name,
+              },
+              "content",
+            )
+          }
+          testID={`${testID}-content-tabs`}
+        />
+      )}
     </View>
   );
 }
 
 const s = StyleSheet.create({
+  column: { gap: 8 },
   bar: { flexDirection: "row", gap: 8 },
   trigger: {
     flex: 1,
     minWidth: 0,
-    minHeight: 56,
+    minHeight: 48,
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -286,7 +266,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   closeText: { color: colors.accent, fontSize: 14, lineHeight: 21 },
-  menuContent: { padding: 8, paddingTop: 0, gap: 4 },
+  menuContent: { padding: 8, gap: 4 },
   hint: { color: colors.muted, fontSize: 12, lineHeight: 18, padding: 8 },
   autoOption: { minHeight: 52, padding: 10, gap: 2 },
   option: {

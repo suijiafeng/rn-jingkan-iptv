@@ -30,7 +30,7 @@ export const ChannelRow = memo(function ChannelRow({
     [channel.name],
   );
   const unreachable = channel.active && channel.checkStatus === "unreachable";
-  const labels = [...tags, ...(unreachable ? ["上次检测不可达"] : [])];
+  const labels = [...tags, ...(unreachable ? ["不可用"] : [])];
   const editingRecent = !!onRemoveRecent;
   const playbackDisabled = !channel.active || editingRecent;
   return (
@@ -63,7 +63,7 @@ export const ChannelRow = memo(function ChannelRow({
               {labels.map((label) => (
                 <Text
                   key={label}
-                  style={[s.tag, label === "上次检测不可达" && s.badTag]}
+                  style={[s.tag, label === "不可用" && s.badTag]}
                 >
                   {label}
                 </Text>

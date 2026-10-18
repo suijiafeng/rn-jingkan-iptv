@@ -353,12 +353,14 @@ export class Repository {
 
   async listChannels(query: ChannelQuery = {}): Promise<Channel[]> {
     const { where, params } = channelFilter(query);
+    // Channels the last check found unreachable sink to the end (recent keeps
+    // pure play order); everything else keeps the playlist/favorite order.
     const order =
       query.mode === "recent"
         ? "r.lastPlayedAt DESC, c.id"
         : query.mode === "favorites"
-          ? "f.createdAt DESC, c.id"
-          : "s.createdAt, s.id, c.sortIndex, c.id";
+          ? "COALESCE(c.checkStatus = 'unreachable', 0), f.createdAt DESC, c.id"
+          : "COALESCE(c.checkStatus = 'unreachable', 0), s.createdAt, s.id, c.sortIndex, c.id";
     let page = "";
     if (query.limit !== undefined || query.offset) {
       page = " LIMIT ? OFFSET ?";

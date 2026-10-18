@@ -92,9 +92,8 @@ export function SourceManagerModal(props: ManagerProps) {
                 )}
                 {!running && summary && (
                   <Text style={styles.muted}>
-                    {summary.stopped ? "检测已停止。" : "检测完成。"}
-                    可访问 {summary.ok} 个，不可达 {summary.unreachable}{" "}
-                    个。可访问只代表服务器有响应，不保证一定能播放。
+                    {summary.stopped ? "已停止：" : ""}可访问 {summary.ok}{" "}
+                    个，不可达 {summary.unreachable} 个
                   </Text>
                 )}
                 <Button
@@ -121,7 +120,7 @@ export function SourceManagerModal(props: ManagerProps) {
                 )}
                 {props.languageLookup === s.id && (
                   <Text style={styles.body} accessibilityLiveRegion="polite">
-                    正在下载 iptv-org 数据库（约 8 MB）并补全语言…
+                    正在补全语言…
                   </Text>
                 )}
                 {props.languageLookup !== s.id &&
@@ -139,7 +138,7 @@ export function SourceManagerModal(props: ManagerProps) {
                     />
                   ) : (
                     <Button
-                      label="补全语言（iptv-org 数据库）"
+                      label="补全语言"
                       secondary
                       disabled={
                         !!props.languageLookup || !!check || !s.channelCount
@@ -165,14 +164,6 @@ export function SourceManagerModal(props: ManagerProps) {
               </Card>
             );
           })}
-          <Notice
-            title="关于可用性检测"
-            body="只在你点击时进行：每个频道发一次很小的请求（最多 1 KiB），同时最多 4 个。结果只说明服务器当时是否有响应，地区限制、节目暂停或格式不支持仍可能无法播放。"
-          />
-          <Notice
-            title="关于补全语言"
-            body="iptv-org 的节目单不再写语言。点击后会从 iptv-org.github.io 下载一次它的公开数据库（约 8 MB），只为 tvg-id 是 iptv-org 格式、且节目单没有写语言的频道补上语言，不上传你的列表。国家已在导入时从 tvg-id 读取，无需联网。"
-          />
           <Button secondary label="返回" onPress={props.onClose} />
         </ScrollView>
       </SafeAreaView>
