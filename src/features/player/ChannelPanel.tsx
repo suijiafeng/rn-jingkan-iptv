@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Keyboard,
   Pressable,
@@ -15,6 +14,7 @@ import { colors } from "../../theme";
 import type { Channel } from "../../domain/types";
 import { sameChannel, type ChannelSheetProps } from "./playerShared";
 import { CloseIcon, LocateIcon } from "./playerIcons";
+import { LoadingTitle } from "./overlayWidgets";
 
 /** Where the list was, so reopening it lands on the same rows. */
 export interface SavedListPosition {
@@ -216,7 +216,9 @@ export function ChannelPanel(props: ChannelPanelProps) {
         removeClippedSubviews={false}
         ListEmptyComponent={
           sheet.loading ? (
-            <ActivityIndicator style={s.emptyLoading} color={colors.accent} />
+            <View style={s.emptyLoading} accessibilityLiveRegion="polite">
+              <LoadingTitle title="正在载入频道" style={s.emptyLoadingText} />
+            </View>
           ) : (
             <Text style={s.empty}>
               {filtered
@@ -267,4 +269,5 @@ const s = StyleSheet.create({
   listContent: { gap: 4 },
   empty: { color: colors.muted, paddingVertical: 24, textAlign: "center" },
   emptyLoading: { paddingVertical: 24 },
+  emptyLoadingText: { color: colors.muted },
 });
