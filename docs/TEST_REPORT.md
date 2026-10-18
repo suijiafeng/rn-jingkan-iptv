@@ -1,5 +1,11 @@
 # 验证记录
 
+## 2026-10-19 · 分支合并到 main 后的校验
+
+- 合并顺序：claude/stoic-golick-5400c6（自动换源，快进）→ claude/dreamy-mayer-d87e9a（统一字号与设置页，只有验证记录冲突，两段都保留）→ perf/large-list 仅剩的性能复测记录（cherry-pick 937d42a；其代码此前已经由 3fc21f5 合入，分支自己的合并提交采用了另一套冲突处理，不再重复合并）→ fix/deep-scroll-restore（深处滚动恢复，移植到现在的分页读取与原生驱动滚动事件：恢复通过 Animated.event 的 listener 观察位置，保存仍等拖动或惯性停止，被截短的位置不保存）。
+- 本机：typecheck、lint、Jest 25 个套件 359 项、build:bundle 通过。
+- 未验证：Android 原生构建与真机；深处滚动恢复与分页首屏的组合只有自动化覆盖（回归测试改为用 scrollEndDrag 触发保存）。
+
 ## 2026-10-19 · 播放失败自动切换同频道备用源
 
 - 新增 sourceFailover（纯函数：失败分类、来源排序、下一个未试来源、一轮记录）与 useSourceFailover（挂在 PlayerScreen，跨会话重建保留本轮）；控制器仍不接触地址，只在 error 快照里多一个类别字段（timeout/network/media/unknown），原生错误消息不出闭包、不进状态。
