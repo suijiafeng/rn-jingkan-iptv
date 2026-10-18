@@ -90,6 +90,26 @@ describe("explicit channel facets", () => {
     });
   });
 
+  it("narrows content to the selected country and language, keeping the selected one", () => {
+    const rows = [
+      { countries: ["CN"], languages: ["zh"], groupName: "新闻;少儿" },
+      { countries: ["MO"], languages: ["zh"], groupName: "综合" },
+      { countries: ["MO"], languages: ["pt"], groupName: "体育" },
+    ];
+    const options = buildFacetOptions(rows, {
+      country: "MO",
+      language: "zh",
+      content: "新闻",
+    });
+    expect(options.countries).toEqual(["CN", "MO"]);
+    expect(options.languages).toEqual(["zh", "pt"]);
+    expect(options.contents).toEqual(["新闻", "综合"]);
+    expect(
+      buildFacetOptions(rows, { country: "MO", language: null, content: null })
+        .contents,
+    ).toEqual(["体育", "综合"]);
+  });
+
   it("matches any value within a dimension and combines dimensions with AND", () => {
     const channel = {
       countries: ["CN", "US"],

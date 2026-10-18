@@ -21,6 +21,7 @@ import { openRepository, Repository } from "./data/repository";
 import { Channel, Source, SourceKind } from "./domain/types";
 import {
   buildFacetOptions,
+  contentOptions,
   EMPTY_FACET_OPTIONS,
   type ChannelFacetOptions,
 } from "./domain/channelFacets";
@@ -318,16 +319,27 @@ export default function App() {
     const settled = new Promise<Channel[]>((resolve) => (settle = resolve));
     fullList.current = settled;
     const load = async () => {
-      const nextFacets =
-        tab === "all"
-          ? await repo.listFacets(sourceId || undefined)
-          : EMPTY_FACET_OPTIONS;
+      const facetRows =
+        tab === "all" ? await repo.listFacetRows(sourceId || undefined) : [];
       if (!current()) return;
+      const baseFacets =
+        tab === "all" ? buildFacetOptions(facetRows) : EMPTY_FACET_OPTIONS;
       const selectedCountry = effectiveCountry(
         region.preference,
         region.result,
-        nextFacets.countries,
+        baseFacets.countries,
       );
+      const nextFacets =
+        tab === "all"
+          ? {
+              ...baseFacets,
+              contents: contentOptions(facetRows, {
+                country: selectedCountry,
+                language,
+                content: group,
+              }),
+            }
+          : EMPTY_FACET_OPTIONS;
       const filter = {
         mode: tab === "settings" ? ("all" as const) : tab,
         sourceId: tab === "all" ? sourceId || undefined : undefined,

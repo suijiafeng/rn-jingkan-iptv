@@ -234,11 +234,16 @@ export function PlayerScreen(props: PlayerScreenProps) {
           : allActiveChannels,
     [scope, props.recentChannels, allActiveChannels],
   );
-  const facets = useMemo(
-    () => buildFacetOptions(allActiveChannels),
-    [allActiveChannels],
-  );
   const country = ignoreCountry ? null : (props.countryCode ?? null);
+  const facets = useMemo(
+    () =>
+      buildFacetOptions(allActiveChannels, {
+        country,
+        language,
+        content: group,
+      }),
+    [allActiveChannels, country, language, group],
+  );
   const query = search.trim().toLocaleLowerCase();
   const shownChannels = useMemo(
     () =>

@@ -19,6 +19,7 @@ import {
   normalizeCountries,
   normalizeLanguages,
   type ChannelFacetOptions,
+  type FacetChannel,
 } from "../domain/channelFacets";
 
 export const SCHEMA_VERSION = 4;
@@ -412,6 +413,11 @@ export class Repository {
   }
 
   async listFacets(sourceId?: string): Promise<ChannelFacetOptions> {
+    return buildFacetOptions(await this.listFacetRows(sourceId));
+  }
+
+  /** Distinct facet combinations of active channels, for narrowing options. */
+  async listFacetRows(sourceId?: string): Promise<FacetChannel[]> {
     const rows = await this.db.getAllAsync<{
       countries: string;
       languages: string;
@@ -420,13 +426,11 @@ export class Repository {
       `SELECT DISTINCT countries, CASE WHEN languages <> '' THEN languages ELSE lookupLanguages END AS languages, groupName FROM channels WHERE active = 1${sourceId ? " AND sourceId = ?" : ""}`,
       sourceId ? [sourceId] : [],
     );
-    return buildFacetOptions(
-      rows.map((row) => ({
-        ...row,
-        countries: normalizeCountries(row.countries),
-        languages: normalizeLanguages(row.languages),
-      })),
-    );
+    return rows.map((row) => ({
+      ...row,
+      countries: normalizeCountries(row.countries),
+      languages: normalizeLanguages(row.languages),
+    }));
   }
 
   async importSource(input: ImportSourceInput): Promise<Source> {

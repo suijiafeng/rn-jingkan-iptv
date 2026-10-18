@@ -20,9 +20,9 @@ import * as DocumentPicker from "expo-document-picker";
 import { downloadPlaylist, readPickedFile } from "../src/data/importIO";
 import { checkChannels } from "../src/features/source/availability";
 import {
-  buildFacetOptions,
   matchesChannelFacets,
   type ChannelFacetOptions,
+  type FacetChannel,
 } from "../src/domain/channelFacets";
 import type { Channel, ChannelQuery } from "../src/domain/types";
 import * as Localization from "expo-localization";
@@ -83,16 +83,20 @@ jest.mock("expo-network", () => ({
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: jest.requireActual("react-native").View,
 }));
+/** Facet rows that yield exactly these content tabs. */
+function rowsFor(options: ChannelFacetOptions): FacetChannel[] {
+  return options.contents.map((groupName) => ({
+    countries: options.countries,
+    languages: options.languages,
+    groupName,
+  }));
+}
 const repo = {
   getSetting: jest.fn(),
   listChannels: jest.fn(async () => []),
   countChannels: jest.fn(async () => 0),
   listSources: jest.fn(async () => []),
-  listFacets: jest.fn(async (): Promise<ChannelFacetOptions> => ({
-    countries: [],
-    languages: [],
-    contents: [],
-  })),
+  listFacetRows: jest.fn(async (): Promise<FacetChannel[]> => []),
   setSetting: jest.fn(async () => {}),
   importSource: jest.fn(async () => ({ id: "s" })),
   cancelRefresh: jest.fn(),
@@ -142,11 +146,7 @@ beforeEach(() => {
   repo.listChannels.mockImplementation(async () => []);
   repo.countChannels.mockImplementation(async () => 0);
   repo.listSources.mockImplementation(async () => []);
-  repo.listFacets.mockImplementation(async () => ({
-    countries: [],
-    languages: [],
-    contents: [],
-  }));
+  repo.listFacetRows.mockImplementation(async () => []);
   repo.clearAll.mockReset().mockResolvedValue(undefined);
   repo.setSetting.mockImplementation(async () => {});
   repo.toggleFavorite.mockReset();
@@ -437,11 +437,13 @@ test("tabs remember independent search, source and group filters", async () => {
     { ...checkSource, name: "来源甲" },
     { ...checkSource, id: "s2", name: "来源乙" },
   ]);
-  repo.listFacets.mockResolvedValue({
-    countries: [],
-    languages: [],
-    contents: ["新闻", "体育"],
-  });
+  repo.listFacetRows.mockResolvedValue(
+    rowsFor({
+      countries: [],
+      languages: [],
+      contents: ["新闻", "体育"],
+    }),
+  );
   await render(<App />);
   await waitFor(() =>
     expect(screen.getByLabelText("频道甲，播放")).toBeTruthy(),
@@ -918,11 +920,13 @@ test("a long list shows its first page at once and still queues every row", asyn
           }
         : fallback,
   );
-  repo.listFacets.mockResolvedValue({
-    countries: ["CN", "US"],
-    languages: ["zh"],
-    contents: ["新闻"],
-  });
+  repo.listFacetRows.mockResolvedValue(
+    rowsFor({
+      countries: ["CN", "US"],
+      languages: ["zh"],
+      contents: ["新闻"],
+    }),
+  );
   let finishRest!: () => void;
   const restReady = new Promise<void>((resolve) => (finishRest = resolve));
   (repo.listChannels as jest.Mock).mockImplementation(
@@ -1034,11 +1038,13 @@ function setupRecentHistory() {
     { ...checkSource, name: "自己的来源" },
     { ...checkSource, id: "s2", name: "其他来源" },
   ]);
-  repo.listFacets.mockResolvedValue({
-    countries: [],
-    languages: [],
-    contents: ["新闻", "体育"],
-  });
+  repo.listFacetRows.mockResolvedValue(
+    rowsFor({
+      countries: [],
+      languages: [],
+      contents: ["新闻", "体育"],
+    }),
+  );
   (repo.listChannels as jest.Mock).mockImplementation(async (query) => {
     const items =
       query?.mode === "recent"
@@ -1394,10 +1400,9 @@ function setupFacetCatalog() {
   repo.listSources.mockResolvedValue([
     { ...checkSource, name: "维度来源" },
   ] as never[]);
-  (repo.listFacets as jest.Mock).mockImplementation(async (sourceId?: string) =>
-    buildFacetOptions(
+  (repo.listFacetRows as jest.Mock).mockImplementation(
+    async (sourceId?: string) =>
       catalog.filter((channel) => !sourceId || channel.sourceId === sourceId),
-    ),
   );
   (repo.listChannels as jest.Mock).mockImplementation(
     async (query: ChannelQuery = {}) => {
@@ -1417,18 +1422,23 @@ function setupFacetCatalog() {
   return catalog;
 }
 
-test("country/language/content menus form an intersection without shrinking available options", async () => {
+function contentTabs(): string[] {
+  const tabs = screen.getByTestId("channel-facet-filters-content-tabs");
+  return within(tabs)
+    .getAllByRole("button")
+    .map((tab) => tab.props.accessibilityLabel);
+}
+test("country/language/content menus form an intersection and content tabs only list categories with channels", async () => {
   setupFacetCatalog();
   await render(<App />);
   await screen.findByLabelText("中文新闻，播放");
+  expect(contentTabs()).toEqual(["全部", "体育", "新闻", "未分组"]);
   await chooseFacet("国家/地区", "中国大陆");
   await chooseFacet("语言", "英语");
   expect(await screen.findByLabelText("英语体育，播放")).toBeTruthy();
   expect(screen.queryByLabelText("美国英语，播放")).toBeNull();
-  await chooseFacet("内容", "新闻");
-  await waitFor(() =>
-    expect(screen.queryByLabelText("英语体育，播放")).toBeNull(),
-  );
+  // 中国大陆 + 英语 has no news channel, so 新闻 is not offered.
+  await waitFor(() => expect(contentTabs()).toEqual(["全部", "体育"]));
   await chooseFacet("内容", "体育");
   expect(await screen.findByLabelText("英语体育，播放")).toBeTruthy();
   expect(repo.listChannels).toHaveBeenCalledWith(

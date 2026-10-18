@@ -371,7 +371,10 @@ export function facetLabel(kind: FacetKind, value: string | null): string {
       : value;
 }
 
-type FacetChannel = Pick<Channel, "countries" | "languages" | "groupName">;
+export type FacetChannel = Pick<
+  Channel,
+  "countries" | "languages" | "groupName"
+>;
 function contentValues(channel: FacetChannel): string[] {
   return splitGroups(channel.groupName).map((value) =>
     value === UNGROUPED ? "" : value,
@@ -402,12 +405,18 @@ function sortOptions(values: Set<string>, kind: FacetKind): string[] {
           facetOrder.compare(facetLabel(kind, a), facetLabel(kind, b)),
   );
 }
+/**
+ * Country and language menus always list every option. With a selection,
+ * content only lists categories that have channels under the selected
+ * country and language (plus the selected category itself, so it stays
+ * visible and can be cleared).
+ */
 export function buildFacetOptions(
   channels: readonly FacetChannel[],
+  selection?: ChannelFacetSelection,
 ): ChannelFacetOptions {
   const countries = new Set<string>();
   const languages = new Set<string>();
-  const contents = new Set<string>();
   for (const channel of channels) {
     const countryValues = normalizeCountries(channel.countries?.join(";"));
     const languageValues = normalizeLanguages(channel.languages?.join(";"));
@@ -415,13 +424,24 @@ export function buildFacetOptions(
       countries.add(value);
     for (const value of languageValues.length ? languageValues : [""])
       languages.add(value);
-    for (const value of contentValues(channel)) contents.add(value);
   }
   return {
     countries: sortOptions(countries, "country"),
     languages: sortOptions(languages, "language"),
-    contents: sortOptions(contents, "content"),
+    contents: contentOptions(channels, selection),
   };
+}
+export function contentOptions(
+  channels: readonly FacetChannel[],
+  selection?: ChannelFacetSelection,
+): string[] {
+  const contents = new Set<string>();
+  const scope = selection && { ...selection, content: null };
+  for (const channel of channels)
+    if (!scope || matchesChannelFacets(channel, scope))
+      for (const value of contentValues(channel)) contents.add(value);
+  if (selection?.content != null) contents.add(selection.content);
+  return sortOptions(contents, "content");
 }
 export function matchesChannelFacets(
   channel: FacetChannel,
