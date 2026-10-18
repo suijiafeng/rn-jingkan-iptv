@@ -58,7 +58,8 @@ export async function countChannelRows(
 ): Promise<number> {
   const { where, params } = channelFilter(query);
   const row = await db.getFirstAsync<{ total: number }>(
-    `SELECT COUNT(${query.includeVariants ? "*" : "DISTINCT c.groupKey"}) AS total FROM channels c${where}`,
+    `SELECT COUNT(${query.includeVariants ? "*" : "DISTINCT c.groupKey"}) AS total
+     FROM channels c JOIN sources s ON s.id = c.sourceId${where}`,
     params,
   );
   return row?.total ?? 0;
@@ -71,7 +72,7 @@ export async function queryChannelSources(
 ): Promise<Channel[]> {
   if (!groupKey) return [];
   const rows = await db.getAllAsync<RawChannel>(
-    `${CHANNEL_SELECT} WHERE c.groupKey = ? AND c.active = 1
+    `${CHANNEL_SELECT} WHERE c.groupKey = ? AND c.active = 1 AND s.enabled = 1
      ORDER BY COALESCE(c.checkStatus = 'unreachable', 0),
        COALESCE(c.id = rg.preferredChannelId, 0) DESC,
        c.qualityRank IS NOT NULL, c.qualityRank,
@@ -87,7 +88,8 @@ export async function queryGroups(
   sourceId?: string,
 ): Promise<string[]> {
   const rows = await db.getAllAsync<{ groupName: string }>(
-    `SELECT DISTINCT groupName FROM channels WHERE active = 1${sourceId ? " AND sourceId = ?" : ""}`,
+    `SELECT DISTINCT c.groupName FROM channels c JOIN sources s ON s.id = c.sourceId
+     WHERE c.active = 1 AND s.enabled = 1${sourceId ? " AND c.sourceId = ?" : ""}`,
     sourceId ? [sourceId] : [],
   );
   const groups = new Set(rows.flatMap((row) => splitGroups(row.groupName)));
@@ -108,7 +110,9 @@ export async function queryFacetRows(
     languages: string;
     groupName: string;
   }>(
-    `SELECT DISTINCT countries, CASE WHEN languages <> '' THEN languages ELSE lookupLanguages END AS languages, groupName FROM channels WHERE active = 1${sourceId ? " AND sourceId = ?" : ""}`,
+    `SELECT DISTINCT c.countries, CASE WHEN c.languages <> '' THEN c.languages ELSE c.lookupLanguages END AS languages, c.groupName
+     FROM channels c JOIN sources s ON s.id = c.sourceId
+     WHERE c.active = 1 AND s.enabled = 1${sourceId ? " AND c.sourceId = ?" : ""}`,
     sourceId ? [sourceId] : [],
   );
   return rows.map((row) => ({

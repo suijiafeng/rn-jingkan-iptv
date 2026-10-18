@@ -11,6 +11,7 @@ const source: Source = {
   id: "source",
   name: "本地节目单",
   kind: "file",
+  enabled: true,
   location: "playlist.m3u",
   createdAt: 1,
   lastSuccessAt: 1,
@@ -53,9 +54,118 @@ function renderModal(
       onRemove={() => {}}
       onCheck={() => {}}
       onStopCheck={() => {}}
+      onEnabledChange={() => {}}
     />
   );
 }
+
+test("manager shows a private-by-default empty state and both add methods", async () => {
+  const add = jest.fn();
+  await render(
+    <SourceManagerModal
+      visible
+      sources={[]}
+      check={null}
+      summaries={{}}
+      onClose={() => {}}
+      onAdd={add}
+      onRefresh={() => {}}
+      onRename={() => {}}
+      onRemove={() => {}}
+      onCheck={() => {}}
+      onStopCheck={() => {}}
+      onEnabledChange={() => {}}
+    />,
+  );
+
+  expect(screen.getByText("还没有节目来源")).toBeTruthy();
+  expect(screen.getByText(/不会自动添加远程来源/)).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "添加链接" }));
+  await fireEvent.press(screen.getByRole("button", { name: "导入文件" }));
+  expect(add.mock.calls).toEqual([["url"], ["file"]]);
+});
+
+test("manager separates source identity, status and actions", async () => {
+  const refresh = jest.fn();
+  const rename = jest.fn();
+  await render(
+    <SourceManagerModal
+      visible
+      sources={[{ ...source, lastErrorCategory: "network" }]}
+      check={null}
+      summaries={{}}
+      onClose={() => {}}
+      onAdd={() => {}}
+      onRefresh={refresh}
+      onRename={rename}
+      onRemove={() => {}}
+      onCheck={() => {}}
+      onStopCheck={() => {}}
+      onEnabledChange={() => {}}
+    />,
+  );
+
+  expect(screen.getByText("文件")).toBeTruthy();
+  expect(screen.getByText("需注意")).toBeTruthy();
+  expect(screen.getByText("上次刷新未完成，旧频道已保留。")).toBeTruthy();
+  await fireEvent.press(
+    screen.getByRole("button", { name: "重新解析 / 更换文件" }),
+  );
+  await fireEvent.press(screen.getByRole("button", { name: "改名" }));
+  expect(refresh).toHaveBeenCalledWith(
+    expect.objectContaining({ id: "source" }),
+  );
+  expect(rename).toHaveBeenCalledWith(
+    expect.objectContaining({ id: "source" }),
+  );
+});
+
+test("manager can disable and re-enable a source", async () => {
+  const change = jest.fn();
+  const ui = await render(
+    <SourceManagerModal
+      visible
+      sources={[source]}
+      check={null}
+      summaries={{}}
+      onClose={() => {}}
+      onAdd={() => {}}
+      onRefresh={() => {}}
+      onRename={() => {}}
+      onRemove={() => {}}
+      onCheck={() => {}}
+      onStopCheck={() => {}}
+      onEnabledChange={change}
+    />,
+  );
+
+  await fireEvent.press(screen.getByRole("button", { name: "停用" }));
+  expect(change).toHaveBeenCalledWith(source, false);
+
+  await ui.rerender(
+    <SourceManagerModal
+      visible
+      sources={[{ ...source, enabled: false }]}
+      check={null}
+      summaries={{}}
+      onClose={() => {}}
+      onAdd={() => {}}
+      onRefresh={() => {}}
+      onRename={() => {}}
+      onRemove={() => {}}
+      onCheck={() => {}}
+      onStopCheck={() => {}}
+      onEnabledChange={change}
+    />,
+  );
+  expect(screen.getByText("已停用")).toBeTruthy();
+  expect(screen.getByText("不参与频道与播放")).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "启用" }));
+  expect(change).toHaveBeenLastCalledWith(
+    expect.objectContaining({ id: source.id }),
+    true,
+  );
+});
 
 test.each(["manager", "rename"] as const)(
   "%s modal presents errors and lets the caller dismiss them",

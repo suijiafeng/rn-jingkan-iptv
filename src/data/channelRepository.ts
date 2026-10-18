@@ -22,6 +22,7 @@ import {
   CHANNEL_SELECT,
   cleanUnreferenced,
   mapChannel,
+  mapSource,
   SOURCE_SELECT,
   upsertChannels,
   type RawChannel,
@@ -88,15 +89,18 @@ export class Repository {
   }
 
   async listSources(): Promise<Source[]> {
-    return this.db.getAllAsync<Source>(
+    const rows = await this.db.getAllAsync<RawSource>(
       `${SOURCE_SELECT} ORDER BY s.createdAt, s.id`,
     );
+    return rows.map(mapSource);
   }
 
   async getSource(id: string): Promise<Source | null> {
-    return this.db.getFirstAsync<Source>(`${SOURCE_SELECT} WHERE s.id = ?`, [
-      id,
-    ]);
+    const row = await this.db.getFirstAsync<RawSource>(
+      `${SOURCE_SELECT} WHERE s.id = ?`,
+      [id],
+    );
+    return row ? mapSource(row) : null;
   }
 
   async getSourceContent(id: string): Promise<string | null> {
@@ -181,10 +185,11 @@ export class Repository {
           ],
         );
         await upsertChannels(tx, id, 1, input.preview, this.makeId);
-        source = await tx.getFirstAsync<Source>(
+        const row = await tx.getFirstAsync<RawSource>(
           `${SOURCE_SELECT} WHERE s.id = ?`,
           [id],
         );
+        source = row ? mapSource(row) : null;
       });
       return source!;
     });
@@ -255,10 +260,11 @@ export class Repository {
           ],
         );
         await cleanUnreferenced(tx);
-        result = await tx.getFirstAsync<Source>(
+        const row = await tx.getFirstAsync<RawSource>(
           `${SOURCE_SELECT} WHERE s.id = ?`,
           [sourceId],
         );
+        result = row ? mapSource(row) : null;
         checkGeneration();
       });
       return result!;
@@ -328,6 +334,17 @@ export class Repository {
     });
   }
 
+  async setSourceEnabled(sourceId: string, enabled: boolean): Promise<void> {
+    if (!enabled) this.cancelRefresh(sourceId);
+    await this.serialize(async () => {
+      const result = await this.db.runAsync(
+        "UPDATE sources SET enabled = ? WHERE id = ?",
+        [enabled ? 1 : 0, sourceId],
+      );
+      if (!result.changes) throw new RepositoryError("source_missing");
+    });
+  }
+
   async setSourceError(
     sourceId: string,
     category: string,
@@ -372,7 +389,8 @@ export class Repository {
         favorite = !existing;
         if (favorite) {
           const active = await tx.getFirstAsync<{ id: string }>(
-            "SELECT id FROM channels WHERE groupKey = ? AND active = 1 LIMIT 1",
+            `SELECT c.id FROM channels c JOIN sources s ON s.id = c.sourceId
+             WHERE c.groupKey = ? AND c.active = 1 AND s.enabled = 1 LIMIT 1`,
             [channel.groupKey],
           );
           if (!active) throw new RepositoryError("channel_missing");
@@ -397,9 +415,11 @@ export class Repository {
         const channel = await tx.getFirstAsync<{
           id: string;
           groupKey: string;
-        }>("SELECT id, groupKey FROM channels WHERE id = ? AND active = 1", [
-          channelId,
-        ]);
+        }>(
+          `SELECT c.id, c.groupKey FROM channels c JOIN sources s ON s.id = c.sourceId
+           WHERE c.id = ? AND c.active = 1 AND s.enabled = 1`,
+          [channelId],
+        );
         if (!channel) return;
         await tx.runAsync(
           `INSERT INTO recent_groups(groupKey,preferredChannelId,lastPlayedAt)

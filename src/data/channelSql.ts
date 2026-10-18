@@ -16,7 +16,8 @@ import { RepositoryError, type SqlExecutor, type SqlValue } from "./sql";
 
 /** SQL fragments, row mapping and batch writes shared by the repository. */
 
-export interface RawSource extends Source {
+export interface RawSource extends Omit<Source, "enabled"> {
+  enabled: number;
   content?: string | null;
 }
 export interface RawChannel extends Omit<
@@ -32,15 +33,17 @@ export interface RawChannel extends Omit<
   sourceCreatedAt?: number;
   groupRow?: number;
   preferredChannelId?: string | null;
+  sourceEnabled?: number;
 }
 
 export const SOURCE_SELECT = `SELECT s.id, s.name, s.kind, s.location, s.createdAt, s.lastSuccessAt,
-  s.lastErrorCategory, s.revision,
+  s.lastErrorCategory, s.revision, s.enabled,
   (SELECT COUNT(*) FROM channels c WHERE c.sourceId = s.id AND c.active = 1) AS channelCount,
   (SELECT COUNT(DISTINCT c.groupKey) FROM channels c JOIN favorite_groups f ON f.groupKey = c.groupKey
     WHERE c.sourceId = s.id AND c.active = 1) AS favoriteCount
   FROM sources s`;
 export const CHANNEL_SELECT = `SELECT c.*, s.name AS sourceName, s.createdAt AS sourceCreatedAt,
+  s.enabled AS sourceEnabled,
   CASE WHEN fg.groupKey IS NULL THEN 0 ELSE 1 END AS favorite,
   fg.createdAt AS favoriteCreatedAt, rg.lastPlayedAt, rg.preferredChannelId
   FROM channels c JOIN sources s ON s.id = c.sourceId
@@ -91,7 +94,7 @@ export function channelFilter(query: ChannelQuery): {
 } {
   const where: string[] = [];
   const params: SqlValue[] = [];
-  if (!query.includeInactive) where.push("c.active = 1");
+  if (!query.includeInactive) where.push("c.active = 1", "s.enabled = 1");
   if (query.sourceId) {
     where.push("c.sourceId = ?");
     params.push(query.sourceId);
@@ -165,15 +168,20 @@ export function mapChannel(row: RawChannel): Channel {
     sourceCreatedAt: _sourceCreatedAt,
     groupRow: _groupRow,
     preferredChannelId: _preferredChannelId,
+    sourceEnabled,
     ...rest
   } = row;
   return {
     ...rest,
     countries: normalizeCountries(row.countries),
     languages: normalizeLanguages(row.languages || lookupLanguages),
-    active: row.active === 1,
+    active: row.active === 1 && sourceEnabled !== 0,
     favorite: row.favorite === 1,
   };
+}
+
+export function mapSource(row: RawSource): Source {
+  return { ...row, enabled: row.enabled === 1 };
 }
 
 /**

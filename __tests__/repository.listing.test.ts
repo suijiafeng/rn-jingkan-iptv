@@ -104,6 +104,33 @@ describe("SQLite repository with real SQLite", () => {
     ]);
   });
 
+  it("keeps a disabled source stored while excluding it from browsing and playback", async () => {
+    const source = await importInitial();
+    const channels = await repo.listChannels({ includeVariants: true });
+    await repo.toggleFavorite(channels[0].id);
+    await repo.recordRecent(channels[0].id);
+
+    await repo.setSourceEnabled(source.id, false);
+
+    expect(await repo.listSources()).toMatchObject([
+      { id: source.id, enabled: false, channelCount: 3 },
+    ]);
+    expect(await repo.listChannels()).toEqual([]);
+    expect(await repo.listFavorites()).toEqual([]);
+    expect(await repo.listRecent()).toEqual([]);
+    expect(await repo.listChannelSources(channels[0].groupKey!)).toEqual([]);
+    expect(await repo.getChannel(channels[0].id)).toMatchObject({
+      active: false,
+      favorite: true,
+    });
+
+    await repo.setSourceEnabled(source.id, true);
+    expect(await repo.listSources()).toMatchObject([{ enabled: true }]);
+    expect(await repo.listChannels()).toHaveLength(3);
+    expect(await repo.listFavorites()).toHaveLength(1);
+    expect(await repo.listRecent()).toHaveLength(1);
+  });
+
   it("remembers the played source and otherwise prefers an unlabelled main source", async () => {
     const playlist = content([
       {

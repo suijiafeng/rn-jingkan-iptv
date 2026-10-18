@@ -226,6 +226,19 @@ test("source deletion failure is shown inside source management", async () => {
   expect(screen.getByRole("header", { name: "管理节目来源" })).toBeTruthy();
 });
 
+test("source enable changes are persisted and failures stay visible in management", async () => {
+  repo.setSourceEnabled.mockRejectedValueOnce(new Error("disk unavailable"));
+  await openSourceManager();
+
+  await fireEvent.press(screen.getByRole("button", { name: "停用" }));
+
+  await waitFor(() =>
+    expect(repo.setSourceEnabled).toHaveBeenCalledWith(checkSource.id, false),
+  );
+  expect(screen.getByText("停用来源失败，请重试")).toBeTruthy();
+  expect(screen.getByRole("header", { name: "管理节目来源" })).toBeTruthy();
+});
+
 test("deleting one playback source refreshes alternatives and switches off the deleted address", async () => {
   const primary = {
     id: "primary",

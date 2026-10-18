@@ -1,9 +1,16 @@
 import React from "react";
-import { Modal, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Button, Card, Heading, Notice } from "../../components/ui";
+import { Button, Heading, Notice } from "../../components/ui";
 import type { Source, SourceKind } from "../../domain/types";
-import { colors, styles } from "../../theme";
+import { colors, styles, type } from "../../theme";
 
 export interface CheckProgress {
   sourceId: string;
@@ -29,6 +36,8 @@ interface ManagerProps {
   onRefresh: (source: Source) => void;
   onRename: (source: Source) => void;
   onRemove: (source: Source) => void;
+  sourceSaving?: string | null;
+  onEnabledChange: (source: Source, enabled: boolean) => void;
   onCheck: (source: Source) => void;
   onStopCheck: () => void;
   /** Source whose languages are being looked up in the iptv-org database. */
@@ -47,11 +56,18 @@ export function SourceManagerModal(props: ManagerProps) {
       onRequestClose={props.onClose}
     >
       <SafeAreaView style={styles.screen}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <Heading
-            title="管理节目来源"
-            subtitle={`${props.sources.length} 份节目单 · 手动刷新，不自动联网`}
-          />
+        <ScrollView
+          contentContainerStyle={[styles.content, managerStyles.content]}
+        >
+          <View style={managerStyles.header}>
+            <View style={managerStyles.headerText}>
+              <Heading
+                title="管理节目来源"
+                subtitle={`${props.sources.length} 份节目单 · 只在你操作时联网`}
+              />
+            </View>
+            <Button compact secondary label="完成" onPress={props.onClose} />
+          </View>
           {!!props.error && (
             <>
               <Notice title={props.error} error />
@@ -64,111 +80,255 @@ export function SourceManagerModal(props: ManagerProps) {
               )}
             </>
           )}
-          <Button label="添加节目单" onPress={() => props.onAdd("url")} />
-          <Button
-            label="从文件导入"
-            secondary
-            onPress={() => props.onAdd("file")}
-          />
+          <View style={managerStyles.addActions}>
+            <Button
+              style={managerStyles.addButton}
+              label="添加链接"
+              onPress={() => props.onAdd("url")}
+            />
+            <Button
+              style={managerStyles.addButton}
+              label="导入文件"
+              secondary
+              onPress={() => props.onAdd("file")}
+            />
+          </View>
+          {props.sources.length === 0 && (
+            <View style={managerStyles.emptyCard}>
+              <View style={managerStyles.emptyMark} accessible={false}>
+                <Text style={managerStyles.emptyMarkText}>＋</Text>
+              </View>
+              <Text style={styles.heading}>还没有节目来源</Text>
+              <Text style={[styles.muted, managerStyles.centerText]}>
+                添加一个节目单链接，或从本机导入 M3U、TXT
+                文件。不会自动添加远程来源。
+              </Text>
+            </View>
+          )}
           {props.sources.map((source) => {
             const running = check?.sourceId === source.id;
             const summary = props.summaries[source.id];
+            const lookupRunning = props.languageLookup === source.id;
+            const saving = props.sourceSaving === source.id;
+            const taskBusy = running || lookupRunning;
             return (
-              <Card key={source.id}>
-                <Text style={styles.heading}>{source.name}</Text>
-                <Text style={styles.muted}>
-                  {source.channelCount} 个频道 · {source.favoriteCount} 个收藏
-                  {String.fromCharCode(10)}上次更新{" "}
-                  {new Date(source.lastSuccessAt).toLocaleString()}
-                </Text>
-                {source.lastErrorCategory && (
-                  <Text style={{ color: colors.warn }}>
-                    上次刷新未完成，旧频道已保留。
+              <View
+                key={source.id}
+                style={[
+                  managerStyles.sourceCard,
+                  !source.enabled && managerStyles.sourceCardDisabled,
+                ]}
+              >
+                <View style={managerStyles.sourceHeader}>
+                  <View style={managerStyles.kindMark} accessible={false}>
+                    <Text style={managerStyles.kindMarkText}>
+                      {source.kind === "url" ? "链" : "文"}
+                    </Text>
+                  </View>
+                  <View style={managerStyles.sourceTitle}>
+                    <View style={managerStyles.titleLine}>
+                      <Text style={[styles.heading, managerStyles.title]}>
+                        {source.name}
+                      </Text>
+                      <Text style={managerStyles.kindLabel}>
+                        {source.kind === "url" ? "链接" : "文件"}
+                      </Text>
+                      {!source.enabled && (
+                        <Text
+                          style={[
+                            managerStyles.kindLabel,
+                            managerStyles.disabledLabel,
+                          ]}
+                        >
+                          已停用
+                        </Text>
+                      )}
+                    </View>
+                    <Text style={styles.muted}>
+                      {source.channelCount} 个频道 · {source.favoriteCount}{" "}
+                      个收藏
+                    </Text>
+                  </View>
+                </View>
+                <View style={managerStyles.updateLine}>
+                  <Text style={styles.caption}>
+                    上次更新 {formatUpdateTime(source.lastSuccessAt)}
                   </Text>
+                  <View
+                    style={[
+                      managerStyles.statusDot,
+                      !source.enabled
+                        ? managerStyles.statusDotDisabled
+                        : source.lastErrorCategory &&
+                          managerStyles.statusDotWarn,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.caption,
+                      source.enabled &&
+                        source.lastErrorCategory &&
+                        managerStyles.warnText,
+                    ]}
+                  >
+                    {!source.enabled
+                      ? "不参与频道与播放"
+                      : source.lastErrorCategory
+                        ? "需注意"
+                        : "已启用"}
+                  </Text>
+                </View>
+                {source.lastErrorCategory && (
+                  <View style={managerStyles.warningBox}>
+                    <Text style={managerStyles.warnText}>
+                      上次刷新未完成，旧频道已保留。
+                    </Text>
+                  </View>
                 )}
                 {running && (
-                  <Text style={styles.body} accessibilityLiveRegion="polite">
-                    {check.total === null
-                      ? "正在读取待检测频道…"
-                      : `正在检测可用性 ${check.done}/${check.total}`}
-                  </Text>
+                  <View
+                    style={managerStyles.progressBox}
+                    accessibilityLiveRegion="polite"
+                  >
+                    <View style={managerStyles.progressTextLine}>
+                      <Text style={styles.body}>
+                        {check.total === null
+                          ? "正在读取待检测频道…"
+                          : `正在检测可用性 ${check.done}/${check.total}`}
+                      </Text>
+                      {check.total !== null && check.total > 0 && (
+                        <Text style={styles.caption}>
+                          {Math.round((check.done / check.total) * 100)}%
+                        </Text>
+                      )}
+                    </View>
+                    <View style={managerStyles.progressTrack}>
+                      <View
+                        style={[
+                          managerStyles.progressFill,
+                          {
+                            width: `${
+                              check.total
+                                ? Math.min(
+                                    100,
+                                    (check.done / check.total) * 100,
+                                  )
+                                : 12
+                            }%`,
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
                 )}
                 {!running && summary && (
-                  <Text style={styles.muted}>
-                    {summary.stopped ? "已停止：" : ""}可访问 {summary.ok}{" "}
-                    个，不可达 {summary.unreachable} 个
-                  </Text>
+                  <View style={managerStyles.resultLine}>
+                    <Text style={styles.muted}>
+                      {summary.stopped ? "已停止：" : ""}可访问 {summary.ok}{" "}
+                      个，不可达 {summary.unreachable} 个
+                    </Text>
+                  </View>
                 )}
-                <Button
-                  label={
-                    source.kind === "file"
-                      ? "重新解析 / 更换文件"
-                      : "刷新并预览"
-                  }
-                  secondary
-                  disabled={!!check}
-                  onPress={() => props.onRefresh(source)}
-                />
-                {running ? (
-                  <Button
-                    label="停止检测"
-                    secondary
-                    onPress={props.onStopCheck}
-                  />
-                ) : (
-                  <Button
-                    label="检测可用性"
-                    secondary
-                    disabled={!!check || !source.channelCount}
-                    onPress={() => props.onCheck(source)}
-                  />
-                )}
-                {props.languageLookup === source.id && (
+                {lookupRunning && (
                   <Text style={styles.body} accessibilityLiveRegion="polite">
                     正在补全语言…
                   </Text>
                 )}
-                {props.languageLookup !== source.id &&
-                  props.languageMessages?.[source.id] && (
-                    <Text style={styles.muted}>
-                      {props.languageMessages[source.id]}
-                    </Text>
-                  )}
-                {props.onLookupLanguages &&
-                  (props.languageLookup === source.id ? (
+                {!lookupRunning && props.languageMessages?.[source.id] && (
+                  <Text style={styles.muted}>
+                    {props.languageMessages[source.id]}
+                  </Text>
+                )}
+                <View style={managerStyles.quickActions}>
+                  <Button
+                    compact
+                    label={source.kind === "file" ? "重新解析" : "刷新并预览"}
+                    accessibilityLabel={
+                      source.kind === "file"
+                        ? "重新解析 / 更换文件"
+                        : "刷新并预览"
+                    }
+                    secondary
+                    disabled={
+                      !source.enabled ||
+                      saving ||
+                      !!check ||
+                      !!props.languageLookup
+                    }
+                    onPress={() => props.onRefresh(source)}
+                  />
+                  {running ? (
                     <Button
-                      label="停止补全语言"
+                      compact
+                      label="停止检测"
                       secondary
-                      onPress={() => props.onStopLanguageLookup?.()}
+                      onPress={props.onStopCheck}
                     />
                   ) : (
                     <Button
-                      label="补全语言"
+                      compact
+                      label="检测可用性"
                       secondary
                       disabled={
-                        !!props.languageLookup ||
+                        !source.enabled ||
+                        saving ||
                         !!check ||
                         !source.channelCount
                       }
-                      onPress={() => props.onLookupLanguages?.(source)}
+                      onPress={() => props.onCheck(source)}
                     />
-                  ))}
-                <View style={styles.row}>
+                  )}
+                  {props.onLookupLanguages &&
+                    (lookupRunning ? (
+                      <Button
+                        compact
+                        label="停止补全语言"
+                        secondary
+                        onPress={() => props.onStopLanguageLookup?.()}
+                      />
+                    ) : (
+                      <Button
+                        compact
+                        label="补全语言"
+                        secondary
+                        disabled={
+                          !!props.languageLookup ||
+                          !!check ||
+                          !source.enabled ||
+                          saving ||
+                          !source.channelCount
+                        }
+                        onPress={() => props.onLookupLanguages?.(source)}
+                      />
+                    ))}
                   <Button
+                    compact
+                    label={
+                      saving ? "正在保存" : source.enabled ? "停用" : "启用"
+                    }
+                    secondary
+                    disabled={saving || taskBusy || (!!check && !running)}
+                    onPress={() =>
+                      props.onEnabledChange(source, !source.enabled)
+                    }
+                  />
+                  <Button
+                    compact
                     label="改名"
                     secondary
-                    style={{ flex: 1 }}
+                    disabled={saving}
                     onPress={() => props.onRename(source)}
                   />
                   <Button
+                    compact
                     label="删除"
                     secondary
                     danger
-                    style={{ flex: 1 }}
+                    disabled={saving}
                     onPress={() => props.onRemove(source)}
                   />
                 </View>
-              </Card>
+              </View>
             );
           })}
           <Button secondary label="返回" onPress={props.onClose} />
@@ -176,6 +336,16 @@ export function SourceManagerModal(props: ManagerProps) {
       </SafeAreaView>
     </Modal>
   );
+}
+
+/** A stable, compact local timestamp without depending on locale data. */
+function formatUpdateTime(timestamp: number) {
+  const date = new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) return "时间未知";
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(
+    date.getDate(),
+  )} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 interface RenameProps {
@@ -228,3 +398,106 @@ export function RenameSourceModal(props: RenameProps) {
     </Modal>
   );
 }
+
+const managerStyles = StyleSheet.create({
+  content: { gap: 12 },
+  header: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  headerText: { flex: 1, minWidth: 0 },
+  addActions: { flexDirection: "row", gap: 10 },
+  addButton: { flex: 1 },
+  emptyCard: {
+    minHeight: 220,
+    borderRadius: 16,
+    padding: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.surface,
+  },
+  emptyMark: {
+    width: 48,
+    height: 48,
+    marginBottom: 4,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.raised,
+  },
+  emptyMarkText: { ...type.title, color: colors.accent },
+  centerText: { maxWidth: 280, textAlign: "center" },
+  sourceHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  sourceCard: {
+    borderRadius: 14,
+    padding: 14,
+    gap: 9,
+    backgroundColor: colors.surface,
+  },
+  sourceCardDisabled: { opacity: 0.78 },
+  kindMark: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.raised,
+  },
+  kindMarkText: { ...type.heading, color: colors.accent },
+  sourceTitle: { flex: 1, minWidth: 0, gap: 2 },
+  titleLine: { flexDirection: "row", alignItems: "center", gap: 8 },
+  title: { flexShrink: 1 },
+  kindLabel: {
+    ...type.caption,
+    color: colors.muted,
+    backgroundColor: colors.raised,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    overflow: "hidden",
+  },
+  disabledLabel: { color: colors.text },
+  updateLine: { flexDirection: "row", alignItems: "center", gap: 6 },
+  statusDot: {
+    width: 6,
+    height: 6,
+    marginLeft: "auto",
+    borderRadius: 999,
+    backgroundColor: colors.accent,
+  },
+  statusDotWarn: { backgroundColor: colors.warn },
+  statusDotDisabled: { backgroundColor: colors.mutedFaint },
+  warnText: { ...type.muted, color: colors.warn },
+  warningBox: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: colors.raised,
+  },
+  progressBox: { gap: 8 },
+  progressTextLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  progressTrack: {
+    height: 4,
+    borderRadius: 999,
+    overflow: "hidden",
+    backgroundColor: colors.raised,
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: colors.accent,
+  },
+  resultLine: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: colors.raised,
+  },
+  quickActions: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+});

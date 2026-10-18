@@ -110,6 +110,7 @@ export const repo = {
   ),
   listChannelSources: jest.fn(async (_groupKey: string) => []),
   deleteSource: jest.fn(async () => {}),
+  setSourceEnabled: jest.fn(async () => {}),
   renameSource: jest.fn(async () => {}),
   removeRecent: jest.fn(async (_channelId: string) => {}),
   clearRecent: jest.fn(async () => {}),
@@ -120,6 +121,7 @@ export const checkSource = {
   id: "s1",
   name: "公开列表",
   kind: "url",
+  enabled: true,
   location: "https://a.example.com/list.m3u",
   createdAt: 1,
   lastSuccessAt: 1,
@@ -159,6 +161,7 @@ export function resetAppMocks() {
   repo.setSetting.mockImplementation(async () => {});
   repo.toggleFavorite.mockReset();
   repo.deleteSource.mockReset().mockResolvedValue(undefined);
+  repo.setSourceEnabled.mockReset().mockResolvedValue(undefined);
   repo.renameSource.mockReset().mockResolvedValue(undefined);
   repo.removeRecent.mockReset().mockResolvedValue(undefined);
   repo.clearRecent.mockReset().mockResolvedValue(undefined);
