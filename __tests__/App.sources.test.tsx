@@ -1,0 +1,335 @@
+import React from "react";
+import {
+  mockPlayerProps,
+  mockManagerProps,
+  repo,
+  checkSource,
+  openSourceManager,
+  resetAppMocks,
+} from "./support/appTestKit";
+import { Alert, AppState, type AppStateStatus } from "react-native";
+import * as Network from "expo-network";
+import {
+  fireEvent,
+  act,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react-native";
+import App from "../src/App";
+import { checkChannels } from "../src/features/source/availability";
+import type { Channel, ChannelQuery } from "../src/domain/types";
+
+beforeEach(resetAppMocks);
+
+test("availability check never sends requests without network consent", async () => {
+  jest
+    .spyOn(Alert, "alert")
+    .mockImplementation((_title, _message, buttons) =>
+      buttons?.[0]?.onPress?.(),
+    );
+  await openSourceManager();
+  await fireEvent.press(screen.getByText("检测可用性"));
+  await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+  expect(checkChannels).not.toHaveBeenCalled();
+  expect(repo.saveCheckResults).not.toHaveBeenCalled();
+});
+
+test("availability check shows progress, can be stopped, and saves finished results", async () => {
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" ? true : fallback,
+  );
+  const channels = [
+    { id: "a", streamUrl: "https://a.example.com/a" },
+    { id: "b", streamUrl: "https://a.example.com/b" },
+  ];
+  repo.listChannels.mockImplementation(async (query?: { sourceId?: string }) =>
+    query?.sourceId ? (channels as never[]) : [],
+  );
+  let finish!: () => void;
+  (checkChannels as jest.Mock).mockImplementation(
+    (_targets, options: { signal: AbortSignal; onProgress: Function }) =>
+      new Promise((resolve) => {
+        options.onProgress(1, 2);
+        finish = () =>
+          resolve([
+            { channelId: "a", streamUrl: "https://a.example.com/a", ok: true },
+          ]);
+        options.signal.addEventListener("abort", finish);
+      }),
+  );
+  await openSourceManager();
+  await fireEvent.press(screen.getByText("检测可用性"));
+  await waitFor(() =>
+    expect(screen.getByText("正在检测可用性 1/2")).toBeTruthy(),
+  );
+  await fireEvent.press(screen.getByText("停止检测"));
+  await waitFor(() =>
+    expect(repo.saveCheckResults).toHaveBeenCalledWith([
+      { channelId: "a", streamUrl: "https://a.example.com/a", ok: true },
+    ]),
+  );
+  await waitFor(() =>
+    expect(screen.getByText(/已停止：可访问 1 个，不可达 0 个/)).toBeTruthy(),
+  );
+});
+
+test.each(["revocation", "background", "stop", "unmount"])(
+  "availability preflight cannot start requests after %s",
+  async (action) => {
+    repo.getSetting.mockImplementation(async (key, fallback) =>
+      key === "remoteAllowed" ? true : fallback,
+    );
+    const listeners = new Set<(state: AppStateStatus) => void>();
+    const subscription = jest
+      .spyOn(AppState, "addEventListener")
+      .mockImplementation((_event, listener) => {
+        listeners.add(listener);
+        return {
+          remove: () => {
+            listeners.delete(listener);
+          },
+        };
+      });
+    let finish!: (network: object) => void;
+    (Network.getNetworkStateAsync as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    jest
+      .spyOn(Alert, "alert")
+      .mockImplementation((_title, _message, buttons) =>
+        buttons?.[1]?.onPress?.(),
+      );
+    const ui = await openSourceManager();
+    (repo.listChannels as jest.Mock).mockResolvedValue([
+      { id: "a", streamUrl: "https://a.example.com/live" },
+    ]);
+    try {
+      await fireEvent.press(screen.getByText("检测可用性"));
+      await waitFor(() =>
+        expect(Network.getNetworkStateAsync).toHaveBeenCalledTimes(1),
+      );
+      if (action === "revocation") {
+        await fireEvent.press(screen.getByText("返回", { exact: true }));
+        await fireEvent.press(
+          screen.getByRole("button", { name: "撤销联网许可" }),
+        );
+        await waitFor(() =>
+          expect(screen.getByText("阅读风险并允许")).toBeTruthy(),
+        );
+      } else if (action === "background") {
+        await act(async () => {
+          listeners.forEach((listener) => listener("background"));
+          listeners.forEach((listener) => listener("active"));
+        });
+      } else if (action === "stop") {
+        await fireEvent.press(screen.getByText("停止检测"));
+      } else {
+        await ui.unmount();
+      }
+      await act(async () => finish({ type: "WIFI", isConnected: true }));
+      expect(checkChannels).not.toHaveBeenCalled();
+      expect(repo.saveCheckResults).not.toHaveBeenCalled();
+    } finally {
+      subscription.mockRestore();
+    }
+  },
+);
+
+test("a stopped preflight cannot clear a replacement sweep", async () => {
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" ? true : fallback,
+  );
+  let finishPreflight!: (network: object) => void;
+  (Network.getNetworkStateAsync as jest.Mock).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishPreflight = resolve;
+      }),
+  );
+  (checkChannels as jest.Mock).mockImplementation(
+    (_targets, options) =>
+      new Promise((resolve) => {
+        options.signal.addEventListener("abort", () => resolve([]));
+      }),
+  );
+  await openSourceManager();
+  await fireEvent.press(screen.getByText("检测可用性"));
+  await waitFor(() =>
+    expect(Network.getNetworkStateAsync).toHaveBeenCalledTimes(1),
+  );
+  await fireEvent.press(screen.getByText("停止检测"));
+  await fireEvent.press(screen.getByText("检测可用性"));
+  await waitFor(() => expect(checkChannels).toHaveBeenCalledTimes(1));
+  await act(async () => finishPreflight({ type: "WIFI", isConnected: true }));
+  expect(screen.getByText("停止检测")).toBeTruthy();
+  expect(checkChannels).toHaveBeenCalledTimes(1);
+  await fireEvent.press(screen.getByText("停止检测"));
+});
+
+test("rapid check callbacks share a single preflight and sweep", async () => {
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" ? true : fallback,
+  );
+  let finish!: (network: object) => void;
+  (Network.getNetworkStateAsync as jest.Mock).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await openSourceManager();
+  const start = mockManagerProps.mock.calls.at(-1)![0].onCheck;
+  await act(async () => {
+    start(checkSource);
+    start(checkSource);
+  });
+  expect(Network.getNetworkStateAsync).toHaveBeenCalledTimes(1);
+  await act(async () => finish({ type: "WIFI", isConnected: true }));
+  await waitFor(() => expect(checkChannels).toHaveBeenCalledTimes(1));
+});
+
+test("source-manager network failures are visible without closing the modal", async () => {
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" ? true : fallback,
+  );
+  (Network.getNetworkStateAsync as jest.Mock).mockResolvedValueOnce({
+    type: "NONE",
+    isConnected: false,
+  });
+  await openSourceManager();
+  await fireEvent.press(screen.getByText("检测可用性"));
+  await waitFor(() =>
+    expect(screen.getByText("当前没有可用网络，请连接后重试")).toBeTruthy(),
+  );
+  expect(screen.getByRole("header", { name: "管理节目来源" })).toBeTruthy();
+  expect(checkChannels).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByText("关闭提示"));
+  expect(screen.queryByText("当前没有可用网络，请连接后重试")).toBeNull();
+});
+
+test("source deletion failure is shown inside source management", async () => {
+  repo.deleteSource.mockRejectedValueOnce(new Error("disk unavailable"));
+  jest
+    .spyOn(Alert, "alert")
+    .mockImplementation((_title, _message, buttons) =>
+      buttons?.[1]?.onPress?.(),
+    );
+  await openSourceManager();
+  await fireEvent.press(screen.getByText("删除", { exact: true }));
+  await waitFor(() =>
+    expect(screen.getByText("删除未完成，请重试")).toBeTruthy(),
+  );
+  expect(screen.getByRole("header", { name: "管理节目来源" })).toBeTruthy();
+});
+
+test("deleting one playback source refreshes alternatives and switches off the deleted address", async () => {
+  const primary = {
+    id: "primary",
+    groupKey: "iptv:cctv1.cn",
+    name: "CCTV-1",
+    active: true,
+    favorite: false,
+    sourceId: "s1",
+    sourceName: "来源一",
+    groupName: "新闻",
+  };
+  const backup = {
+    ...primary,
+    id: "backup",
+    sourceId: "s2",
+    sourceName: "来源二",
+  };
+  let deleted = false;
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" ? true : fallback,
+  );
+  repo.listSources.mockResolvedValue([
+    { ...checkSource, id: "s1", name: "来源一" },
+    { ...checkSource, id: "s2", name: "来源二" },
+  ] as never[]);
+  (repo.listChannels as jest.Mock).mockImplementation(
+    async (query?: ChannelQuery) =>
+      query?.mode === "recent" ? [] : ([primary] as never[]),
+  );
+  repo.getChannel.mockImplementation(async (id) =>
+    id === primary.id && !deleted ? primary : id === backup.id ? backup : null,
+  );
+  (repo.listChannelSources as jest.Mock).mockImplementation(async () =>
+    deleted ? [backup] : [primary, backup],
+  );
+  repo.deleteSource.mockImplementation(async () => {
+    deleted = true;
+  });
+  jest
+    .spyOn(Alert, "alert")
+    .mockImplementation((_title, _message, buttons) =>
+      buttons?.[1]?.onPress?.(),
+    );
+
+  await render(<App />);
+  await fireEvent.press(await screen.findByLabelText("CCTV-1，播放"));
+  await waitFor(() => expect(mockPlayerProps).toHaveBeenCalled());
+  await act(async () =>
+    mockManagerProps.mock.calls.at(-1)![0].onRemove({
+      ...checkSource,
+      id: "s1",
+      name: "来源一",
+    }),
+  );
+  await waitFor(() => {
+    const player = mockPlayerProps.mock.calls.at(-1)![0];
+    expect(player.channel.id).toBe("backup");
+    expect(player.sources.map((source: Channel) => source.id)).toEqual([
+      "backup",
+    ]);
+  });
+});
+
+test("failed saving of finished results after a manual stop remains visible", async () => {
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" ? true : fallback,
+  );
+  repo.saveCheckResults.mockRejectedValueOnce(new Error("disk unavailable"));
+  (checkChannels as jest.Mock).mockImplementation(
+    (_targets, options) =>
+      new Promise((resolve) => {
+        options.signal.addEventListener("abort", () =>
+          resolve([
+            {
+              channelId: "a",
+              streamUrl: "https://a.example.com/live",
+              ok: true,
+            },
+          ]),
+        );
+      }),
+  );
+  await openSourceManager();
+  await fireEvent.press(screen.getByText("检测可用性"));
+  await waitFor(() => expect(checkChannels).toHaveBeenCalledTimes(1));
+  await fireEvent.press(screen.getByText("停止检测"));
+  await waitFor(() =>
+    expect(screen.getByText("检测结果未能保存，请重试")).toBeTruthy(),
+  );
+  expect(screen.getByRole("header", { name: "管理节目来源" })).toBeTruthy();
+});
+
+test("rename failure remains visible with the input and a working retry", async () => {
+  repo.renameSource.mockRejectedValueOnce(new Error("disk unavailable"));
+  await openSourceManager();
+  await fireEvent.press(screen.getByText("改名", { exact: true }));
+  await fireEvent.changeText(screen.getByLabelText("来源名称"), "新的名称");
+  await fireEvent.press(screen.getByText("保存名称"));
+  await waitFor(() => expect(screen.getByText("改名失败")).toBeTruthy());
+  expect(screen.getByDisplayValue("新的名称")).toBeTruthy();
+  await fireEvent.press(screen.getByText("保存名称"));
+  await waitFor(() =>
+    expect(screen.getByRole("header", { name: "管理节目来源" })).toBeTruthy(),
+  );
+  expect(screen.queryByText("改名失败")).toBeNull();
+  expect(repo.renameSource).toHaveBeenCalledTimes(2);
+});

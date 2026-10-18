@@ -7,9 +7,9 @@ const { fetch: fetchMock } = jest.requireMock("expo/fetch");
 Object.assign(globalThis, { TextDecoder, TextEncoder });
 function stream(chunks: Uint8Array[]) {
   return new ReadableStream({
-    start(c) {
-      chunks.forEach((x) => c.enqueue(x));
-      c.close();
+    start(controller) {
+      chunks.forEach((chunk) => controller.enqueue(chunk));
+      controller.close();
     },
   }) as unknown as globalThis.ReadableStream<Uint8Array>;
 }
@@ -51,7 +51,9 @@ test("revoked remote consent prevents fetch even for HTTPS", async () => {
   expect(fetchMock).not.toHaveBeenCalled();
 });
 test("cancellation does not return partial data", async () => {
-  const c = new AbortController();
-  c.abort();
-  await expect(readBoundedStream(stream([]), c.signal)).rejects.toThrow("取消");
+  const controller = new AbortController();
+  controller.abort();
+  await expect(
+    readBoundedStream(stream([]), controller.signal),
+  ).rejects.toThrow("取消");
 });

@@ -246,7 +246,7 @@ export function useChannelSession(props: SessionProps) {
   const zapCluster = (absolute: boolean) => (
     <View
       testID="zap-cluster"
-      style={[s.zapRow, absolute && s.zapRowAbsolute]}
+      style={[styles.zapRow, absolute && styles.zapRowAbsolute]}
       pointerEvents="box-none"
     >
       <OverlayButton
@@ -262,10 +262,10 @@ export function useChannelSession(props: SessionProps) {
       <Pressable
         testID="center-play-pause"
         style={({ pressed }) => [
-          s.centerButton,
-          compactCluster && s.centerButtonCompact,
-          pressed && s.pressed,
-          primaryDisabled && s.overlayButtonDisabled,
+          styles.centerButton,
+          compactCluster && styles.centerButtonCompact,
+          pressed && styles.pressed,
+          primaryDisabled && styles.overlayButtonDisabled,
         ]}
         accessibilityRole="button"
         accessibilityLabel={primaryLabel}
@@ -273,7 +273,7 @@ export function useChannelSession(props: SessionProps) {
         onPress={primaryAction}
         disabled={primaryDisabled}
       >
-        <Text style={s.centerIcon}>{primaryIcon}</Text>
+        <Text style={styles.centerIcon}>{primaryIcon}</Text>
       </Pressable>
       <OverlayButton
         label="⏭"
@@ -305,7 +305,7 @@ export function useChannelSession(props: SessionProps) {
 
   const favoriteButton = (
     <Pressable
-      style={[s.favoriteHit, !props.fullscreen && s.favoriteSolid]}
+      style={[styles.favoriteHit, !props.fullscreen && styles.favoriteSolid]}
       accessibilityRole="button"
       accessibilityLabel={
         props.channel.favorite ? "取消收藏当前频道" : "收藏当前频道"
@@ -313,7 +313,7 @@ export function useChannelSession(props: SessionProps) {
       accessibilityState={{ selected: props.channel.favorite }}
       onPress={() => props.onFavorite(props.channel)}
     >
-      <Text style={[s.star, props.channel.favorite && s.starOn]}>
+      <Text style={[styles.star, props.channel.favorite && styles.starOn]}>
         {props.channel.favorite ? "★" : "☆"}
       </Text>
     </Pressable>
@@ -357,7 +357,7 @@ export function useChannelSession(props: SessionProps) {
 
 export type SessionView = ReturnType<typeof useChannelSession>;
 
-const s = StyleSheet.create({
+const styles = StyleSheet.create({
   centerButton: {
     alignSelf: "center",
     width: 64,

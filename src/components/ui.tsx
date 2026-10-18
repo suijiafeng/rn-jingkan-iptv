@@ -44,8 +44,8 @@ export function Button({
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
-        s.button,
-        compact && s.buttonCompact,
+        uiStyles.button,
+        compact && uiStyles.buttonCompact,
         {
           backgroundColor: secondary
             ? compact
@@ -61,8 +61,8 @@ export function Button({
     >
       <Text
         style={[
-          s.label,
-          compact && s.labelCompact,
+          uiStyles.label,
+          compact && uiStyles.labelCompact,
           {
             color: danger
               ? colors.bad
@@ -123,7 +123,7 @@ export function Notice({
     </Card>
   );
 }
-const s = StyleSheet.create({
+const uiStyles = StyleSheet.create({
   button: {
     minHeight: sizes.button,
     borderRadius: 12,

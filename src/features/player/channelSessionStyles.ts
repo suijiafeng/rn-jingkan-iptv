@@ -2,7 +2,7 @@ import { StyleSheet } from "react-native";
 import { colors } from "../../theme";
 
 /** ChannelSession's styles: portrait, fullscreen and docked-bar layouts. */
-export const s = StyleSheet.create({
+export const sessionStyles = StyleSheet.create({
   flex: { flex: 1 },
   fullscreenSources: {
     position: "absolute",

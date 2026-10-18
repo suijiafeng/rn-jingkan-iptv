@@ -1,5 +1,13 @@
 # 验证记录
 
+## 2026-10-19 · 列表固定行高、模块拆分到 500 行以内、禁用单字母标识符（分支 refactor/split-modules）
+
+- 快速滚动空白：频道行改为统一高度（标签与标题同一行、分组说明一行，随字体缩放），主列表与选台列表提供 getItemLayout，不再依赖逐行测量。新增行高与偏移单元测试 3 项。真机快速滑动尚未复测。
+- 拆分：App.tsx 1627 行拆为 src/features/home 下 7 个 hook 与 3 个界面组件，App 483 行；repository.ts 1082 行拆为 sql、schema、channelSql、channelReads、channelRepository，repository.ts 保留对外入口；displayNamesZh.ts 拆为国家与语言两张表。App、repository、PlayerScreen 三个测试文件按主题拆分，共享 mock 放在各自的 support 目录。全部源码与测试文件均不超过 500 行。
+- 命名：ESLint 新增 id-length（最少 2 个字符），全仓单字母标识符改为语义化名称，lint 同时排除 .claude/ 下的工作区副本。
+- 自动化：typecheck、lint 通过；Jest 38 个套件 362 项通过，测试项数与拆分前一致。`expo export --platform android` 成功；`./gradlew assembleRelease --offline -PreactNativeArchitectures=arm64-v8a` 成功，APK 33,311,184 字节，仍为 Android Debug 测试签名。
+- 未验证：三星真机播放与滚动、模拟器界面回归。拆分只移动代码与改名，行为由现有自动化测试覆盖。
+
 ## 2026-10-19 · 分支合并到 main 后的校验
 
 - 合并顺序：claude/stoic-golick-5400c6（自动换源，快进）→ claude/dreamy-mayer-d87e9a（统一字号与设置页，只有验证记录冲突，两段都保留）→ perf/large-list 仅剩的性能复测记录（cherry-pick 937d42a；其代码此前已经由 3fc21f5 合入，分支自己的合并提交采用了另一套冲突处理，不再重复合并）→ fix/deep-scroll-restore（深处滚动恢复，移植到现在的分页读取与原生驱动滚动事件：恢复通过 Animated.event 的 listener 观察位置，保存仍等拖动或惯性停止，被截短的位置不保存）。

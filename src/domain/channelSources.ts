@@ -61,15 +61,21 @@ export function channelGroupKey(
 }
 
 export function compareChannelSources(
-  a: Pick<Channel | ParsedChannel, "qualityRank" | "sortIndex" | "streamUrl">,
-  b: Pick<Channel | ParsedChannel, "qualityRank" | "sortIndex" | "streamUrl">,
+  left: Pick<
+    Channel | ParsedChannel,
+    "qualityRank" | "sortIndex" | "streamUrl"
+  >,
+  right: Pick<
+    Channel | ParsedChannel,
+    "qualityRank" | "sortIndex" | "streamUrl"
+  >,
 ): number {
-  const aRank = a.qualityRank ?? Number.POSITIVE_INFINITY;
-  const bRank = b.qualityRank ?? Number.POSITIVE_INFINITY;
+  const leftRank = left.qualityRank ?? Number.POSITIVE_INFINITY;
+  const rightRank = right.qualityRank ?? Number.POSITIVE_INFINITY;
   return (
-    aRank - bRank ||
-    a.sortIndex - b.sortIndex ||
-    a.streamUrl.localeCompare(b.streamUrl)
+    leftRank - rightRank ||
+    left.sortIndex - right.sortIndex ||
+    left.streamUrl.localeCompare(right.streamUrl)
   );
 }
 

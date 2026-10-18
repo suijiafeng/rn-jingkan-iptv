@@ -35,9 +35,9 @@ test("maps feed ids and ISO 639-3 codes, using the main feed for bare ids", () =
 
 function body(text: string) {
   return new ReadableStream<Uint8Array>({
-    start(c) {
-      c.enqueue(new TextEncoder().encode(text));
-      c.close();
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(text));
+      controller.close();
     },
   });
 }

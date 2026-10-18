@@ -325,7 +325,7 @@ test("previous/next have boundaries and back dismisses sheet before fullscreen",
 
 test("adjacent playable index skips marked channels and never wraps", () => {
   const items = ["a", "dead", "b", "dead2"];
-  const dead = (x: string) => x.startsWith("dead");
+  const dead = (item: string) => item.startsWith("dead");
   expect(adjacentPlayableIndex(items, 0, 1, dead)).toBe(2);
   expect(adjacentPlayableIndex(items, 2, -1, dead)).toBe(0);
   expect(adjacentPlayableIndex(items, 2, 1, dead)).toBeNull();

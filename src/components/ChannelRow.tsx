@@ -1,9 +1,44 @@
 import React, { memo, useMemo } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+} from "react-native";
 import { Channel } from "../domain/types";
 import { channelTitle, displayGroups } from "../domain/channelLabels";
 import { colors, sizes, styles, type } from "../theme";
 import { ChannelLogo } from "./ChannelLogo";
+
+/** Space between rows; lists add it as a separator or a content gap. */
+export const CHANNEL_ROW_GAP = 4;
+
+/**
+ * Every row has the same height, so lists can place rows by arithmetic
+ * (getItemLayout) instead of rendering and measuring them first. Without
+ * that, a fast fling outruns the measurements and shows blank space.
+ * Content: 12dp padding top and bottom, a title line (tags sit beside it),
+ * a 3dp gap and one caption line; text lines grow with the font scale.
+ */
+export function channelRowHeight(fontScale: number): number {
+  const lines =
+    (type.rowTitle.lineHeight + type.caption.lineHeight) * fontScale;
+  return Math.max(sizes.row, Math.ceil(24 + 3 + lines));
+}
+
+/** Offset of row `index` when rows are `rowHeight` apart by CHANNEL_ROW_GAP. */
+export function channelRowLayout(
+  rowHeight: number,
+  index: number,
+  leading = 0,
+): { length: number; offset: number; index: number } {
+  return {
+    length: rowHeight,
+    offset: leading + index * (rowHeight + CHANNEL_ROW_GAP),
+    index,
+  };
+}
 /**
  * Memoized: with 10k+ rows the list re-renders cells on every parent update,
  * so callers pass stable handlers that receive the channel.
@@ -31,10 +66,12 @@ export const ChannelRow = memo(function ChannelRow({
   );
   const unreachable = channel.active && channel.checkStatus === "unreachable";
   const labels = [...tags, ...(unreachable ? ["不可用"] : [])];
+  const { fontScale } = useWindowDimensions();
+  const rowHeight = channelRowHeight(fontScale);
   const editingRecent = !!onRemoveRecent;
   const playbackDisabled = !channel.active || editingRecent;
   return (
-    <View style={s.row}>
+    <View style={[rowStyles.row, { height: rowHeight }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={
@@ -45,7 +82,7 @@ export const ChannelRow = memo(function ChannelRow({
         accessibilityState={{ disabled: playbackDisabled, selected: current }}
         onPress={() => onPlay(channel)}
         disabled={playbackDisabled}
-        style={({ pressed }) => [s.main, pressed && { opacity: 0.65 }]}
+        style={({ pressed }) => [rowStyles.main, pressed && { opacity: 0.65 }]}
       >
         <ChannelLogo
           uri={channel.logoUrl}
@@ -54,27 +91,28 @@ export const ChannelRow = memo(function ChannelRow({
           size={sizes.logo}
         />
         <View style={{ flex: 1, gap: 3 }}>
-          <Text
-            numberOfLines={2}
-            style={[s.title, current && s.currentTitle]}
-          >
-            {title}
-          </Text>
-          {labels.length > 0 && (
-            <View style={s.tags}>
-              {labels.map((label) => (
-                <Text
-                  key={label}
-                  style={[s.tag, label === "不可用" && s.badTag]}
-                >
-                  {label}
-                </Text>
-              ))}
-            </View>
-          )}
+          {/* One line: tags sit beside the title so every row has the
+              same height (see channelRowHeight). */}
+          <View style={rowStyles.titleLine}>
+            <Text
+              numberOfLines={1}
+              style={[rowStyles.title, current && rowStyles.currentTitle]}
+            >
+              {title}
+            </Text>
+            {labels.map((label) => (
+              <Text
+                key={label}
+                numberOfLines={1}
+                style={[rowStyles.tag, label === "不可用" && rowStyles.badTag]}
+              >
+                {label}
+              </Text>
+            ))}
+          </View>
           {/* No source name: the row stands for a logical channel, and the
               source that actually plays is chosen at playback time. */}
-          <Text numberOfLines={2} style={styles.caption}>
+          <Text numberOfLines={1} style={styles.caption}>
             {channel.active
               ? displayGroups(channel.groupName)
               : "节目单里已没有这个频道"}
@@ -89,11 +127,11 @@ export const ChannelRow = memo(function ChannelRow({
           disabled={recentBusy}
           onPress={() => onRemoveRecent(channel)}
           style={({ pressed }) => [
-            s.removeRecent,
+            rowStyles.removeRecent,
             { opacity: recentBusy ? 0.4 : pressed ? 0.65 : 1 },
           ]}
         >
-          <Text style={s.removeRecentText}>删除</Text>
+          <Text style={rowStyles.removeRecentText}>删除</Text>
         </Pressable>
       )}
       {!editingRecent && (
@@ -102,7 +140,7 @@ export const ChannelRow = memo(function ChannelRow({
           accessibilityLabel={`${channel.favorite ? "取消收藏" : "收藏"}${title}`}
           accessibilityState={{ selected: channel.favorite }}
           onPress={() => onFavorite(channel)}
-          style={s.star}
+          style={rowStyles.star}
         >
           <Text
             style={{
@@ -117,16 +155,17 @@ export const ChannelRow = memo(function ChannelRow({
     </View>
   );
 });
-const s = StyleSheet.create({
+const rowStyles = StyleSheet.create({
   // No own background: rows sit directly on the page and the player sheet.
   row: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: sizes.row,
     paddingLeft: 12,
     paddingRight: 4,
+    overflow: "hidden",
   },
-  title: { ...type.rowTitle, color: colors.text },
+  titleLine: { flexDirection: "row", alignItems: "center", gap: 6 },
+  title: { ...type.rowTitle, color: colors.text, flexShrink: 1 },
   currentTitle: { color: colors.accent, fontWeight: "600" },
   main: {
     flex: 1,
@@ -134,9 +173,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     paddingVertical: 12,
-    minHeight: sizes.row,
   },
-  tags: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tag: {
     ...type.muted,
     color: colors.warn,

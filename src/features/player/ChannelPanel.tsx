@@ -6,8 +6,14 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
-import { ChannelRow } from "../../components/ChannelRow";
+import {
+  CHANNEL_ROW_GAP,
+  ChannelRow,
+  channelRowHeight,
+  channelRowLayout,
+} from "../../components/ChannelRow";
 import { ChannelFilterBar } from "../channel/ChannelListParts";
 import { Button, Notice } from "../../components/ui";
 import { colors } from "../../theme";
@@ -54,6 +60,7 @@ export function ChannelPanel(props: ChannelPanelProps) {
   const shownChannels = sheet.channels;
   const range = sheet.rangeKey;
   const channelList = useRef<FlatList<Channel>>(null);
+  const rowHeight = channelRowHeight(useWindowDimensions().fontScale);
   const scrollRetry = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollTarget = useRef<{ index: number; retries: number } | null>(null);
   const [locateRequest, setLocateRequest] = useState(0);
@@ -112,7 +119,7 @@ export function ChannelPanel(props: ChannelPanelProps) {
 
   const locateButton = (
     <Pressable
-      style={s.headingAction}
+      style={styles.headingAction}
       accessibilityRole="button"
       accessibilityLabel="定位当前频道"
       accessibilityState={{ disabled: !channel.active }}
@@ -130,14 +137,14 @@ export function ChannelPanel(props: ChannelPanelProps) {
   return (
     <>
       {props.fullscreen && (
-        <View style={s.heading}>
-          <Text accessibilityRole="header" style={s.headingTitle}>
+        <View style={styles.heading}>
+          <Text accessibilityRole="header" style={styles.headingTitle}>
             频道列表
           </Text>
-          <View style={s.flex} />
+          <View style={styles.flex} />
           {locateButton}
           <Pressable
-            style={s.headingAction}
+            style={styles.headingAction}
             accessibilityRole="button"
             accessibilityLabel="关闭频道列表"
             onPress={props.onClose}
@@ -207,8 +214,9 @@ export function ChannelPanel(props: ChannelPanelProps) {
           }, 100);
         }}
         keyExtractor={(item) => item.id}
-        style={s.list}
-        contentContainerStyle={s.listContent}
+        getItemLayout={(_data, index) => channelRowLayout(rowHeight, index)}
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
         initialNumToRender={12}
         maxToRenderPerBatch={16}
         updateCellsBatchingPeriod={16}
@@ -216,11 +224,14 @@ export function ChannelPanel(props: ChannelPanelProps) {
         removeClippedSubviews={false}
         ListEmptyComponent={
           sheet.loading ? (
-            <View style={s.emptyLoading} accessibilityLiveRegion="polite">
-              <LoadingTitle title="正在载入频道" style={s.emptyLoadingText} />
+            <View style={styles.emptyLoading} accessibilityLiveRegion="polite">
+              <LoadingTitle
+                title="正在载入频道"
+                style={styles.emptyLoadingText}
+              />
             </View>
           ) : (
-            <Text style={s.empty}>
+            <Text style={styles.empty}>
               {filtered
                 ? `没有匹配频道，试试清除搜索${scope === "all" ? "或调整筛选" : ""}`
                 : scope === "recent"
@@ -245,7 +256,7 @@ export function ChannelPanel(props: ChannelPanelProps) {
   );
 }
 
-const s = StyleSheet.create({
+const styles = StyleSheet.create({
   flex: { flex: 1 },
   heading: {
     flexDirection: "row",
@@ -266,7 +277,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   list: { flex: 1 },
-  listContent: { gap: 4 },
+  listContent: { gap: CHANNEL_ROW_GAP },
   empty: { color: colors.muted, paddingVertical: 24, textAlign: "center" },
   emptyLoading: { paddingVertical: 24 },
   emptyLoadingText: { color: colors.muted },

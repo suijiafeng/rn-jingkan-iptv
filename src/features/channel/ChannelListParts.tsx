@@ -53,7 +53,7 @@ export function ChannelListTitle(props: HeaderProps) {
   const toggleRecentDisabled =
     props.recentBusy || (!props.recentEditing && props.recentCount === 0);
   return (
-    <View style={s.topRow}>
+    <View style={partStyles.topRow}>
       <View style={{ flex: 1 }}>
         <Heading
           title={
@@ -71,7 +71,7 @@ export function ChannelListTitle(props: HeaderProps) {
         />
       </View>
       {tab === "recent" && (
-        <View style={s.headerActions}>
+        <View style={partStyles.headerActions}>
           {props.recentEditing && (
             <Pressable
               accessibilityRole="button"
@@ -80,13 +80,13 @@ export function ChannelListTitle(props: HeaderProps) {
               disabled={clearRecentDisabled}
               onPress={props.onClearRecent}
               style={({ pressed }) => [
-                s.headerAction,
+                partStyles.headerAction,
                 {
                   opacity: clearRecentDisabled ? 0.4 : pressed ? 0.7 : 1,
                 },
               ]}
             >
-              <Text style={s.dangerText}>清空</Text>
+              <Text style={partStyles.dangerText}>清空</Text>
             </Pressable>
           )}
           <Pressable
@@ -98,13 +98,13 @@ export function ChannelListTitle(props: HeaderProps) {
             disabled={toggleRecentDisabled}
             onPress={props.onToggleRecentEditing}
             style={({ pressed }) => [
-              s.headerAction,
+              partStyles.headerAction,
               {
                 opacity: toggleRecentDisabled ? 0.4 : pressed ? 0.7 : 1,
               },
             ]}
           >
-            <Text style={s.actionText}>
+            <Text style={partStyles.actionText}>
               {props.recentEditing ? "完成" : "管理"}
             </Text>
           </Pressable>
@@ -144,12 +144,16 @@ export function ChannelFilterBar(
   );
   if (!hasFilterBar(props)) return null;
   return (
-    <View style={[s.filterBar, props.compact && s.compactBar]}>
-      <View style={[s.searchLine, props.foldSearch && s.hidden]}>
-        <View style={[s.searchRow, { flex: 1 }]}>
+    <View
+      style={[partStyles.filterBar, props.compact && partStyles.compactBar]}
+    >
+      <View
+        style={[partStyles.searchLine, props.foldSearch && partStyles.hidden]}
+      >
+        <View style={[partStyles.searchRow, { flex: 1 }]}>
           <TextInput
             accessibilityLabel="搜索频道名称"
-            style={s.searchInput}
+            style={partStyles.searchInput}
             placeholder="搜索频道名称…"
             placeholderTextColor={colors.muted}
             value={props.search}
@@ -162,9 +166,9 @@ export function ChannelFilterBar(
               accessibilityRole="button"
               accessibilityLabel="清除搜索"
               onPress={props.onClearSearch}
-              style={s.clearSearch}
+              style={partStyles.clearSearch}
             >
-              <Text style={s.clearText}>清除搜索</Text>
+              <Text style={partStyles.clearText}>清除搜索</Text>
             </Pressable>
           )}
         </View>
@@ -175,11 +179,11 @@ export function ChannelFilterBar(
             accessibilityState={{ expanded: sourcesOpen }}
             onPress={() => setSourcesOpen((value) => !value)}
             style={({ pressed }) => [
-              s.sourceToggle,
+              partStyles.sourceToggle,
               pressed && { opacity: 0.7 },
             ]}
           >
-            <Text numberOfLines={1} style={s.sourceText}>
+            <Text numberOfLines={1} style={partStyles.sourceText}>
               {selectedSource?.name || "来源"} {sourcesOpen ? "▴" : "▾"}
             </Text>
           </Pressable>
@@ -202,14 +206,14 @@ export function ChannelFilterBar(
                 setSourcesOpen(false);
               }}
             />
-            {props.sources.map((s) => (
+            {props.sources.map((source) => (
               <Button
-                key={s.id}
-                label={s.name}
-                secondary={props.sourceId !== s.id}
-                selected={props.sourceId === s.id}
+                key={source.id}
+                label={source.name}
+                secondary={props.sourceId !== source.id}
+                selected={props.sourceId === source.id}
                 onPress={() => {
-                  props.onSourceChange(s.id);
+                  props.onSourceChange(source.id);
                   setSourcesOpen(false);
                 }}
               />
@@ -229,7 +233,7 @@ export function ChannelFilterBar(
         />
       )}
       {tab === "all" && props.autoCheck && (
-        <View style={s.checkRow} accessibilityLiveRegion="polite">
+        <View style={partStyles.checkRow} accessibilityLiveRegion="polite">
           <ActivityIndicator size="small" color={colors.muted} />
           <Text style={styles.muted}>
             检测可用性 {props.autoCheck.done}/{props.autoCheck.total}
@@ -237,19 +241,19 @@ export function ChannelFilterBar(
         </View>
       )}
       {tab === "all" && !!props.sourceId && (
-        <View style={s.scopeRow}>
+        <View style={partStyles.scopeRow}>
           <Text style={[styles.muted, { flex: 1 }]}>
             范围：{selectedSource?.name || "所有来源"}
           </Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="清除来源筛选"
-            style={s.reset}
+            style={partStyles.reset}
             onPress={() => {
               props.onSourceChange("");
             }}
           >
-            <Text style={s.clearText}>所有来源</Text>
+            <Text style={partStyles.clearText}>所有来源</Text>
           </Pressable>
         </View>
       )}
@@ -260,7 +264,7 @@ export function ChannelFilterBar(
 /** Title and filters together (non-sticky layouts and tests). */
 export function ChannelListHeader(props: HeaderProps) {
   return (
-    <View style={s.header}>
+    <View style={partStyles.header}>
       <ChannelListTitle {...props} />
       <ChannelFilterBar {...props} />
     </View>
@@ -376,7 +380,7 @@ export function BottomTabs({
   );
 }
 
-const s = StyleSheet.create({
+const partStyles = StyleSheet.create({
   header: { gap: 10, marginBottom: 12 },
   // Opaque so rows scrolling underneath never show through the pinned bar.
   filterBar: { gap: 10, paddingVertical: 8, backgroundColor: colors.bg },

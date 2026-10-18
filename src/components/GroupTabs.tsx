@@ -80,8 +80,8 @@ export function GroupTabs({
       ref={scroller}
       testID={testID}
       horizontal
-      style={s.scroller}
-      contentContainerStyle={s.content}
+      style={styles.scroller}
+      contentContainerStyle={styles.content}
       showsHorizontalScrollIndicator
       indicatorStyle="white"
       keyboardShouldPersistTaps="handled"
@@ -134,7 +134,7 @@ export function GroupTabs({
   );
 }
 
-const s = StyleSheet.create({
+const styles = StyleSheet.create({
   scroller: { flexGrow: 0, flexShrink: 0 },
   content: { gap: 8, paddingBottom: 2 },
 });

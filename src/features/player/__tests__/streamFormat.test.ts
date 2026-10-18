@@ -19,9 +19,9 @@ function response(
     typeof body === "string" ? [new TextEncoder().encode(body)] : body;
   const cancel = jest.fn();
   const stream = new ReadableStream<Uint8Array>({
-    start(c) {
-      chunks.forEach((x) => c.enqueue(x));
-      c.close();
+    start(controller) {
+      chunks.forEach((chunk) => controller.enqueue(chunk));
+      controller.close();
     },
     cancel,
   });

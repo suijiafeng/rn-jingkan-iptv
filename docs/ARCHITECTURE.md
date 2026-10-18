@@ -1,6 +1,6 @@
 # 架构与边界
 
-Expo Router 仅提供薄入口，src/App.tsx 持有状态与流程（导入、刷新、播放、许可、检测），界面拆在 features/source（表单、来源管理、改名、可用性检测）、features/settings、features/channel（列表头、空状态、底部导航）与 features/common（确认框、风险说明）。domain/channelLabels 负责分组拆分翻译与频道名标记，domain/channelSources 负责可靠频道归组和显式清晰度排序。数据库 schema v6（检测结果、分组规范化、国家/地区／语言元数据、逻辑频道组与清晰度，以及逻辑频道级收藏／最近迁移）。使用 React 状态，不引入额外全局状态框架。底层状态只存 SQLite，UI 的结果快照由 revision 触发重查。
+Expo Router 仅提供薄入口，src/App.tsx 只组合首页；状态与流程按职责放在 features/home 的 hook 里：useAppSettings（打开数据库、设置、联网许可与移动网络确认）、useChannelListData（分页读取与各标签滚动位置）、usePlayback（播放、换台队列、上一个频道）、useSourceImport（导入与刷新表单）、useSourceTasks（可用性检测、语言补全）、useChannelActions（收藏、最近观看）、useDataControls（删除来源、撤销许可、清空），界面由 ChannelListPage、SourceDialogs、HomePlayer 承担。其余界面拆在 features/source（表单、来源管理、改名、可用性检测）、features/settings、features/channel（列表头、空状态、底部导航）与 features/common（确认框、风险说明）。domain/channelLabels 负责分组拆分翻译与频道名标记，domain/channelSources 负责可靠频道归组和显式清晰度排序。数据层 src/data/repository.ts 是对外入口，实现分在 sql（接口与错误）、schema（版本迁移）、channelSql（查询片段、行映射、批量写入）、channelReads（只读查询）与 channelRepository（仓库类）。数据库 schema v6（检测结果、分组规范化、国家/地区／语言元数据、逻辑频道组与清晰度，以及逻辑频道级收藏／最近迁移）。使用 React 状态，不引入额外全局状态框架。底层状态只存 SQLite，UI 的结果快照由 revision 触发重查。
 
 - domain/m3u：异步解析、资源上限、重复/坏行统计；只读取显式清晰度属性或严格 iptv-org 清晰度后缀，不从名称猜测，也不自动探测频道。
 - domain/url：HTTP(S) 输入检查，只拒绝显式危险目标（私网/本机地址、Fetch bad port 与常见局域网服务端口；81/82/85/98 等流媒体端口放行）；不是 DNS/重定向/原生请求防火墙。

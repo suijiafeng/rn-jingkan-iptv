@@ -37,7 +37,7 @@ export function SettingsScreen(props: Props) {
     props.revokePending ||
     (!props.remoteAllowed && !props.artworkAllowed);
   return (
-    <ScrollView contentContainerStyle={[styles.content, s.content]}>
+    <ScrollView contentContainerStyle={[styles.content, screenStyles.content]}>
       <Heading title="设置" subtitle="简单一点，安静地看" />
       <SettingSection label="节目来源">
         <SettingRow
@@ -190,7 +190,7 @@ export function SettingsScreen(props: Props) {
           onPress={props.onClearAll}
         />
       </SettingSection>
-      <View style={s.footer}>
+      <View style={screenStyles.footer}>
         <Text style={styles.muted}>静看 0.1.0 · 个人测试版</Text>
         <Text style={styles.caption}>
           无广告、无账号、无统计。资料只保存在本机。直播源本身可能含广告。只观看你有权访问的内容。
@@ -201,7 +201,7 @@ export function SettingsScreen(props: Props) {
   );
 }
 
-const s = {
+const screenStyles = {
   content: { gap: 20 },
   footer: { gap: 4, paddingHorizontal: 4 },
 } as const;
