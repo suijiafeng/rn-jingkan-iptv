@@ -5,6 +5,7 @@ import {
   VideoView,
   type VideoPlayer,
   type VideoSource,
+  isPictureInPictureSupported,
 } from "expo-video";
 import type { MediaHandle } from "./mediaHandle";
 import { PlaybackController } from "./playbackController";
@@ -12,6 +13,8 @@ import { classifyPlayerError } from "./sourceFailover";
 import { resolveContentType } from "./streamFormat";
 
 interface Props {
+  backgroundAllowed?: boolean;
+  title?: string;
   uri: string;
   attemptId: number;
   controller: PlaybackController;
@@ -20,34 +23,81 @@ interface Props {
 }
 
 /** Owns exactly one player for one attempt; never replaces a previous channel. */
-export function NativeAttempt({ uri, attemptId, controller, media }: Props) {
+export function NativeAttempt({
+  uri,
+  attemptId,
+  controller,
+  media,
+  backgroundAllowed = false,
+  title = "静看",
+}: Props) {
   const [player, setPlayer] = useState<VideoPlayer | null>(null);
+  const view = useRef<VideoView>(null);
+  const backgroundPolicy = useRef(backgroundAllowed);
+  const pipActive = useRef(false);
+  const pendingPip = useRef<{
+    resolve: () => void;
+    reject: () => void;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
   const alive = useRef(false);
   const currentInstance = useRef<VideoPlayer | null>(null);
+  useEffect(() => {
+    backgroundPolicy.current = backgroundAllowed;
+    if (currentInstance.current) {
+      currentInstance.current.staysActiveInBackground =
+        backgroundAllowed || pipActive.current || !!pendingPip.current;
+      currentInstance.current.showNowPlayingNotification = backgroundAllowed;
+    }
+  }, [backgroundAllowed]);
   useEffect(() => {
     alive.current = true;
     let live = true;
     let instance: VideoPlayer | undefined;
     const sniff = new AbortController();
     const subscriptions: { remove: () => void }[] = [];
-    const current = () =>
-      live &&
-      controller.isCurrentAttempt(attemptId) &&
-      AppState.currentState === "active";
+    const current = () => live && controller.isCurrentAttempt(attemptId);
     try {
       // Construct empty: even the source is withheld until the controller allows it.
       instance = createVideoPlayer(null);
       const ownedPlayer = instance;
       currentInstance.current = instance;
       ownedPlayer.audioMixingMode = "doNotMix";
-      ownedPlayer.staysActiveInBackground = false;
-      ownedPlayer.showNowPlayingNotification = false;
+      ownedPlayer.staysActiveInBackground = backgroundPolicy.current;
+      ownedPlayer.showNowPlayingNotification = backgroundPolicy.current;
       ownedPlayer.allowsExternalPlayback = false;
       ownedPlayer.keepScreenOnWhilePlaying = true;
       ownedPlayer.loop = false;
       // One sample per second feeds the overlay timeline (catch-up streams only).
       ownedPlayer.timeUpdateEventInterval = 1;
       media?.attach(ownedPlayer);
+      media?.attachPictureInPicture(ownedPlayer, async () => {
+        if (!current() || !view.current || !isPictureInPictureSupported())
+          throw new Error("Picture in picture unavailable");
+        if (pendingPip.current || pipActive.current) return;
+        // Reserve before the native call: Android can background the Activity
+        // before delivering onPictureInPictureStart to JavaScript.
+        controller.setPictureInPicture(attemptId, true);
+        ownedPlayer.staysActiveInBackground = true;
+        let entryTimer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const failed = () => reject(new Error("Picture in picture failed"));
+            entryTimer = setTimeout(failed, 5000);
+            pendingPip.current = { resolve, reject: failed, timer: entryTimer };
+            void view.current!.startPictureInPicture().catch(failed);
+          });
+        } catch {
+          if (current()) {
+            ownedPlayer.staysActiveInBackground = backgroundPolicy.current;
+            controller.setPictureInPicture(attemptId, false);
+          }
+          throw new Error("Picture in picture failed");
+        } finally {
+          if (entryTimer !== undefined) clearTimeout(entryTimer);
+          pendingPip.current = null;
+        }
+      });
       subscriptions.push(
         ownedPlayer.addListener("statusChange", ({ status, error }) => {
           if (!current()) return;
@@ -72,7 +122,7 @@ export function NativeAttempt({ uri, attemptId, controller, media }: Props) {
           if (current()) controller.nativeEnded(attemptId);
         }),
         AppState.addEventListener("change", (state) => {
-          if (state !== "active") {
+          if (state !== "active" && !controller.canContinueOutsideApp()) {
             // Pause synchronously before React commits the controller's unmount.
             ownedPlayer.pause();
             controller.appStateChanged(state);
@@ -81,7 +131,6 @@ export function NativeAttempt({ uri, attemptId, controller, media }: Props) {
       );
       // This effect owns an external native resource, which must not be created
       // during render. Publish its handle for the VideoView after construction.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPlayer(ownedPlayer);
       if (current()) {
         // Suffix-less addresses get one bounded 1 KiB format probe first;
@@ -92,6 +141,7 @@ export function NativeAttempt({ uri, attemptId, controller, media }: Props) {
             const source: VideoSource = {
               uri,
               useCaching: false,
+              metadata: { title },
               ...(contentType === "auto" ? {} : { contentType }),
             };
             return ownedPlayer.replaceAsync(source).then(() => {
@@ -117,6 +167,12 @@ export function NativeAttempt({ uri, attemptId, controller, media }: Props) {
     return () => {
       alive.current = false;
       live = false;
+      if (pendingPip.current) {
+        clearTimeout(pendingPip.current.timer);
+        pendingPip.current.reject();
+        pendingPip.current = null;
+      }
+      pipActive.current = false;
       sniff.abort();
       currentInstance.current = null;
       subscriptions.forEach((subscription) => subscription.remove());
@@ -134,11 +190,12 @@ export function NativeAttempt({ uri, attemptId, controller, media }: Props) {
         }
       }
     };
-  }, [uri, attemptId, controller, media]);
+  }, [uri, attemptId, controller, media, title]);
 
   if (!player) return null;
   return (
     <VideoView
+      ref={view}
       testID="native-video-view"
       player={player}
       style={StyleSheet.absoluteFill}
@@ -148,9 +205,27 @@ export function NativeAttempt({ uri, attemptId, controller, media }: Props) {
       // second, unsynchronised layer and swallow the zap gestures.
       nativeControls={false}
       fullscreenOptions={{ enable: false }}
-      allowsPictureInPicture={false}
+      allowsPictureInPicture
       startsPictureInPictureAutomatically={false}
       allowsVideoFrameAnalysis={false}
+      onPictureInPictureStart={() => {
+        if (
+          player !== currentInstance.current ||
+          !controller.isCurrentAttempt(attemptId)
+        )
+          return;
+        pipActive.current = true;
+        pendingPip.current?.resolve();
+        controller.setPictureInPicture(attemptId, true);
+      }}
+      onPictureInPictureStop={() => {
+        if (currentInstance.current && player === currentInstance.current) {
+          pipActive.current = false;
+          currentInstance.current.staysActiveInBackground =
+            backgroundPolicy.current;
+          controller.setPictureInPicture(attemptId, false);
+        }
+      }}
       useExoShutter
       onFirstFrameRender={() => {
         if (alive.current && player === currentInstance.current)

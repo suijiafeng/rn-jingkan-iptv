@@ -374,6 +374,10 @@ export default function App() {
               settings.saveToggle("swipeReverse", value)
             }
             skipUnreachable={settings.skipUnreachable}
+            backgroundPlayback={settings.backgroundPlayback}
+            onBackgroundPlaybackChange={(value) =>
+              settings.saveToggle("backgroundPlayback", value)
+            }
             onSkipUnreachableChange={(value) =>
               settings.saveToggle("skipUnreachable", value)
             }

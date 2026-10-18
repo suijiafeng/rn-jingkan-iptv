@@ -91,6 +91,7 @@ export function FullscreenBars({
             {!mediaInfo.seekable && mediaInfo.isLive && <LiveBadge />}
             <View style={styles.flex} />
             {sourceButton}
+            {view.pictureInPictureButton}
             <OverlayButton
               label="频道列表"
               icon={<MenuIcon />}

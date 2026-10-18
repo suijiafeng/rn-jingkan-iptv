@@ -122,6 +122,8 @@ export function ChannelSession(props: SessionProps) {
             attemptId={state.attemptId}
             controller={controller}
             media={media}
+            backgroundAllowed={props.backgroundAllowed}
+            title={title}
           />
         )}
         {/* The whole picture: tap toggles the overlay; in fullscreen a
@@ -298,6 +300,9 @@ export function ChannelSession(props: SessionProps) {
                 accessibilityLabel="横屏全屏"
                 onPress={props.onToggleFullscreen}
               />
+            </View>
+            <View style={sessionStyles.portraitTopRight}>
+              {view.pictureInPictureButton}
             </View>
           </>
         )}

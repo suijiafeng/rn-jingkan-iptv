@@ -39,6 +39,65 @@ afterEach(() => {
 });
 
 describe("playback intent and source isolation", () => {
+  test("background playback retains an attempt but still stops on cellular and consent withdrawal", async () => {
+    let active = true;
+    const { controller } = setup({
+      backgroundAllowed: true,
+      isAppActive: () => active,
+    });
+    await controller.requestPlay();
+    const id = controller.getSnapshot().attemptId!;
+    controller.nativeStarted(id);
+    active = false;
+    controller.appStateChanged("background");
+    expect(controller.isCurrentAttempt(id)).toBe(true);
+    controller.nativeStopped(id);
+    expect(controller.getSnapshot().phase).toBe("paused");
+    controller.nativeStarted(id);
+    expect(controller.getSnapshot().phase).toBe("playing");
+    controller.networkChanged(mobile);
+    expect(controller.getSnapshot()).toEqual({
+      phase: "cellular",
+      attemptId: null,
+    });
+    await controller.requestPlay(true);
+    controller.setPolicy(false, true);
+    expect(controller.getSnapshot()).toEqual({
+      phase: "blocked",
+      attemptId: null,
+    });
+    controller.dispose();
+  });
+  test("PiP reservation survives the Activity background transition but is scoped to its attempt", async () => {
+    let active = true;
+    const { controller } = setup({ isAppActive: () => active });
+    await controller.requestPlay();
+    const id = controller.getSnapshot().attemptId!;
+    controller.nativeStarted(id);
+    controller.setPictureInPicture(id, true);
+    active = false;
+    controller.appStateChanged("background");
+    expect(controller.isCurrentAttempt(id)).toBe(true);
+    controller.setPictureInPicture(id, false);
+    expect(controller.getSnapshot()).toEqual({
+      phase: "paused",
+      attemptId: null,
+      pauseReason: "background",
+    });
+    controller.setPictureInPicture(id, true);
+    expect(controller.canContinueOutsideApp()).toBe(false);
+    controller.dispose();
+  });
+  test("turning background playback off while inactive releases the attempt", async () => {
+    const { controller } = setup({
+      backgroundAllowed: true,
+      isAppActive: () => false,
+    });
+    await controller.requestPlay();
+    controller.setBackgroundAllowed(false);
+    expect(controller.getSnapshot().attemptId).toBeNull();
+    controller.dispose();
+  });
   test("no native attempt or network check without external-source consent", async () => {
     const { controller, checkNetwork } = setup({ remoteAllowed: false });
     await controller.requestPlay();

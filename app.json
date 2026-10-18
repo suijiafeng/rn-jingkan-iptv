@@ -11,7 +11,7 @@
     "newArchEnabled": true,
     "android": {
       "package": "com.jingkan.personal",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "monochromeImage": "./assets/adaptive-icon.png",
@@ -30,7 +30,6 @@
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.VIBRATE",
         "android.permission.ACCESS_BACKGROUND_LOCATION",
-        "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION",
         "android.permission.ACTIVITY_RECOGNITION",
         "com.google.android.gms.permission.ACTIVITY_RECOGNITION",
@@ -58,8 +57,8 @@
       [
         "expo-video",
         {
-          "supportsBackgroundPlayback": false,
-          "supportsPictureInPicture": false
+          "supportsBackgroundPlayback": true,
+          "supportsPictureInPicture": true
         }
       ],
       [

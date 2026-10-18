@@ -16,6 +16,8 @@ interface Props {
   remoteAllowed: boolean;
   revokePending: boolean;
   mobileWarning: boolean;
+  backgroundPlayback?: boolean;
+  onBackgroundPlaybackChange?: (value: boolean) => void;
   artworkAllowed: boolean;
   artworkSaving: boolean;
   artworkRevokePending: boolean;
@@ -158,6 +160,18 @@ export function SettingsScreen(props: Props) {
         )}
       </SettingSection>
       <SettingSection label="播放">
+        <SettingRow
+          title="后台播放"
+          caption="开启后切换应用或锁屏继续播放，可用系统媒体控件暂停；会持续联网并耗电。关闭后切到后台暂停，画中画除外。"
+          trailing={
+            <Switch
+              accessibilityLabel="后台播放"
+              value={props.backgroundPlayback ?? false}
+              trackColor={{ true: colors.accent }}
+              onValueChange={props.onBackgroundPlaybackChange}
+            />
+          }
+        />
         <SettingRow
           title="换台反转"
           caption={

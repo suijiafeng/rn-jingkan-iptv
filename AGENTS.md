@@ -1,6 +1,6 @@
 # 静看工程约定
 
-- 本仓库是个人自用 Android IPTV 客户端。不要加入广告、遥测、账号、后台服务或默认远程节目源。
+- 本仓库是个人自用 Android IPTV 客户端。不要加入广告、遥测、账号或默认远程节目源。仅允许用户开启的后台媒体播放前台服务，不加入其他常驻后台任务或后台定位。
 - 使用 Expo SDK 58 配套 React Native 0.88。依赖精确固定并提交 package-lock.json，不独立升级原生模块。
 - 每次修改后运行 npm run typecheck、npm run lint、npm test -- --runInBand。交付前额外运行 npm run build:bundle 与 Android 构建；无环境条件必须记录未运行项。
 - 原生目录由 expo prebuild 生成；原生策略只能修改 app.json / plugins，不手改生成目录。

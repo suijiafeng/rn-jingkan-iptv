@@ -36,6 +36,21 @@ const NO_INFO: MediaInfo = { isLive: false, seekable: false };
  */
 export class MediaHandle {
   private player: VideoPlayer | null = null;
+  private enterPictureInPicture: (() => Promise<void>) | null = null;
+
+  attachPictureInPicture(player: VideoPlayer, enter: () => Promise<void>) {
+    if (this.player === player) this.enterPictureInPicture = enter;
+  }
+
+  async startPictureInPicture(): Promise<boolean> {
+    try {
+      if (!this.enterPictureInPicture) return false;
+      await this.enterPictureInPicture();
+      return true;
+    } catch {
+      return false;
+    }
+  }
   private info: MediaInfo = NO_INFO;
   private timeline: MediaTimeline | null = null;
   private infoListeners = new Set<() => void>();
@@ -43,12 +58,14 @@ export class MediaHandle {
 
   attach(player: VideoPlayer) {
     this.player = player;
+    this.enterPictureInPicture = null;
     this.publish(NO_INFO, null);
   }
   /** Only the player that attached may detach (a newer attempt may own it). */
   detach(player: VideoPlayer) {
     if (this.player !== player) return;
     this.player = null;
+    this.enterPictureInPicture = null;
     this.publish(NO_INFO, null);
   }
   /** Samples the attached player; native reads may throw after release. */

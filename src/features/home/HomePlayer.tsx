@@ -71,6 +71,7 @@ export function HomePlayer({
         onFavorite={onFavorite}
         onStarted={onStarted}
         remoteAllowed={settings.remoteAllowed}
+        backgroundAllowed={settings.backgroundPlayback}
         mobileWarning={settings.mobileWarning && !settings.mobileAccepted}
         onMobileAccepted={() => settings.setMobileAccepted(true)}
         swipeReverse={settings.swipeReverse}

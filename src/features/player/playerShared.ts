@@ -30,6 +30,7 @@ export interface PlayerScreenProps {
   onStarted: (channel: Channel) => void;
   remoteAllowed: boolean;
   mobileWarning: boolean;
+  backgroundAllowed?: boolean;
   /** The user chose to continue on a possibly metered network. */
   onMobileAccepted?: () => void;
   /** Fullscreen swipe up = next channel; true flips it (我的电视 “换台反转”). */
@@ -43,7 +44,7 @@ export interface PlayerScreenProps {
   onDismissError?: () => void;
   /**
    * Docked as a small bar over the channel page while playback continues
-   * (foreground only; leaving the app still pauses). The owner switches the
+   * (background behavior follows the playback setting). The owner switches the
    * container's size; the session, its player and the stream stay mounted.
    */
   mini?: boolean;

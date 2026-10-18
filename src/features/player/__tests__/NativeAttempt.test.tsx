@@ -19,7 +19,9 @@ const mockPlayers: {
 }[] = [];
 let mockReplace: () => Promise<void> = () => Promise.resolve();
 const createdControllers: PlaybackController[] = [];
+const mockEnterPip = jest.fn<Promise<void>, []>(() => Promise.resolve());
 jest.mock("expo-video", () => ({
+  isPictureInPictureSupported: () => true,
   createVideoPlayer: jest.fn((source: unknown) => {
     if (source !== null) throw new Error("Players must be constructed empty");
     const handlers: Record<string, Handler> = {};
@@ -43,9 +45,14 @@ jest.mock("expo-video", () => ({
     return player;
   }),
   VideoView: (props: Record<string, unknown>) => {
+    const React = jest.requireActual<typeof import("react")>("react");
+    React.useImperativeHandle(props.ref as React.Ref<unknown>, () => ({
+      startPictureInPicture: mockEnterPip,
+    }));
     const { View } =
       jest.requireActual<typeof import("react-native")>("react-native");
-    return <View {...props} />;
+    const { ref: _ref, ...rest } = props;
+    return <View {...rest} />;
   },
 }));
 
@@ -74,6 +81,7 @@ async function readyController() {
 }
 beforeEach(() => {
   mockPlayers.length = 0;
+  mockEnterPip.mockReset().mockResolvedValue(undefined);
   mockReplace = () => Promise.resolve();
   Object.defineProperty(AppState, "currentState", {
     configurable: true,
@@ -83,6 +91,94 @@ beforeEach(() => {
 });
 afterEach(() => {
   createdControllers.splice(0).forEach((controller) => controller.dispose());
+  jest.useRealTimers();
+});
+
+test("background setting configures media controls without replacing the player", async () => {
+  const { controller, id } = await readyController();
+  const ui = await render(
+    <NativeAttempt
+      uri="https://example.test/live.m3u8"
+      attemptId={id}
+      controller={controller}
+    />,
+  );
+  await ui.rerender(
+    <NativeAttempt
+      uri="https://example.test/live.m3u8"
+      attemptId={id}
+      controller={controller}
+      backgroundAllowed
+    />,
+  );
+  expect(mockPlayers).toHaveLength(1);
+  expect(mockPlayers[0].staysActiveInBackground).toBe(true);
+  expect(mockPlayers[0]).toHaveProperty("showNowPlayingNotification", true);
+  await ui.unmount();
+});
+
+test("PiP reserves playback before backgrounding and confirms the actual native event", async () => {
+  const { controller, id } = await readyController();
+  const media = new MediaHandle();
+  const ui = await render(
+    <NativeAttempt
+      uri="https://example.test/live.m3u8"
+      attemptId={id}
+      controller={controller}
+      media={media}
+    />,
+  );
+  const entering = media.startPictureInPicture();
+  expect(mockEnterPip).toHaveBeenCalledTimes(1);
+  expect(controller.canContinueOutsideApp()).toBe(true);
+  Object.defineProperty(AppState, "currentState", {
+    configurable: true,
+    value: "background",
+  });
+  controller.appStateChanged("background");
+  await act(() =>
+    ui.getByTestId("native-video-view").props.onPictureInPictureStart(),
+  );
+  expect(await entering).toBe(true);
+  expect(controller.isCurrentAttempt(id)).toBe(true);
+  await act(() =>
+    ui.getByTestId("native-video-view").props.onPictureInPictureStop(),
+  );
+  expect(controller.getSnapshot().attemptId).toBeNull();
+  await ui.unmount();
+});
+
+test("silent PiP denial expires and never leaves background permission enabled", async () => {
+  jest.useFakeTimers();
+  const schedule = jest.spyOn(global, "setTimeout");
+  const cancel = jest.spyOn(global, "clearTimeout");
+  const { controller, id } = await readyController();
+  const media = new MediaHandle();
+  const ui = await render(
+    <NativeAttempt
+      uri="https://example.test/live.m3u8"
+      attemptId={id}
+      controller={controller}
+      media={media}
+    />,
+  );
+  const entering = media.startPictureInPicture();
+  const timerIndex = schedule.mock.calls.findIndex((call) => call[1] === 5000);
+  const entryTimer = schedule.mock.results[timerIndex].value;
+  await act(async () => {
+    jest.advanceTimersByTime(5000);
+  });
+  expect(await entering).toBe(false);
+  expect(controller.canContinueOutsideApp()).toBe(false);
+  expect(mockPlayers[0].staysActiveInBackground).toBe(false);
+  await ui.unmount();
+  controller.dispose();
+  await act(async () => {
+    jest.runOnlyPendingTimers();
+  });
+  expect(cancel).toHaveBeenCalledWith(entryTimer);
+  schedule.mockRestore();
+  cancel.mockRestore();
 });
 
 test("constructs empty, leaves controls to the app overlay, and loads one HLS attempt", async () => {
@@ -99,6 +195,7 @@ test("constructs empty, leaves controls to the app overlay, and loads one HLS at
   expect(native.replaceAsync).toHaveBeenCalledWith({
     uri: "https://example.test/live.m3u8?token=private",
     useCaching: false,
+    metadata: { title: "静看" },
     contentType: "hls",
   });
   expect(native.audioMixingMode).toBe("doNotMix");
@@ -108,7 +205,7 @@ test("constructs empty, leaves controls to the app overlay, and loads one HLS at
   expect(ui.getByTestId("native-video-view").props).toMatchObject({
     nativeControls: false,
     fullscreenOptions: { enable: false },
-    allowsPictureInPicture: false,
+    allowsPictureInPicture: true,
   });
   await act(() => {
     native.handlers.playingChange({ isPlaying: true });
@@ -259,6 +356,7 @@ test("suffix-less addresses are probed first and loaded with the detected type",
   expect(mockPlayers[0].replaceAsync).toHaveBeenCalledWith({
     uri: "https://cdn.example.test/163189/ch8",
     useCaching: false,
+    metadata: { title: "静看" },
     contentType: "hls",
   });
   await ui.unmount();

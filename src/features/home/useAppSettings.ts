@@ -8,7 +8,7 @@ import type { Tab } from "../channel/ChannelListParts";
 
 /** A boolean setting that is shown at once and rolled back if saving fails. */
 export type SavedToggleKey =
-  "mobileWarning" | "swipeReverse" | "skipUnreachable";
+  "mobileWarning" | "swipeReverse" | "skipUnreachable" | "backgroundPlayback";
 
 /**
  * Opens the local database and owns the settings and network permissions
@@ -26,6 +26,7 @@ export function useAppSettings({
     [remoteAllowed, setRemoteAllowed] = useState(false),
     [revokePending, setRevokePending] = useState(false),
     [mobileWarning, setMobileWarning] = useState(true),
+    [backgroundPlayback, setBackgroundPlayback] = useState(false),
     [swipeReverse, setSwipeReverse] = useState(false),
     [skipUnreachable, setSkipUnreachable] = useState(true),
     [artworkAllowed, setArtworkAllowed] = useState(false),
@@ -47,6 +48,7 @@ export function useAppSettings({
       .then(async (opened) => {
         const allowed = await opened.getSetting("remoteAllowed", false);
         const warning = await opened.getSetting("mobileWarning", true);
+        const background = await opened.getSetting("backgroundPlayback", false);
         const reverse = await opened.getSetting("swipeReverse", false);
         const skipDead = await opened.getSetting("skipUnreachable", true);
         const artwork = await opened.getSetting("artworkAllowed", false);
@@ -55,6 +57,7 @@ export function useAppSettings({
           remoteRef.current = allowed;
           setRemoteAllowed(allowed);
           setMobileWarning(warning);
+          setBackgroundPlayback(background);
           setSwipeReverse(reverse);
           setSkipUnreachable(skipDead);
           setArtworkAllowed(artwork);
@@ -178,6 +181,7 @@ export function useAppSettings({
 
   const toggleSetters: Record<SavedToggleKey, (value: boolean) => void> = {
     mobileWarning: setMobileWarning,
+    backgroundPlayback: setBackgroundPlayback,
     swipeReverse: setSwipeReverse,
     skipUnreachable: setSkipUnreachable,
   };
@@ -202,6 +206,7 @@ export function useAppSettings({
   const resetToDefaults = () => {
     setRevokePending(false);
     setMobileWarning(true);
+    setBackgroundPlayback(false);
     setMobileAccepted(false);
     setSwipeReverse(false);
     setSkipUnreachable(true);
@@ -223,6 +228,7 @@ export function useAppSettings({
     revokePending,
     setRevokePending,
     mobileWarning,
+    backgroundPlayback,
     mobileAccepted,
     setMobileAccepted,
     swipeReverse,

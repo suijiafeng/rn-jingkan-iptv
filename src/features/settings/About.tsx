@@ -34,7 +34,7 @@ export function About() {
             <Text style={styles.body}>安静地看，资料自己保管。</Text>
             <Text style={styles.muted}>
               个人 Android IPTV
-              客户端。无应用广告、账号、遥测或后台播放；不内置节目来源。来源中的节目和广告由相应提供方负责，仅观看你有权访问的内容。
+              客户端。无应用广告、账号或遥测；不内置节目来源。支持主动进入画中画；后台播放默认关闭，开启后通过媒体前台服务继续播放并提供系统媒体控制，不用于后台定位或其他常驻任务。来源中的节目和广告由相应提供方负责，仅观看你有权访问的内容。
             </Text>
             <Heading title="隐私与权限" />
             <Text style={styles.body}>
