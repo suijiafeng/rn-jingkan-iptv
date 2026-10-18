@@ -27,6 +27,8 @@ export interface FacetFiltersProps {
   countryHint?: string;
   /** Content categories as one-tap tabs instead of a third menu. */
   contentAsTabs?: boolean;
+  /** Dense sizes inside the player (40dp triggers, chip tabs). */
+  compact?: boolean;
   testID?: string;
 }
 
@@ -44,6 +46,7 @@ export function FacetFilters({
   selected,
   onChange,
   contentAsTabs = false,
+  compact = false,
   testID = "facet-filters",
 }: FacetFiltersProps) {
   const [open, setOpen] = useState<FacetKind | null>(null);
@@ -110,13 +113,16 @@ export function FacetFilters({
             onPress={() => toggle(kind)}
             style={({ pressed }) => [
               s.trigger,
+              compact && s.triggerCompact,
               selected[kind] !== null && s.selectedTrigger,
               pressed && { opacity: 0.7 },
             ]}
           >
             <Text numberOfLines={1} style={s.triggerText}>
               <Text style={s.dimension}>{LABELS[kind]} </Text>
-              <Text style={s.value}>{facetLabel(kind, selected[kind])}</Text>
+              <Text style={[s.value, compact && s.valueCompact]}>
+                {facetLabel(kind, selected[kind])}
+              </Text>
             </Text>
             <Text style={s.arrow}>{open === kind ? "▴" : "▾"}</Text>
           </Pressable>
@@ -208,6 +214,7 @@ export function FacetFilters({
             )
           }
           testID={`${testID}-content-tabs`}
+          compact={compact}
         />
       )}
     </View>
@@ -231,7 +238,9 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "transparent",
   },
+  triggerCompact: { minHeight: 40, paddingVertical: 6, borderRadius: 999 },
   selectedTrigger: { borderColor: colors.accent },
+  valueCompact: { fontSize: 13, lineHeight: 20 },
   triggerText: { flex: 1, minWidth: 0 },
   dimension: { color: colors.muted, fontSize: 11, lineHeight: 16 },
   value: {

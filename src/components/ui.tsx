@@ -18,6 +18,7 @@ export function Button({
   accessibilityRole = "button",
   accessibilityLabel,
   style,
+  compact = false,
 }: {
   label: string;
   onPress: () => void;
@@ -29,6 +30,8 @@ export function Button({
   /** Spoken label when the visible text is abbreviated; defaults to label. */
   accessibilityLabel?: string;
   style?: ViewStyle;
+  /** Chip-sized (34dp, 13px) for dense rows such as the player's filters. */
+  compact?: boolean;
 }) {
   return (
     <Pressable
@@ -42,8 +45,15 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => [
         s.button,
+        compact && s.buttonCompact,
         {
-          backgroundColor: secondary ? colors.raised : colors.accent,
+          backgroundColor: secondary
+            ? compact
+              ? colors.surface
+              : colors.raised
+            : compact
+              ? colors.text
+              : colors.accent,
           opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
         },
         style,
@@ -52,7 +62,18 @@ export function Button({
       <Text
         style={[
           s.label,
-          { color: danger ? colors.bad : secondary ? colors.text : colors.ink },
+          compact && s.labelCompact,
+          {
+            color: danger
+              ? colors.bad
+              : secondary
+                ? compact
+                  ? colors.muted
+                  : colors.text
+                : compact
+                  ? colors.bg
+                  : colors.ink,
+          },
         ]}
       >
         {label}
@@ -111,10 +132,17 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  buttonCompact: {
+    minHeight: 34,
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+  },
   label: {
     fontSize: 14,
     lineHeight: 21,
     fontWeight: "600",
     textAlign: "center",
   },
+  labelCompact: { fontSize: 13, lineHeight: 20, fontWeight: "500" },
 });

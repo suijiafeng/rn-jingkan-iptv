@@ -20,7 +20,7 @@ import type { Channel } from "../../domain/types";
 import { qualityName } from "../../domain/channelSources";
 import { channelTitle } from "../../domain/channelLabels";
 import { MediaHandle } from "./mediaHandle";
-import { OverlayButton } from "./overlayWidgets";
+import { OverlayButton, SourceChip } from "./overlayWidgets";
 import {
   adjacentPlayableIndex,
   PlaybackController,
@@ -220,7 +220,7 @@ export function useChannelSession(props: SessionProps) {
         ? "被系统暂停"
         : state.pauseReason === "cellular-declined"
           ? "已停止，可手动播放"
-          : description.body;
+          : "";
   // One round control for the primary action in every state, so cancel,
   // retry, pause and resume all look alike: ■ while connecting, ↻ after a
   // failure, ▶ when paused or stopped, ❚❚ while playing.
@@ -240,7 +240,7 @@ export function useChannelSession(props: SessionProps) {
       <OverlayButton
         label="⏮"
         accessibilityLabel="上一台"
-        quiet
+        variant="ring"
         compact={compactCluster}
         disabled={previous === null}
         onPress={() => {
@@ -266,7 +266,7 @@ export function useChannelSession(props: SessionProps) {
       <OverlayButton
         label="⏭"
         accessibilityLabel="下一台"
-        quiet
+        variant="ring"
         compact={compactCluster}
         disabled={next === null}
         onPress={selectNext}
@@ -276,8 +276,10 @@ export function useChannelSession(props: SessionProps) {
   // Quality and source of the address that is actually playing; the chip opens
   // the alternatives (a popover in fullscreen, a bottom sheet in portrait).
   const sourceButton = (
-    <OverlayButton
-      label={`${qualityName(props.channel)} · ${props.channel.sourceName}${props.sources.length > 1 ? " ▾" : ""}`}
+    <SourceChip
+      quality={qualityName(props.channel)}
+      sourceName={props.channel.sourceName}
+      count={props.sources.length}
       accessibilityLabel={
         props.sources.length > 1
           ? `切换来源，当前${qualityName(props.channel)}，${props.channel.sourceName}，共 ${props.sources.length} 个`
@@ -299,7 +301,7 @@ export function useChannelSession(props: SessionProps) {
       accessibilityState={{ selected: props.channel.favorite }}
       onPress={() => props.onFavorite(props.channel)}
     >
-      <Text style={[s.star, props.channel.favorite && s.accent]}>
+      <Text style={[s.star, props.channel.favorite && s.starOn]}>
         {props.channel.favorite ? "★" : "☆"}
       </Text>
     </Pressable>
@@ -344,7 +346,6 @@ export function useChannelSession(props: SessionProps) {
 export type SessionView = ReturnType<typeof useChannelSession>;
 
 const s = StyleSheet.create({
-  accent: { color: colors.accent },
   centerButton: {
     alignSelf: "center",
     width: 64,
@@ -352,7 +353,7 @@ const s = StyleSheet.create({
     borderRadius: 32,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0A1214B3",
+    backgroundColor: "#00000073",
     borderWidth: 1,
     borderColor: "#FFFFFF40",
   },
@@ -361,7 +362,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 18,
+    gap: 22,
   },
   zapRowAbsolute: {
     position: "absolute",
@@ -370,15 +371,17 @@ const s = StyleSheet.create({
     bottom: 0,
     left: 0,
   },
-  centerIcon: { color: colors.text, fontSize: 22, lineHeight: 28 },
+  centerIcon: { color: colors.text, fontSize: 24, lineHeight: 30 },
   favoriteHit: {
-    minWidth: 48,
-    minHeight: 48,
+    width: 40,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: 20,
   },
   favoriteSolid: { borderRadius: 12, backgroundColor: colors.raised },
   overlayButtonDisabled: { opacity: 0.4 },
   pressed: { opacity: 0.7 },
-  star: { color: colors.muted, fontSize: 24 },
+  star: { color: colors.muted, fontSize: 20, lineHeight: 24 },
+  starOn: { color: colors.warn },
 });

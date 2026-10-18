@@ -6,13 +6,17 @@ import {
   Text,
   View,
 } from "react-native";
-import { Heading } from "../../components/ui";
-import { colors, styles as theme } from "../../theme";
+import { colors } from "../../theme";
 import { qualityName } from "../../domain/channelSources";
 import { channelTitle, displayGroups } from "../../domain/channelLabels";
 import { NativeAttempt } from "./NativeAttempt";
 import { FullscreenBars } from "./FullscreenBars";
-import { MediaStatus, OverlayButton, WaitProgress } from "./overlayWidgets";
+import {
+  MediaStatus,
+  OverlayButton,
+  Shade,
+  WaitProgress,
+} from "./overlayWidgets";
 import { ChevronLeftIcon, FullscreenIcon } from "./playerIcons";
 import { SourceList } from "./SourceList";
 import {
@@ -175,13 +179,17 @@ export function ChannelSession(props: SessionProps) {
           !(state.phase === "paused" && state.attemptId !== null) && (
             // box-none: swipes on the dimmed area still reach the gesture layer.
             <View
-              style={s.videoNotice}
+              style={[s.videoNotice, waiting && s.videoNoticeSoft]}
               pointerEvents="box-none"
               accessibilityLiveRegion="polite"
             >
               <View pointerEvents="none" style={s.noticeText}>
-                {waiting && <ActivityIndicator color={colors.accent} />}
-                <Text style={s.noticeTitle}>{description.title}</Text>
+                {waiting && (
+                  <ActivityIndicator size="large" color={colors.accent} />
+                )}
+                {!(state.phase === "paused" && !pausedBody) && (
+                  <Text style={s.noticeTitle}>{description.title}</Text>
+                )}
                 {!!(state.phase === "paused"
                   ? pausedBody
                   : description.body) && (
@@ -210,6 +218,12 @@ export function ChannelSession(props: SessionProps) {
               )}
             </View>
           )}
+        {!props.mini && controlsVisible && !props.sheetOpen && (
+          <>
+            <Shade edge="top" heightRatio={0.46} />
+            <Shade edge="bottom" heightRatio={0.52} />
+          </>
+        )}
         {!props.mini &&
           controlsVisible &&
           !props.sheetOpen &&
@@ -231,8 +245,8 @@ export function ChannelSession(props: SessionProps) {
             <View style={s.portraitTopLeft}>
               <OverlayButton
                 label="返回频道"
-                icon={<ChevronLeftIcon />}
-                quiet
+                icon={<ChevronLeftIcon size={20} />}
+                variant="quiet"
                 accessibilityLabel="返回频道"
                 onPress={props.onClose}
               />
@@ -240,8 +254,8 @@ export function ChannelSession(props: SessionProps) {
             <View style={s.portraitBottomRight}>
               <OverlayButton
                 label="横屏全屏"
-                icon={<FullscreenIcon />}
-                quiet
+                icon={<FullscreenIcon size={20} />}
+                variant="quiet"
                 accessibilityLabel="横屏全屏"
                 onPress={props.onToggleFullscreen}
               />
@@ -260,7 +274,7 @@ export function ChannelSession(props: SessionProps) {
             <Text style={s.miniTitle} numberOfLines={1}>
               {title}
             </Text>
-            <Text style={theme.muted} numberOfLines={1}>
+            <Text style={s.miniSubtitle} numberOfLines={1}>
               {state.phase === "playing"
                 ? `${qualityName(props.channel)} · ${props.channel.sourceName}`
                 : description.title}
@@ -269,14 +283,14 @@ export function ChannelSession(props: SessionProps) {
           <OverlayButton
             label={primaryIcon}
             accessibilityLabel={primaryLabel}
-            solid
+            variant="quiet"
             disabled={primaryDisabled}
             onPress={primaryAction}
           />
           <OverlayButton
             label="✕"
             accessibilityLabel="停止播放"
-            solid
+            variant="quiet"
             onPress={props.onClose}
           />
         </>
@@ -284,14 +298,18 @@ export function ChannelSession(props: SessionProps) {
       {!props.fullscreen && !props.mini && (
         <View style={s.portraitInfo} testID="portrait-info">
           {/* Title on its own line: room for longer names and extra text. */}
-          <Heading
-            title={title}
-            subtitle={[
-              displayGroups(props.channel.groupName),
-              ...channelTitle(props.channel.name).tags,
-            ].join(" · ")}
-          />
-          <View style={s.row}>
+          <View>
+            <Text style={s.infoTitle} numberOfLines={2}>
+              {title}
+            </Text>
+            <Text style={s.infoSubtitle} numberOfLines={1}>
+              {[
+                displayGroups(props.channel.groupName),
+                ...channelTitle(props.channel.name).tags,
+              ].join(" · ")}
+            </Text>
+          </View>
+          <View style={s.infoRow}>
             {sourceButton}
             <View style={s.flex} />
             {favoriteButton}
@@ -359,6 +377,7 @@ const s = StyleSheet.create({
     backgroundColor: colors.raised,
   },
   miniText: { flex: 1, minHeight: 64, justifyContent: "center", gap: 2 },
+  miniSubtitle: { color: colors.muted, fontSize: 11, lineHeight: 16 },
   miniTitle: {
     color: colors.text,
     fontSize: 14,
@@ -382,8 +401,8 @@ const s = StyleSheet.create({
   },
   noticeTitle: {
     color: colors.text,
-    fontSize: 18,
-    lineHeight: 27,
+    fontSize: 15,
+    lineHeight: 22,
     fontWeight: "600",
     textAlign: "center",
   },
@@ -403,7 +422,7 @@ const s = StyleSheet.create({
     lineHeight: 27,
     fontWeight: "600",
   },
-  portraitBottomRight: { position: "absolute", bottom: 8, right: 8 },
+  portraitBottomRight: { position: "absolute", bottom: 6, right: 6 },
   portraitInfo: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -412,8 +431,21 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: colors.line,
   },
-  portraitMedia: { position: "absolute", left: 12, right: 12, bottom: 10 },
-  portraitTopLeft: { position: "absolute", top: 8, left: 8 },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  infoTitle: {
+    color: colors.text,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "600",
+  },
+  infoSubtitle: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  portraitMedia: { position: "absolute", left: 14, right: 56, bottom: 16 },
+  portraitTopLeft: { position: "absolute", top: 6, left: 6 },
   quietText: {
     color: colors.muted,
     fontSize: 14,
@@ -427,11 +459,12 @@ const s = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: "#000000CC",
-    padding: 16,
-    gap: 8,
+    backgroundColor: "#060A0CD6",
+    padding: 14,
+    gap: 10,
     justifyContent: "center",
   },
+  videoNoticeSoft: { backgroundColor: "#060A0C8C" },
   videoStage: {
     width: "100%",
     aspectRatio: 16 / 9,

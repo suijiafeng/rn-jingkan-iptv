@@ -1,6 +1,6 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { styles as theme } from "../../theme";
+import { colors } from "../../theme";
 import { LiveBadge, MediaStatus, OverlayButton } from "./overlayWidgets";
 import { ChevronLeftIcon } from "./playerIcons";
 import type { SessionProps } from "./ChannelSession";
@@ -40,9 +40,9 @@ export function FullscreenBars({
             ? [
                 s.fullscreenTop,
                 {
-                  top: insets.top + 16,
-                  left: insets.left + 24,
-                  right: insets.right + 24,
+                  top: insets.top,
+                  left: insets.left,
+                  right: insets.right,
                 },
               ]
             : s.hidden
@@ -50,16 +50,16 @@ export function FullscreenBars({
       >
         <OverlayButton
           label="退出全屏"
-          icon={<ChevronLeftIcon />}
+          icon={<ChevronLeftIcon size={20} />}
           accessibilityLabel="退出全屏"
-          quiet
+          variant="quiet"
           onPress={props.onToggleFullscreen}
         />
         <View style={s.flex}>
-          <Text style={theme.heading} numberOfLines={1}>
+          <Text style={s.title} numberOfLines={1}>
             {title}
           </Text>
-          <Text style={theme.muted} numberOfLines={1}>
+          <Text style={s.subtitle} numberOfLines={1}>
             {[
               index >= 0
                 ? `第 ${index + 1} / ${props.channels.length} 台`
@@ -78,9 +78,9 @@ export function FullscreenBars({
           style={[
             s.fullscreenBottom,
             {
-              bottom: insets.bottom + 16,
-              left: insets.left + 24,
-              right: insets.right + 24,
+              bottom: insets.bottom,
+              left: insets.left,
+              right: insets.right,
             },
           ]}
         >
@@ -105,24 +105,29 @@ export function FullscreenBars({
 
 const s = StyleSheet.create({
   flex: { flex: 1 },
-  row: { flexDirection: "row", alignItems: "center", gap: 12 },
+  row: { flexDirection: "row", alignItems: "center", gap: 10 },
   hidden: { display: "none" },
+  // Bars sit on the Shade the session draws; no panel of their own.
   fullscreenTop: {
     position: "absolute",
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    borderRadius: 16,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    backgroundColor: "#0A1214D9",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   fullscreenBottom: {
     position: "absolute",
     gap: 8,
-    borderRadius: 16,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    backgroundColor: "#0A1214D9",
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 12,
   },
+  title: {
+    color: colors.text,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "600",
+  },
+  subtitle: { color: "#FFFFFFB3", fontSize: 11, lineHeight: 16 },
 });

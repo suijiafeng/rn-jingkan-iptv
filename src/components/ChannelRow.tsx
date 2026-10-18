@@ -60,9 +60,17 @@ export const ChannelRow = memo(function ChannelRow({
           uri={channel.logoUrl}
           title={title}
           enabled={artworkEnabled}
+          size={flat ? 44 : 36}
         />
         <View style={{ flex: 1, gap: 3 }}>
-          <Text numberOfLines={2} style={styles.heading}>
+          <Text
+            numberOfLines={2}
+            style={[
+              styles.heading,
+              flat && s.flatTitle,
+              current && flat && s.flatCurrent,
+            ]}
+          >
             {title}
           </Text>
           {labels.length > 0 && (
@@ -79,7 +87,7 @@ export const ChannelRow = memo(function ChannelRow({
           )}
           {/* No source name: the row stands for a logical channel, and the
               source that actually plays is chosen at playback time. */}
-          <Text numberOfLines={2} style={styles.muted}>
+          <Text numberOfLines={2} style={[styles.muted, flat && s.flatMeta]}>
             {channel.active
               ? displayGroups(channel.groupName)
               : "来源已不再提供"}
@@ -132,7 +140,10 @@ const s = StyleSheet.create({
     paddingLeft: 12,
     paddingRight: 4,
   },
-  flat: { backgroundColor: "transparent" },
+  flat: { backgroundColor: "transparent", minHeight: 62 },
+  flatTitle: { fontSize: 15, lineHeight: 20, fontWeight: "500" },
+  flatCurrent: { color: colors.accent, fontWeight: "600" },
+  flatMeta: { fontSize: 11, lineHeight: 16 },
   main: {
     flex: 1,
     flexDirection: "row",

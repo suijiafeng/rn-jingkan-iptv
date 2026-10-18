@@ -165,6 +165,7 @@ export function ChannelPanel(props: ChannelPanelProps) {
               secondary={scope !== value}
               selected={scope === value}
               style={s.scopeButton}
+              compact
               onPress={() => changeScope(value)}
             />
           </View>
@@ -275,7 +276,7 @@ const s = StyleSheet.create({
   },
   headingActionText: { color: colors.accent, fontSize: 13, lineHeight: 20 },
   scopes: { flexDirection: "row", alignItems: "center", gap: 8 },
-  scopeButton: { minHeight: 48, paddingVertical: 8, paddingHorizontal: 12 },
+  scopeButton: { minHeight: 34, paddingVertical: 7, paddingHorizontal: 12 },
   list: { flex: 1 },
   listContent: { gap: 4 },
   empty: { color: colors.muted, paddingVertical: 24, textAlign: "center" },

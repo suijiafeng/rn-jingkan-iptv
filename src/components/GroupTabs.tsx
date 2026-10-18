@@ -8,6 +8,8 @@ interface Props {
   onChange: (group: string | null) => void;
   buttonStyle?: ViewStyle;
   testID?: string;
+  /** Chip-sized tabs for the player's dense filter bar. */
+  compact?: boolean;
 }
 
 const ALL_KEY = "scope:all";
@@ -20,6 +22,7 @@ export function GroupTabs({
   onChange,
   buttonStyle,
   testID = "group-tabs",
+  compact = false,
 }: Props) {
   const scroller = useRef<React.ElementRef<typeof ScrollView>>(null);
   const viewport = useRef(0);
@@ -124,7 +127,8 @@ export function GroupTabs({
             label={item.label}
             secondary={!item.selected}
             selected={item.selected}
-            style={{ ...s.button, ...buttonStyle }}
+            style={{ ...(compact ? s.buttonChip : s.button), ...buttonStyle }}
+            compact={compact}
             onPress={item.onPress}
           />
         </View>
@@ -137,4 +141,5 @@ const s = StyleSheet.create({
   scroller: { flexGrow: 0, flexShrink: 0 },
   content: { gap: 8, paddingBottom: 2 },
   button: { minHeight: 48, paddingVertical: 10, paddingHorizontal: 14 },
+  buttonChip: { minHeight: 34 },
 });

@@ -290,14 +290,15 @@ test("fullscreen media stays edge-to-edge while controls and sheets respect disp
   expect(
     StyleSheet.flatten(ui.getByTestId("video-stage").props.style),
   ).toMatchObject({ top: 0, right: 0, bottom: 0, left: 0 });
+  // Bars run to the picture's edges, offset only by the display insets.
   expect(
     StyleSheet.flatten(ui.getByTestId("fullscreen-controls").props.style),
-  ).toMatchObject({ top: 27, right: 37, left: 43 });
+  ).toMatchObject({ top: 11, right: 13, left: 19 });
   expect(
     StyleSheet.flatten(
       ui.getByTestId("fullscreen-bottom-controls").props.style,
     ),
-  ).toMatchObject({ bottom: 33, right: 37, left: 43 });
+  ).toMatchObject({ bottom: 17, right: 13, left: 19 });
   // The gesture layer is the whole picture, not an edge strip.
   expect(
     StyleSheet.flatten(ui.getByTestId("fullscreen-gesture-layer").props.style),
@@ -898,7 +899,7 @@ describe("one overlay instead of native controls", () => {
     await fireEvent.press(ui.getByTestId("center-play-pause"));
     expect(mockNative.pause).not.toHaveBeenCalled();
     expect(mockUnmounts).toHaveBeenCalledTimes(1);
-    expect(ui.getByText("已暂停")).toBeTruthy();
+    expect(ui.queryByText("已暂停")).toBeNull(); // plain pause: dimmed picture and ▶ only
     await fireEvent.press(ui.getByRole("button", { name: "播放" }));
     expect(mockMounts).toHaveBeenCalledTimes(2);
     await ui.unmount();
@@ -1067,6 +1068,7 @@ describe("docked bar", () => {
     await start();
     await fireEvent.press(ui.getByRole("button", { name: "暂停" }));
     expect(mockUnmounts).toHaveBeenCalledTimes(1);
+    // The docked bar still names the state in its subtitle.
     expect(ui.getByText("已暂停")).toBeTruthy();
     await fireEvent.press(ui.getByRole("button", { name: "播放" }));
     expect(mockMounts).toHaveBeenCalledTimes(2);
@@ -1110,7 +1112,7 @@ describe("one round primary control", () => {
     expect(round().props.accessibilityLabel).toBe("暂停");
     expect(within(round()).getByText("❚❚")).toBeTruthy();
     await fireEvent.press(round());
-    expect(ui.getByText("已暂停")).toBeTruthy();
+    expect(ui.queryByText("已暂停")).toBeNull(); // plain pause: dimmed picture and ▶ only
     expect(round().props.accessibilityLabel).toBe("播放");
     expect(within(round()).getByText("▶")).toBeTruthy();
     expect(ui.queryByRole("button", { name: "重试播放" })).toBeNull();
