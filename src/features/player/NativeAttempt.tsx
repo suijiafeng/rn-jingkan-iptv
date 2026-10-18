@@ -8,6 +8,7 @@ import {
 } from "expo-video";
 import type { MediaHandle } from "./mediaHandle";
 import { PlaybackController } from "./playbackController";
+import { classifyPlayerError } from "./sourceFailover";
 import { resolveContentType } from "./streamFormat";
 
 interface Props {
@@ -48,10 +49,15 @@ export function NativeAttempt({ uri, attemptId, controller, media }: Props) {
       ownedPlayer.timeUpdateEventInterval = 1;
       media?.attach(ownedPlayer);
       subscriptions.push(
-        ownedPlayer.addListener("statusChange", ({ status }) => {
+        ownedPlayer.addListener("statusChange", ({ status, error }) => {
           if (!current()) return;
           media?.sample(ownedPlayer);
-          controller.nativeStatus(attemptId, status);
+          // Only a coarse category leaves this closure; the message does not.
+          controller.nativeStatus(
+            attemptId,
+            status,
+            classifyPlayerError(error?.message),
+          );
         }),
         ownedPlayer.addListener("timeUpdate", () => {
           if (current()) media?.sample(ownedPlayer);
@@ -92,10 +98,17 @@ export function NativeAttempt({ uri, attemptId, controller, media }: Props) {
               if (current()) ownedPlayer.play();
             });
           })
-          .catch(() => {
+          .catch((reason: unknown) => {
             // Expo 58 provides only PlayerError.message; do not claim HTTP status,
             // expiry, or authentication from unstructured vendor error strings.
-            if (current()) controller.nativeStatus(attemptId, "error");
+            if (current())
+              controller.nativeStatus(
+                attemptId,
+                "error",
+                classifyPlayerError(
+                  reason instanceof Error ? reason.message : null,
+                ),
+              );
           });
       }
     } catch {

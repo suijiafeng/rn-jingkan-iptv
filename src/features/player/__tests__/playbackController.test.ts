@@ -6,6 +6,13 @@ import {
   isOffline,
   PlaybackController,
 } from "../playbackController";
+import {
+  advanceRound,
+  classifyPlayerError,
+  nextUntriedSource,
+  sourcePosition,
+} from "../sourceFailover";
+import type { Channel } from "../../../domain/types";
 const wifi = { type: "WIFI", isConnected: true, isInternetReachable: true };
 const mobile = {
   type: "CELLULAR",
@@ -276,7 +283,11 @@ describe("network safety", () => {
       },
     }).controller;
     await failed.requestPlay();
-    expect(failed.getSnapshot()).toEqual({ phase: "error", attemptId: null });
+    expect(failed.getSnapshot()).toEqual({
+      phase: "error",
+      attemptId: null,
+      failure: "unknown",
+    });
     const unknown = setup({
       checkNetwork: async () => ({ type: "UNKNOWN", isConnected: true }),
     }).controller;
@@ -345,4 +356,123 @@ test("a user pause keeps a started attempt, and a later native stop keeps its re
   controller.nativeStarted(id);
   expect(controller.getSnapshot()).toEqual({ phase: "playing", attemptId: id });
   controller.dispose();
+});
+
+describe("source failover", () => {
+  const base: Channel = {
+    id: "a",
+    identityKey: "a",
+    sourceId: "source",
+    sourceName: "我的节目单",
+    active: true,
+    lastSeenRevision: 1,
+    lastPlayedAt: null,
+    checkStatus: null,
+    checkedAt: null,
+    name: "山野纪实",
+    groupName: "纪录片",
+    groupKey: "iptv:shanye.cn",
+    streamUrl: "https://example.test/a.m3u8",
+    logoUrl: null,
+    tvgId: null,
+    sortIndex: 0,
+    favorite: false,
+  };
+  // Listed out of order on purpose: the round walks compareChannelSources.
+  const high: Channel = {
+    ...base,
+    id: "c",
+    streamUrl: "https://example.test/c.m3u8",
+    qualityRank: 1080,
+    sortIndex: 2,
+  };
+  const low: Channel = { ...base, qualityRank: 576 };
+  const mid: Channel = {
+    ...base,
+    id: "b",
+    streamUrl: "https://example.test/b.m3u8",
+    qualityRank: 720,
+    sortIndex: 1,
+  };
+  const sources = [high, low, mid];
+
+  test("a native error carries only a category and defaults to unknown", async () => {
+    const { controller } = setup();
+    await controller.requestPlay();
+    controller.nativeStatus(controller.getSnapshot().attemptId!, "error");
+    expect(controller.getSnapshot()).toEqual({
+      phase: "error",
+      attemptId: null,
+      failure: "unknown",
+    });
+    await controller.requestPlay();
+    controller.nativeStatus(
+      controller.getSnapshot().attemptId!,
+      "error",
+      "network",
+    );
+    expect(controller.getSnapshot().failure).toBe("network");
+    controller.dispose();
+  });
+  test("only unmistakable transport and container messages are classified", () => {
+    expect(
+      classifyPlayerError(
+        "A playback exception has occurred: Source error Response code: 404",
+      ),
+    ).toBe("network");
+    expect(classifyPlayerError("Unable to connect to https://x.test/a")).toBe(
+      "network",
+    );
+    expect(
+      classifyPlayerError("Source error UnrecognizedInputFormatException"),
+    ).toBe("media");
+    expect(classifyPlayerError("MediaCodecVideoRenderer error, index=0")).toBe(
+      "unknown",
+    );
+    expect(classifyPlayerError(undefined)).toBe("unknown");
+  });
+  test("a timeout moves to the next source in quality order", () => {
+    expect(sourcePosition(sources, low)).toEqual({ index: 1, total: 3 });
+    const step = advanceRound(null, low, sources, "timeout");
+    expect(step.next?.id).toBe("b");
+    expect(step.round).toEqual({
+      groupKey: "iptv:shanye.cn",
+      tried: ["a"],
+      autoSelected: "b",
+    });
+  });
+  test("every source is tried once, then the round stays for a manual retry", () => {
+    const first = advanceRound(null, low, sources, "timeout");
+    const second = advanceRound(first.round, mid, sources, "network");
+    expect(second.next?.id).toBe("c");
+    const third = advanceRound(second.round, high, sources, "media");
+    expect(third.next).toBeNull();
+    expect(third.round.tried).toEqual(["a", "b", "c"]);
+    // The same failure reported again changes nothing.
+    expect(advanceRound(third.round, high, sources, "timeout")).toEqual({
+      round: third.round,
+      next: null,
+    });
+  });
+  test("an unknown native error never switches sources", () => {
+    const step = advanceRound(null, low, sources, "unknown");
+    expect(step.next).toBeNull();
+    expect(step.round.autoSelected).toBeNull();
+    expect(nextUntriedSource(sources, low, ["a"])?.id).toBe("b");
+  });
+  test("a manually chosen source is the start; the walk wraps around it", () => {
+    const step = advanceRound(null, high, sources, "timeout");
+    expect(step.next?.id).toBe("a");
+    const again = advanceRound(step.round, low, sources, "timeout");
+    expect(again.next?.id).toBe("b");
+    expect(advanceRound(again.round, mid, sources, "timeout").next).toBeNull();
+  });
+  test("another channel starts a fresh round; a lone source has no alternative", () => {
+    const stale = advanceRound(null, low, sources, "timeout").round;
+    const other: Channel = { ...base, id: "z", groupKey: "iptv:other.cn" };
+    expect(advanceRound(stale, other, [other], "timeout")).toEqual({
+      round: { groupKey: "iptv:other.cn", tried: ["z"], autoSelected: null },
+      next: null,
+    });
+  });
 });

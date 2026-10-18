@@ -86,6 +86,13 @@ export function useChannelSession(props: SessionProps) {
   useEffect(() => {
     controller.setPolicy(props.remoteAllowed, props.mobileWarning);
   }, [controller, props.remoteAllowed, props.mobileWarning]);
+  // A finished attempt without a picture is reported once; the failover
+  // decides whether another address of this channel is worth a try.
+  const { onFailure, onUserPlay } = props.failover;
+  useEffect(() => {
+    if (state.phase === "timeout") onFailure("timeout");
+    else if (state.phase === "error") onFailure(state.failure ?? "unknown");
+  }, [state.phase, state.failure, onFailure]);
 
   // Overlay controls (both modes): tap the picture to toggle; they auto-hide
   // only while actually playing, and never for screen-reader users.
@@ -152,6 +159,7 @@ export function useChannelSession(props: SessionProps) {
     // On a possibly metered network ▶ is the explicit "continue" answer.
     if (state.phase === "cellular") {
       props.onMobileAccepted?.();
+      onUserPlay();
       void controller.requestPlay(true);
       return;
     }
@@ -169,7 +177,10 @@ export function useChannelSession(props: SessionProps) {
     }
     if (retained && media.play()) return;
     if (busy) controller.pause();
-    else void controller.requestPlay();
+    else {
+      onUserPlay();
+      void controller.requestPlay();
+    }
   };
   const index = props.channels.findIndex((channel) =>
     sameChannel(channel, props.channel),
@@ -212,7 +223,10 @@ export function useChannelSession(props: SessionProps) {
     else showOsd(step === 1 ? "已经是最后一个频道" : "已经是第一个频道");
   };
 
-  const description = descriptions[state.phase];
+  const description =
+    starting && props.failover.connectingTitle
+      ? { ...descriptions[state.phase], title: props.failover.connectingTitle }
+      : descriptions[state.phase];
   const pausedBody =
     state.pauseReason === "background"
       ? "切到后台时暂停"

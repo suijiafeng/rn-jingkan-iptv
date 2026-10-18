@@ -1,3 +1,5 @@
+import type { AttemptFailure } from "./sourceFailover";
+
 /** A source-free state machine: stream URLs and native errors never enter UI state. */
 export type PlaybackPhase =
   | "paused"
@@ -17,6 +19,8 @@ export interface PlaybackSnapshot {
   phase: PlaybackPhase;
   attemptId: number | null;
   pauseReason?: PauseReason;
+  /** Only with phase "error": a category, never the native message. */
+  failure?: AttemptFailure;
 }
 export interface ConnectionState {
   type?: string;
@@ -97,6 +101,11 @@ export class PlaybackController {
       ...(pauseReason ? { pauseReason } : {}),
     });
   }
+  private fail(failure: AttemptFailure) {
+    ++this.generation;
+    this.clearTimer();
+    this.publish({ phase: "error", attemptId: null, failure });
+  }
   setOnStarted(onStarted: () => void) {
     this.options = { ...this.options, onStarted };
   }
@@ -137,7 +146,8 @@ export class PlaybackController {
     try {
       network = await this.options.checkNetwork();
     } catch {
-      if (token === this.generation && !this.disposed) this.stop("error");
+      // Not the stream's fault: no other address is tried for this.
+      if (token === this.generation && !this.disposed) this.fail("unknown");
       return;
     }
     if (this.disposed || token !== this.generation) return;
@@ -217,9 +227,14 @@ export class PlaybackController {
       this.options.onStarted();
     }
   }
-  nativeStatus(id: number, status: string) {
+  /** Errors default to "unknown", which only a manual retry may follow. */
+  nativeStatus(
+    id: number,
+    status: string,
+    failure: Exclude<AttemptFailure, "timeout"> = "unknown",
+  ) {
     if (!this.isCurrentAttempt(id)) return;
-    if (status === "error") this.stop("error");
+    if (status === "error") this.fail(failure);
     else if (status === "loading")
       this.publish({
         phase: this.startedAttempt === id ? "buffering" : "connecting",

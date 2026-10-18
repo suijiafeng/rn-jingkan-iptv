@@ -6,7 +6,6 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { colors } from "../../theme";
 import { qualityName } from "../../domain/channelSources";
 import { channelTitle, displayGroups } from "../../domain/channelLabels";
 import { NativeAttempt } from "./NativeAttempt";
@@ -26,8 +25,12 @@ import {
   type PlayerScreenProps,
 } from "./playerShared";
 import { useChannelSession } from "./useChannelSession";
+import type { FailoverView } from "./useSourceFailover";
+import { s } from "./channelSessionStyles";
 
 export interface SessionProps extends PlayerScreenProps {
+  /** Automatic switching between this channel's addresses after a failure. */
+  failover: FailoverView;
   fullscreen: boolean;
   sheetOpen: boolean;
   controlsShown: boolean;
@@ -79,10 +82,11 @@ export function ChannelSession(props: SessionProps) {
     favoriteButton,
   } = view;
   // Title, then one line of description: the state's body plus any hint.
+  const failed = state.phase === "timeout" || state.phase === "error";
   const noticeLine = [
     state.phase === "paused" ? pausedBody : description.body,
-    (state.phase === "timeout" || state.phase === "error") &&
-    props.channel.checkStatus === "unreachable"
+    failed ? props.failover.failedBody : "",
+    failed && props.channel.checkStatus === "unreachable"
       ? "上次检测也打不开"
       : "",
   ]
@@ -371,145 +375,3 @@ export function ChannelSession(props: SessionProps) {
     </View>
   );
 }
-
-const s = StyleSheet.create({
-  flex: { flex: 1 },
-  fullscreenSources: {
-    position: "absolute",
-    top: 82,
-    right: 24,
-    width: 300,
-    maxHeight: "65%",
-    borderRadius: 16,
-    padding: 8,
-    backgroundColor: "#0A1214D9",
-  },
-  fullscreenVideo: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    width: undefined,
-  },
-  miniBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingRight: 6,
-    backgroundColor: colors.raised,
-  },
-  miniText: { flex: 1, minHeight: 64, justifyContent: "center", gap: 2 },
-  miniSubtitle: { color: colors.muted, fontSize: 11, lineHeight: 16 },
-  miniTitle: {
-    color: colors.text,
-    fontSize: 14,
-    lineHeight: 21,
-    fontWeight: "600",
-  },
-  miniVideo: { width: 100, height: 64 },
-  noticeBody: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: "center",
-  },
-  noticeText: { gap: 8 },
-  quietLink: { alignSelf: "center", paddingHorizontal: 12, paddingVertical: 6 },
-  quietLinkText: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 18,
-    textDecorationLine: "underline",
-  },
-  noticeTitle: {
-    color: colors.text,
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  swipeHint: {
-    position: "absolute",
-    top: "50%",
-    width: 16,
-    height: 0,
-    alignItems: "center",
-    justifyContent: "center",
-    opacity: 0.55,
-  },
-  swipeHintText: {
-    color: colors.text,
-    fontSize: 11,
-    lineHeight: 16,
-    letterSpacing: 2,
-    width: 120,
-    textAlign: "center",
-    transform: [{ rotate: "90deg" }],
-  },
-  osd: {
-    position: "absolute",
-    top: 24,
-    alignSelf: "center",
-    maxWidth: "70%",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: "#0A1214D9",
-  },
-  osdText: {
-    color: colors.text,
-    fontSize: 18,
-    lineHeight: 27,
-    fontWeight: "600",
-  },
-  portraitBottomRight: { position: "absolute", bottom: 6, right: 6 },
-  portraitInfo: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 10,
-    gap: 10,
-    borderBottomWidth: 1,
-    borderColor: colors.line,
-  },
-  infoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  infoTitle: {
-    color: colors.text,
-    fontSize: 18,
-    lineHeight: 24,
-    fontWeight: "600",
-  },
-  infoSubtitle: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 2,
-  },
-  portraitMedia: { position: "absolute", left: 14, right: 56, bottom: 16 },
-  portraitTopLeft: { position: "absolute", top: 6, left: 6 },
-  quietText: {
-    color: colors.muted,
-    fontSize: 14,
-    lineHeight: 21,
-    fontWeight: "500",
-  },
-  row: { flexDirection: "row", alignItems: "center", gap: 12 },
-  videoNotice: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: "#060A0CD6",
-    padding: 14,
-    gap: 10,
-    justifyContent: "center",
-  },
-  videoNoticeSoft: { backgroundColor: "#060A0C8C" },
-  videoStage: {
-    width: "100%",
-    backgroundColor: "#000000",
-    overflow: "hidden",
-  },
-  warning: { color: colors.warn, fontSize: 12, lineHeight: 18 },
-});

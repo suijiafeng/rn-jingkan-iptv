@@ -1,5 +1,14 @@
 # 验证记录
 
+## 2026-10-19 · 播放失败自动切换同频道备用源
+
+- 新增 sourceFailover（纯函数：失败分类、来源排序、下一个未试来源、一轮记录）与 useSourceFailover（挂在 PlayerScreen，跨会话重建保留本轮）；控制器仍不接触地址，只在 error 快照里多一个类别字段（timeout/network/media/unknown），原生错误消息不出闭包、不进状态。
+- 规则：一次尝试以超时或可归类的网络/媒体错误结束，且同频道还有未试来源时，按 compareChannelSources 顺序切到下一个并重新尝试；每个来源一轮只试一次，全部失败回到手动重试并提示“N 个来源都试过了”。离线、移动数据确认、未允许联网、手动暂停/取消、用户手选来源都不触发；手选来源作为本轮起点，走完后回绕；手动重试开新一轮。无法归类的原生错误（解码器、运行时、空消息）保持只允许手动重试。切换中状态栏显示“来源 2/3 连接中”，不出现地址。
+- 旧尝试沿用 attemptId/generation：换源会卸载旧 ChannelSession（释放原生实例），迟到回调被 isCurrentAttempt 忽略。
+- 本机（Node 24）：typecheck、lint、Jest 24 个套件 354 项通过（新增控制器/纯函数 7 项、PlayerScreen 5 项：超时切第二来源、全部失败后手动重试并开新一轮、未知错误不切换、手选来源起算并回绕、离线与手动暂停不切换）；build:bundle 导出成功。工作树位于 .claude 目录下，Jest 需以 `--testPathIgnorePatterns /node_modules/ /android/` 覆盖配置中的 .claude 忽略项才能发现测试。
+- 为保持单文件 500 行以内，ChannelSession 的样式表移至 channelSessionStyles.ts，无样式改动。
+- 未验证：Android 原生构建与 S25 Ultra 真机未运行；错误分类仅按 ExoPlayer 常见消息模式单元测试，真实设备上 expo-video 58 返回的消息文本未实测，分类不中时退化为“未知→手动重试”，不会误切。
+
 ## 2026-10-18 · 分类交互精简、切换时自动检测、用词调整
 
 - 本机：typecheck、lint、Jest 23 个套件 326 项通过（新增自动检测 hook 与“不可用排末尾”排序测试；按新交互改写了 13 项依赖旧菜单的测试）。

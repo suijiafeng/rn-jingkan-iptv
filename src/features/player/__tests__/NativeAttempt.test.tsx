@@ -233,7 +233,11 @@ test("unstructured native 401 string remains an unknown error with no credential
       error: { message: "401 https://example.test/live?secret=123" },
     });
   });
-  expect(controller.getSnapshot()).toEqual({ phase: "error", attemptId: null });
+  expect(controller.getSnapshot()).toEqual({
+    phase: "error",
+    attemptId: null,
+    failure: "unknown",
+  });
   await ui.unmount();
   controller.dispose();
 });
