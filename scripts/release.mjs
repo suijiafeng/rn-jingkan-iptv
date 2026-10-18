@@ -243,7 +243,7 @@ try {
       // Include installed package licenses for all locked packages (including
       // build tools) to avoid silently omitting a transitive component.
       const notices = [
-        "静看开源组件发行说明\n",
+        "静看 TV 开源组件发行说明\n",
         "AndroidX / AndroidX Media3 / Kotlin / OkHttp / SQLite: see official project licenses; AndroidX and Media3 use Apache-2.0; SQLite is public domain.\n",
       ];
       const inventory = JSON.parse(

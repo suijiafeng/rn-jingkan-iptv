@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "静看",
+    "name": "静看 TV",
     "slug": "jingkan-iptv",
     "version": "1.0.0",
     "icon": "./assets/icon.png",
@@ -49,7 +49,7 @@
           "isAndroidMotionActivityEnabled": false,
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
-          "locationWhenInUsePermission": "允许静看在使用时识别国家/地区，位置不会保存。",
+          "locationWhenInUsePermission": "允许静看 TV 在使用时识别国家/地区，位置不会保存。",
           "locationFullAccuracyPermission": false,
           "motionUsagePermission": false,
           "isIosReducedAccuracyByDefault": true

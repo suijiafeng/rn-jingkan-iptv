@@ -129,10 +129,10 @@ test("filters chosen in the sheet are the channel page's filters", async () => {
   expect(screen.getByRole("button", { name: "语言：英语" })).toBeTruthy();
   expect(screen.getByLabelText("搜索频道名称").props.value).toBe("美国");
   // Search settles after the page's usual 250 ms debounce.
-  await waitFor(() =>
-    expect(screen.queryByLabelText("英语体育，播放")).toBeNull(),
-  );
-  expect(screen.getByLabelText("美国英语，播放")).toBeTruthy();
+  await waitFor(() => {
+    expect(screen.getByLabelText("美国英语，播放")).toBeTruthy();
+    expect(screen.queryByLabelText("英语体育，播放")).toBeNull();
+  });
 });
 
 test("locating from the sheet shows every country without changing the saved choice", async () => {

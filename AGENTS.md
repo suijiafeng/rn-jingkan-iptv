@@ -1,4 +1,4 @@
-# 静看工程约定
+# 静看 TV 工程约定
 
 - 本仓库是个人自用 Android IPTV 客户端。不要加入广告、遥测、账号、后台服务或默认远程节目源。
 - 使用 Expo SDK 58 配套 React Native 0.88。依赖精确固定并提交 package-lock.json，不独立升级原生模块。

@@ -242,7 +242,7 @@ export default function App() {
     return (
       <SafeAreaView style={theme.screen}>
         <View style={theme.content}>
-          <Heading title="静看" subtitle="只留下你想看的频道" />
+          <Heading title="静看 TV" subtitle="只留下你想看的频道" />
           {error ? (
             <>
               <Notice title={error} error />
