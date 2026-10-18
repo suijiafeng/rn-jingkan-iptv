@@ -287,9 +287,9 @@ test("fullscreen media stays edge-to-edge while controls and sheets respect disp
   await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
 
   expect(ui.getByTestId("player-screen").props.edges).toEqual([]);
-  expect(StyleSheet.flatten(ui.getByTestId("video-stage").props.style)).toMatchObject(
-    { top: 0, right: 0, bottom: 0, left: 0 },
-  );
+  expect(
+    StyleSheet.flatten(ui.getByTestId("video-stage").props.style),
+  ).toMatchObject({ top: 0, right: 0, bottom: 0, left: 0 });
   expect(
     StyleSheet.flatten(ui.getByTestId("fullscreen-controls").props.style),
   ).toMatchObject({ top: 27, right: 37, left: 43 });
@@ -301,7 +301,13 @@ test("fullscreen media stays edge-to-edge while controls and sheets respect disp
   // The gesture layer is the whole picture, not an edge strip.
   expect(
     StyleSheet.flatten(ui.getByTestId("fullscreen-gesture-layer").props.style),
-  ).toMatchObject({ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 });
+  ).toMatchObject({
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  });
 
   await fireEvent.press(
     ui.getByRole("button", {
@@ -801,27 +807,25 @@ describe("waiting and failure", () => {
       });
   };
 
-  test("connecting shows elapsed seconds; with hidden fullscreen controls it offers the next channel after 15 s", async () => {
+  test("connecting shows elapsed seconds; after 15 s a slow hint, with zapping right in the notice", async () => {
     jest.useFakeTimers();
     const options = props();
     const ui = await render(<PlayerScreen {...options} />);
     await seconds(3);
-    expect(ui.getByText("已等待 3 秒")).toBeTruthy();
+    expect(ui.getByText("已等 3 秒")).toBeTruthy();
     await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
-    const layer = ui.getByTestId("fullscreen-gesture-layer");
-    await act(() => {
-      layer.props.onResponderGrant({ nativeEvent: { pageX: 10, pageY: 10 } });
-      layer.props.onResponderRelease({ nativeEvent: { pageX: 10, pageY: 10 } });
-    });
-    expect(ui.queryByRole("button", { name: "退出全屏" })).toBeNull();
-    expect(ui.queryByRole("button", { name: "换下一台" })).toBeNull();
+    expect(ui.queryByText(/比平时慢/)).toBeNull();
     await seconds(12);
     expect(ui.getByText(/比平时慢/)).toBeTruthy();
-    await fireEvent.press(ui.getByRole("button", { name: "换下一台" }));
+    expect(ui.queryByRole("button", { name: "换下一台" })).toBeNull();
+    await fireEvent.press(
+      within(ui.getByTestId("zap-cluster")).getByRole("button", {
+        name: "下一台",
+      }),
+    );
     expect(options.onSelect).toHaveBeenLastCalledWith(second);
     await ui.unmount();
   });
-
   test("portrait loading never duplicates the visible next button", async () => {
     jest.useFakeTimers();
     const ui = await render(<PlayerScreen {...props()} />);
@@ -854,11 +858,16 @@ describe("waiting and failure", () => {
 
 describe("one overlay instead of native controls", () => {
   const start = async () => {
-    await act(() => mockAttempt?.controller.nativeStarted(mockAttempt.attemptId));
+    await act(() =>
+      mockAttempt?.controller.nativeStarted(mockAttempt.attemptId),
+    );
   };
 
   test("fullscreen: zapping and play/pause sit in the centre cluster; the bars hold identity and choices", async () => {
-    const options = props({ previousChannel: second, sources: [first, second] });
+    const options = props({
+      previousChannel: second,
+      sources: [first, second],
+    });
     const ui = await render(<PlayerScreen {...options} />);
     await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
     await start();
@@ -929,7 +938,9 @@ describe("one overlay instead of native controls", () => {
     // A vertical drag in portrait never changes channel.
     await act(() => {
       layer.props.onResponderGrant({ nativeEvent: { pageX: 50, pageY: 300 } });
-      layer.props.onResponderRelease({ nativeEvent: { pageX: 50, pageY: 100 } });
+      layer.props.onResponderRelease({
+        nativeEvent: { pageX: 50, pageY: 100 },
+      });
     });
     await ui.unmount();
   });
@@ -999,7 +1010,9 @@ describe("portrait layout", () => {
 
 describe("docked bar", () => {
   const start = async () => {
-    await act(() => mockAttempt?.controller.nativeStarted(mockAttempt.attemptId));
+    await act(() =>
+      mockAttempt?.controller.nativeStarted(mockAttempt.attemptId),
+    );
   };
   const backKey = () => {
     let handler: (() => boolean | null | undefined) | undefined;
@@ -1029,7 +1042,9 @@ describe("docked bar", () => {
     expect(mockUnmounts).not.toHaveBeenCalled();
     expect(ui.queryByTestId("player-channel-list")).toBeNull();
     expect(ui.queryByTestId("video-tap-layer")).toBeNull();
-    expect(ui.getAllByRole("button", { name: "展开播放器，山野纪实" })).toHaveLength(2);
+    expect(
+      ui.getAllByRole("button", { name: "展开播放器，山野纪实" }),
+    ).toHaveLength(2);
     await fireEvent.press(
       ui.getAllByRole("button", { name: "展开播放器，山野纪实" })[1],
     );
@@ -1089,7 +1104,9 @@ describe("one round primary control", () => {
     await act(async () => {
       await Promise.resolve();
     });
-    await act(() => mockAttempt?.controller.nativeStarted(mockAttempt.attemptId));
+    await act(() =>
+      mockAttempt?.controller.nativeStarted(mockAttempt.attemptId),
+    );
     expect(round().props.accessibilityLabel).toBe("暂停");
     expect(within(round()).getByText("❚❚")).toBeTruthy();
     await fireEvent.press(round());

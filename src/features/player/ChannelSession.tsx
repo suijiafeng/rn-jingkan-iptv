@@ -6,7 +6,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Button, Heading } from "../../components/ui";
+import { Heading } from "../../components/ui";
 import { colors, styles as theme } from "../../theme";
 import { qualityName } from "../../domain/channelSources";
 import { channelTitle, displayGroups } from "../../domain/channelLabels";
@@ -65,8 +65,6 @@ export function ChannelSession(props: SessionProps) {
     primaryIcon,
     primaryDisabled,
     zapCluster,
-    next,
-    selectNext,
     sourceButton,
     favoriteButton,
   } = view;
@@ -184,9 +182,13 @@ export function ChannelSession(props: SessionProps) {
               <View pointerEvents="none" style={s.noticeText}>
                 {waiting && <ActivityIndicator color={colors.accent} />}
                 <Text style={s.noticeTitle}>{description.title}</Text>
-                <Text style={s.noticeBody}>
-                  {state.phase === "paused" ? pausedBody : description.body}
-                </Text>
+                {!!(state.phase === "paused"
+                  ? pausedBody
+                  : description.body) && (
+                  <Text style={s.noticeBody}>
+                    {state.phase === "paused" ? pausedBody : description.body}
+                  </Text>
+                )}
                 {(state.phase === "timeout" || state.phase === "error") &&
                   props.channel.checkStatus === "unreachable" && (
                     <Text style={s.noticeBody}>
@@ -194,39 +196,18 @@ export function ChannelSession(props: SessionProps) {
                     </Text>
                   )}
               </View>
-              {waiting && (
-                <WaitProgress
-                  key={state.attemptId ?? "checking"}
-                  onNext={
-                    next !== null && props.fullscreen && !controlsVisible
-                      ? selectNext
-                      : undefined
-                  }
-                />
-              )}
+              {waiting && <WaitProgress key={state.attemptId ?? "checking"} />}
+              {(state.attemptId === null || starting) && zapCluster(false)}
               {state.phase === "cellular" && (
-                <View style={s.row}>
-                  <View style={s.flex}>
-                    <Button
-                      label="暂不播放"
-                      secondary
-                      onPress={() => controller.pause("cellular-declined")}
-                    />
-                  </View>
-                  <View style={s.flex}>
-                    <Button
-                      label="继续播放"
-                      onPress={() => {
-                        props.onMobileAccepted?.();
-                        void controller.requestPlay(true);
-                      }}
-                    />
-                  </View>
-                </View>
+                <Pressable
+                  style={s.quietLink}
+                  accessibilityRole="button"
+                  accessibilityLabel="暂不播放"
+                  onPress={() => controller.pause("cellular-declined")}
+                >
+                  <Text style={s.quietLinkText}>暂不播放</Text>
+                </Pressable>
               )}
-              {state.phase !== "cellular" &&
-                (state.attemptId === null || starting) &&
-                zapCluster(false)}
             </View>
           )}
         {!props.mini &&
@@ -392,6 +373,13 @@ const s = StyleSheet.create({
     textAlign: "center",
   },
   noticeText: { gap: 8 },
+  quietLink: { alignSelf: "center", paddingHorizontal: 12, paddingVertical: 6 },
+  quietLinkText: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    textDecorationLine: "underline",
+  },
   noticeTitle: {
     color: colors.text,
     fontSize: 18,

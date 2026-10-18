@@ -56,29 +56,20 @@ export const descriptions: Record<
   PlaybackSnapshot["phase"],
   { title: string; body: string }
 > = {
-  paused: { title: "已暂停", body: "点击播放，继续收看当前频道" },
-  checking: { title: "正在检查网络", body: "确认连接后开始播放" },
-  connecting: { title: "正在连接频道", body: "首次加载最多等待 30 秒" },
-  playing: { title: "正在播放", body: "画面来自你的节目源" },
-  buffering: { title: "正在缓冲", body: "等待节目源传送画面" },
+  paused: { title: "已暂停", body: "" },
+  checking: { title: "正在检查网络", body: "" },
+  connecting: { title: "正在连接", body: "最多等 30 秒" },
+  playing: { title: "正在播放", body: "" },
+  buffering: { title: "正在缓冲", body: "" },
   cellular: {
     title: "可能使用移动数据",
-    body: "当前网络可能产生流量费用。继续后，连回 Wi-Fi 之前不再询问。",
+    body: "继续后，连回 Wi-Fi 前不再询问",
   },
-  blocked: {
-    title: "外部连接已关闭",
-    body: "返回设置，允许连接自己的节目源后再播放",
-  },
-  offline: { title: "网络未连接", body: "检查网络连接，然后手动重试" },
-  timeout: {
-    title: "连接超时",
-    body: "30 秒内未开始播放。节目源可能已失效、受地区限制或暂时不可用。可以重试、换台，或在来源管理中检测可用性",
-  },
-  error: {
-    title: "暂时无法播放",
-    body: "原因未确定（播放器没有提供可靠的细分原因）。常见情况：地址失效、地区限制、服务器拒绝或格式不支持。可以重试、换台，或在来源管理中检测可用性",
-  },
-  ended: { title: "节目流已结束", body: "可以重试连接，或选择其他频道" },
+  blocked: { title: "未允许联网", body: "到设置里允许节目来源联网" },
+  offline: { title: "网络未连接", body: "连上网络后再试" },
+  timeout: { title: "连接超时", body: "30 秒内没有画面" },
+  error: { title: "暂时无法播放", body: "原因未知，可以重试或换台" },
+  ended: { title: "节目流已结束", body: "可以重试或换台" },
 };
 
 export const CONTROLS_HIDE_MS = 4000;

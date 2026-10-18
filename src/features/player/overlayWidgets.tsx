@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useSyncExternalStore } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Button } from "../../components/ui";
 import { colors } from "../../theme";
 import { LIVE_EDGE_MARGIN_S, type MediaHandle } from "./mediaHandle";
 import { SLOW_START_SECONDS } from "./playerShared";
@@ -175,7 +174,7 @@ export function MediaStatus({
  * Seconds without a picture, so a dead stream is not a silent 30 s wait.
  * Own component (keyed per attempt) so the 1 s tick re-renders only itself.
  */
-export function WaitProgress({ onNext }: { onNext?: () => void }) {
+export function WaitProgress() {
   const [started] = useState(() => Date.now());
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
@@ -191,14 +190,9 @@ export function WaitProgress({ onNext }: { onNext?: () => void }) {
   return (
     <>
       <View pointerEvents="none" style={s.noticeText}>
-        {seconds > 0 && <Text style={s.noticeBody}>已等待 {seconds} 秒</Text>}
-        {slow && (
-          <Text style={s.noticeBody}>
-            比平时慢，节目源可能已失效。可以继续等，或换下一台。
-          </Text>
-        )}
+        {seconds > 0 && <Text style={s.noticeBody}>已等 {seconds} 秒</Text>}
+        {slow && <Text style={s.noticeBody}>比平时慢，可以换台</Text>}
       </View>
-      {slow && onNext && <Button label="换下一台" secondary onPress={onNext} />}
     </>
   );
 }

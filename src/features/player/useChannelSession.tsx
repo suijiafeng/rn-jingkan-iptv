@@ -138,14 +138,23 @@ export function useChannelSession(props: SessionProps) {
   );
   // Paused in place: the attempt (and its native player) is still alive.
   const retained = state.phase === "paused" && state.attemptId !== null;
-  const primaryLabel = starting
-    ? "取消"
-    : busy
-      ? "暂停"
-      : canRetry
-        ? "重试播放"
-        : "播放";
+  const primaryLabel =
+    state.phase === "cellular"
+      ? "继续播放"
+      : starting
+        ? "取消"
+        : busy
+          ? "暂停"
+          : canRetry
+            ? "重试播放"
+            : "播放";
   const primaryAction = () => {
+    // On a possibly metered network ▶ is the explicit "continue" answer.
+    if (state.phase === "cellular") {
+      props.onMobileAccepted?.();
+      void controller.requestPlay(true);
+      return;
+    }
     const id = state.attemptId;
     // Catch-up streams pause in place so the position survives. Plain live
     // stops (releasing the decoder); resuming reconnects at the live edge.
@@ -206,18 +215,18 @@ export function useChannelSession(props: SessionProps) {
   const description = descriptions[state.phase];
   const pausedBody =
     state.pauseReason === "background"
-      ? "离开应用后已暂停。点击播放继续收看"
+      ? "离开应用后暂停"
       : state.pauseReason === "interrupted"
-        ? "播放已被系统暂停。点击播放继续收看"
+        ? "被系统暂停"
         : state.pauseReason === "cellular-declined"
-          ? "已停止播放。准备好后可手动播放"
+          ? "已停止，可手动播放"
           : description.body;
   // One round control for the primary action in every state, so cancel,
   // retry, pause and resume all look alike: ■ while connecting, ↻ after a
   // failure, ▶ when paused or stopped, ❚❚ while playing.
   const showsPlay = retained || !busy;
   const primaryIcon = starting ? "■" : canRetry ? "↻" : showsPlay ? "▶" : "❚❚";
-  const primaryDisabled = !props.remoteAllowed || state.phase === "cellular";
+  const primaryDisabled = !props.remoteAllowed;
   // The one visual focus of the overlay: previous / play-pause / next in a
   // row, the same in portrait (smaller) and fullscreen. Also shown inside the
   // status notice, so stopped and paused states keep the same controls.
