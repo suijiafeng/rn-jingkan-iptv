@@ -11,6 +11,74 @@ interface IconProps {
   color?: string;
 }
 
+/** Speaker with sound waves, or a crossed speaker while muted. */
+export function VolumeIcon({
+  muted,
+  size = 22,
+  color = colors.text,
+}: IconProps & { muted: boolean }) {
+  return (
+    <View pointerEvents="none" style={{ width: size, height: size }}>
+      <View
+        style={{
+          position: "absolute",
+          left: 0,
+          top: size * 0.35,
+          width: size * 0.26,
+          height: size * 0.3,
+          backgroundColor: color,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          left: size * 0.15,
+          top: size * 0.15,
+          borderTopWidth: size * 0.35,
+          borderBottomWidth: size * 0.35,
+          borderRightWidth: size * 0.35,
+          borderTopColor: "transparent",
+          borderBottomColor: "transparent",
+          borderRightColor: color,
+        }}
+      />
+      {muted
+        ? ["45deg", "-45deg"].map((rotate) => (
+            <View
+              key={rotate}
+              style={{
+                position: "absolute",
+                left: size * 0.59,
+                top: size * 0.46,
+                width: size * 0.42,
+                height: 2,
+                backgroundColor: color,
+                transform: [{ rotate }],
+              }}
+            />
+          ))
+        : [0.22, 0.38].map((radius) => (
+            <View
+              key={radius}
+              style={{
+                position: "absolute",
+                left: size * (0.5 - radius),
+                top: size * (0.5 - radius),
+                width: size * radius * 2,
+                height: size * radius * 2,
+                borderRadius: size,
+                borderWidth: 2,
+                borderRightColor: color,
+                borderTopColor: "transparent",
+                borderBottomColor: "transparent",
+                borderLeftColor: "transparent",
+              }}
+            />
+          ))}
+    </View>
+  );
+}
+
 export function PictureInPictureIcon({
   size = 22,
   color = colors.text,

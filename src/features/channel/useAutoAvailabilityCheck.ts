@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
 import * as Network from "expo-network";
 import type { Channel } from "../../domain/types";
 import { isOffline, mightUseMobileData } from "../player/playbackController";
-import { checkChannels, type CheckResult } from "../source/availability";
+import {
+  checkAvailability,
+  type CheckStore,
+} from "../source/availabilityCoordinator";
 
 /** At most this many channels are checked per category switch. */
 export const AUTO_CHECK_MAX = 200;
 /** Channels checked more recently than this are not checked again. */
-export const CHECK_FRESH_MS = 6 * 60 * 60 * 1000;
+export { CHECK_FRESH_MS } from "../source/availabilityCoordinator";
 
 export interface AutoCheckOptions {
   /** Identifies the current category; null = no category selected. */
@@ -20,9 +24,10 @@ export interface AutoCheckOptions {
   remoteAllowed: boolean;
   mobileWarning: boolean;
   mobileAccepted: boolean;
-  save: (results: CheckResult[]) => Promise<void>;
+  repo: CheckStore | null;
   /** Called once after a finished (not cancelled) sweep, to re-sort. */
   onFinished: () => void;
+  onError: (message: string) => void;
 }
 
 /**
@@ -36,9 +41,8 @@ export function useAutoAvailabilityCheck(options: AutoCheckOptions) {
     total: number;
   } | null>(null);
   const controller = useRef<AbortController | null>(null);
-  // Attempts made this run: never re-check them within CHECK_FRESH_MS even if
-  // saving failed, so a reload after the sweep cannot start another sweep.
-  const attempted = useRef(new Map<string, number>());
+  const lastFilter = useRef<string | null>(null);
+  const completedFilter = useRef<string | null>(null);
   const latest = useRef(options);
   useEffect(() => {
     latest.current = options;
@@ -55,47 +59,71 @@ export function useAutoAvailabilityCheck(options: AutoCheckOptions) {
     remoteAllowed,
     mobileWarning,
     mobileAccepted,
+    repo,
   } = options;
   useEffect(() => {
-    if (filterKey === null || !listComplete || paused || !remoteAllowed) return;
-    const now = Date.now();
-    const targets = latest.current.channels
-      .filter(
-        (channel) =>
-          channel.active &&
-          (!channel.checkedAt || now - channel.checkedAt > CHECK_FRESH_MS) &&
-          now - (attempted.current.get(channel.id) ?? 0) > CHECK_FRESH_MS,
-      )
-      .slice(0, AUTO_CHECK_MAX);
+    if (lastFilter.current !== filterKey) {
+      lastFilter.current = filterKey;
+      completedFilter.current = null;
+    }
+    if (
+      filterKey === null ||
+      !listComplete ||
+      paused ||
+      !remoteAllowed ||
+      !repo ||
+      completedFilter.current === filterKey
+    )
+      return;
+    const targets = latest.current.channels.filter((channel) => channel.active);
     if (!targets.length) return;
     const abortController = new AbortController();
     controller.current?.abort();
     controller.current = abortController;
+    const app = AppState.addEventListener("change", (state) => {
+      if (state !== "active") abortController.abort();
+    });
     const run = async () => {
-      const net = await Network.getNetworkStateAsync();
-      if (abortController.signal.aborted || isOffline(net)) return;
-      if (mobileWarning && !mobileAccepted && mightUseMobileData(net)) return;
-      for (const target of targets) attempted.current.set(target.id, now);
-      setProgress({ done: 0, total: targets.length });
-      const results = await checkChannels(targets, {
+      const { refreshed, skipped } = await checkAvailability(repo, targets, {
         signal: abortController.signal,
+        maxRequests: AUTO_CHECK_MAX,
+        beforeRequests: async () => {
+          const net = await Network.getNetworkStateAsync();
+          return (
+            !abortController.signal.aborted &&
+            !isOffline(net) &&
+            !(mobileWarning && !mobileAccepted && mightUseMobileData(net))
+          );
+        },
+        isPermitted: () =>
+          !abortController.signal.aborted &&
+          latest.current.remoteAllowed &&
+          AppState.currentState === "active",
         onProgress: (done, total) => {
           if (!abortController.signal.aborted) setProgress({ done, total });
         },
       });
-      if (results.length) await latest.current.save(results);
       // Re-sort once at the end, not under the user's finger mid-check.
-      if (!abortController.signal.aborted) latest.current.onFinished();
+      if (!abortController.signal.aborted && !skipped) {
+        completedFilter.current = filterKey;
+        if (refreshed) latest.current.onFinished();
+      }
     };
     run()
-      .catch(() => {})
+      .catch(() => {
+        if (!abortController.signal.aborted)
+          latest.current.onError("可用性检测未完成，可在来源管理中重试");
+      })
       .finally(() => {
         if (controller.current === abortController) {
           controller.current = null;
           setProgress(null);
         }
       });
-    return () => abortController.abort();
+    return () => {
+      app.remove();
+      abortController.abort();
+    };
   }, [
     filterKey,
     listComplete,
@@ -103,6 +131,7 @@ export function useAutoAvailabilityCheck(options: AutoCheckOptions) {
     remoteAllowed,
     mobileWarning,
     mobileAccepted,
+    repo,
   ]);
   return { progress, cancel };
 }

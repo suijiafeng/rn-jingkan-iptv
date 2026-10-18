@@ -91,6 +91,7 @@ export function FullscreenBars({
             {!mediaInfo.seekable && mediaInfo.isLive && <LiveBadge />}
             <View style={styles.flex} />
             {sourceButton}
+            {view.muteButton}
             {view.pictureInPictureButton}
             <OverlayButton
               label="频道列表"

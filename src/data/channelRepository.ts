@@ -16,6 +16,7 @@ import {
 } from "../domain/channelFacets";
 import { RepositoryError, type SqlDatabase } from "./sql";
 import { migrateSchema } from "./schema";
+import { readChecks, writeChecks } from "./availability";
 import {
   assertContent,
   assertPreview,
@@ -299,8 +300,8 @@ export class Repository {
   }
 
   /**
-   * Stores manual availability results. A result only applies while the
-   * channel still has the URL that was checked (a refresh may replace it).
+   * Results belong to the exact URL. All matching rows share the same state;
+   * a refreshed row with a different address is never affected.
    */
   async saveCheckResults(
     results: { channelId: string; streamUrl: string; ok: boolean }[],
@@ -308,19 +309,13 @@ export class Repository {
     if (!results.length) return;
     await this.serialize(async () => {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
-        const now = this.now();
-        for (const result of results)
-          await tx.runAsync(
-            "UPDATE channels SET checkStatus = ?, checkedAt = ? WHERE id = ? AND streamUrl = ?",
-            [
-              result.ok ? "ok" : "unreachable",
-              now,
-              result.channelId,
-              result.streamUrl,
-            ],
-          );
+        await writeChecks(tx, results, this.now());
       });
     });
+  }
+
+  getCheckResults(urls: readonly string[]) {
+    return readChecks(this.db, urls);
   }
 
   async renameSource(sourceId: string, name: string): Promise<void> {

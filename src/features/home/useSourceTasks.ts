@@ -10,7 +10,10 @@ import type { Repository } from "../../data/repository";
 import type { Source } from "../../domain/types";
 import { ImportIOError } from "../../data/importIO";
 import { isIptvOrgId } from "../../domain/channelFacets";
-import { checkChannels } from "../source/availability";
+import {
+  AvailabilitySaveError,
+  checkAvailability,
+} from "../source/availabilityCoordinator";
 import { lookupIptvOrgLanguages } from "../source/iptvOrgLanguages";
 import type { CheckProgress, CheckSummary } from "../source/SourceManagerModal";
 
@@ -131,7 +134,7 @@ export function useSourceTasks({
   };
 
   /** Manual, user-started availability sweep of one source's channels. */
-  const runCheck = async (source: Source) => {
+  const runCheck = async (source: Source, force = false) => {
     if (!repo || checkController.current || AppState.currentState !== "active")
       return;
     const abort = new AbortController();
@@ -148,31 +151,28 @@ export function useSourceTasks({
       AppState.currentState === "active";
     const stillPermitted = () =>
       current() && epoch === permissionEpoch.current && remoteRef.current;
-    let started = false;
-    let savingResults = false;
     setError("");
     setCheck({ sourceId: source.id, done: 0, total: null });
     try {
       if (!(await guardRemote(abort.signal)) || !allowed()) return;
-      if (!(await checkNetwork(abort.signal)) || !allowed()) return;
       const targets = await repo.listChannels({
         sourceId: source.id,
         includeVariants: true,
       });
       if (!allowed()) return;
-      setCheck({ sourceId: source.id, done: 0, total: targets.length });
-      started = true;
-      const results = await checkChannels(targets, {
+      const { results, skipped } = await checkAvailability(repo, targets, {
         signal: abort.signal,
+        force,
+        isPermitted: stillPermitted,
+        beforeRequests: async () =>
+          (await checkNetwork(abort.signal)) && allowed(),
         onProgress: (done, total) => {
           if (allowed()) setCheck({ sourceId: source.id, done, total });
         },
       });
       // Manual stop may save finished results, but a newer sweep or revocation
       // makes this task obsolete and must not publish its results.
-      if (!stillPermitted()) return;
-      savingResults = true;
-      await repo.saveCheckResults(results);
+      if (skipped || !stillPermitted()) return;
       if (!stillPermitted()) return;
       const reachable = results.filter((result) => result.ok).length;
       setCheckSummaries((all) => ({
@@ -187,15 +187,15 @@ export function useSourceTasks({
     } catch (failure) {
       if (
         current() &&
-        (savingResults || !abort.signal.aborted) &&
+        (failure instanceof AvailabilitySaveError || !abort.signal.aborted) &&
         epoch === permissionEpoch.current
       )
         setError(
-          started
-            ? "检测结果未能保存，请重试"
+          failure instanceof AvailabilitySaveError
+            ? failure.message
             : failure instanceof ImportIOError
               ? failure.message
-              : "无法开始检测，请检查网络后重试",
+              : "无法完成检测，请检查网络或本地资料后重试",
         );
     } finally {
       if (checkController.current === abort) {

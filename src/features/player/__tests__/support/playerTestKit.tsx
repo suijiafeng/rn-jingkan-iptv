@@ -36,6 +36,7 @@ export const mockNative = {
   isLive: true,
   duration: 30,
   currentTime: 0,
+  muted: false,
   play: jest.fn(),
   pause: jest.fn(),
 };
@@ -51,6 +52,7 @@ jest.mock("../../NativeAttempt", () => ({
   NativeAttempt: function MockNativeAttempt(props: {
     attemptId: number;
     uri: string;
+    muted?: boolean;
     controller: MockController;
     media?: {
       attach: (player: unknown) => void;
@@ -75,6 +77,9 @@ jest.mock("../../NativeAttempt", () => ({
       media.sample(mockNative);
       return () => media.detach(mockNative);
     }, [media]);
+    useEffect(() => {
+      mockNative.muted = !!props.muted;
+    }, [props.muted]);
     return <View testID="mock-native-attempt" />;
   },
 }));
@@ -158,7 +163,12 @@ export const props = (
 });
 beforeEach(() => {
   jest.clearAllMocks();
-  Object.assign(mockNative, { isLive: true, duration: 30, currentTime: 0 });
+  Object.assign(mockNative, {
+    isLive: true,
+    duration: 30,
+    currentTime: 0,
+    muted: false,
+  });
   mockAttempt = null;
   Object.assign(mockSafeAreaInsets, {
     top: 0,

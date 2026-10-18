@@ -52,6 +52,8 @@ export function PlayerScreen(props: PlayerScreenProps) {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   // Lives above the per-channel session so zapping keeps hidden controls hidden.
   const [controlsShown, setControlsShown] = useState(true);
+  // Keep audio intent across per-channel and per-source native instances.
+  const [muted, setMuted] = useState(false);
   // Survives the panel being hidden (fullscreen, docked) and shown again.
   const savedListPosition = useRef<SavedListPosition | null>(null);
   const [listPositionStore] = useState<ListPositionStore>(() => ({
@@ -162,6 +164,8 @@ export function PlayerScreen(props: PlayerScreenProps) {
       <ChannelSession
         key={`${props.channel.id}:${props.channel.streamUrl}`}
         {...props}
+        muted={muted}
+        onMutedChange={setMuted}
         channels={activeChannels}
         failover={failover}
         onSelectSource={onManualSelect}

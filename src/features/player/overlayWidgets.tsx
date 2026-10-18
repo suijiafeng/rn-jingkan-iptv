@@ -77,6 +77,7 @@ export function OverlayButton({
   disabled = false,
   variant = "pill",
   compact = false,
+  selected,
 }: {
   label: string;
   /** Drawn in place of the label text; the label still names the button. */
@@ -87,13 +88,17 @@ export function OverlayButton({
   variant?: OverlayVariant;
   /** Portrait picture: ring keys shrink from 44dp to 40dp. */
   compact?: boolean;
+  selected?: boolean;
 }) {
   const round = variant === "quiet" || variant === "ring";
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityState={{ disabled }}
+      accessibilityState={{
+        disabled,
+        ...(selected === undefined ? {} : { selected }),
+      }}
       disabled={disabled}
       hitSlop={round ? 4 : 6}
       style={({ pressed }) => [

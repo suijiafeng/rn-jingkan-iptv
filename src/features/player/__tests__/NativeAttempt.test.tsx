@@ -117,6 +117,37 @@ test("background setting configures media controls without replacing the player"
   await ui.unmount();
 });
 
+test("mute is applied before playback and toggles without reconnecting or changing volume", async () => {
+  const { controller, id } = await readyController();
+  const ui = await render(
+    <NativeAttempt
+      uri="https://example.test/live.m3u8"
+      attemptId={id}
+      controller={controller}
+      muted
+    />,
+  );
+  const native = mockPlayers[0] as (typeof mockPlayers)[number] & {
+    muted: boolean;
+    volume: number;
+  };
+  native.volume = 0.4;
+  expect(native.muted).toBe(true);
+  await ui.rerender(
+    <NativeAttempt
+      uri="https://example.test/live.m3u8"
+      attemptId={id}
+      controller={controller}
+      muted={false}
+    />,
+  );
+  expect(native.muted).toBe(false);
+  expect(native.volume).toBe(0.4);
+  expect(mockPlayers).toHaveLength(1);
+  expect(native.replaceAsync).toHaveBeenCalledTimes(1);
+  await ui.unmount();
+});
+
 test("PiP reserves playback before backgrounding and confirms the actual native event", async () => {
   jest.useFakeTimers();
   const { controller, id } = await readyController();

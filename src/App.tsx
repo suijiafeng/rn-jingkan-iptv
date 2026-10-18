@@ -129,14 +129,13 @@ export default function App() {
           : null,
       listComplete: !list.listLoading && list.channelTotal === null,
       channels,
-      paused: !!playing,
+      paused: !!playing || !!sourceTasks.check,
       remoteAllowed: settings.remoteAllowed && !settings.revokePending,
       mobileWarning: settings.mobileWarning,
       mobileAccepted: settings.mobileAccepted,
-      save: async (results) => {
-        await repo?.saveCheckResults(results);
-      },
+      repo,
       onFinished: changed,
+      onError: setError,
     });
   const controls = useDataControls({
     repo,

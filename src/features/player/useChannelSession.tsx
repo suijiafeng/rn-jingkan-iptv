@@ -21,7 +21,7 @@ import type { Channel } from "../../domain/types";
 import { qualityName } from "../../domain/channelSources";
 import { channelTitle } from "../../domain/channelLabels";
 import { MediaHandle } from "./mediaHandle";
-import { PictureInPictureIcon } from "./playerIcons";
+import { PictureInPictureIcon, VolumeIcon } from "./playerIcons";
 import { OverlayButton, SourceChip } from "./overlayWidgets";
 import {
   adjacentPlayableIndex,
@@ -356,6 +356,16 @@ export function useChannelSession(props: SessionProps) {
     />
   );
 
+  const muteButton = (
+    <OverlayButton
+      label={props.muted ? "取消静音" : "静音"}
+      icon={<VolumeIcon muted={props.muted} />}
+      variant="quiet"
+      selected={props.muted}
+      onPress={() => props.onMutedChange(!props.muted)}
+    />
+  );
+
   return {
     insets,
     sourcesOpen,
@@ -390,6 +400,7 @@ export function useChannelSession(props: SessionProps) {
     sourceButton,
     favoriteButton,
     pictureInPictureButton,
+    muteButton,
   };
 }
 

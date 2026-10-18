@@ -117,7 +117,13 @@ export const sessionStyles = StyleSheet.create({
   },
   portraitMedia: { position: "absolute", left: 14, right: 56, bottom: 16 },
   portraitTopLeft: { position: "absolute", top: 6, left: 6 },
-  portraitTopRight: { position: "absolute", top: 6, right: 6 },
+  portraitTopRight: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    flexDirection: "row",
+    gap: 6,
+  },
   quietText: {
     color: colors.muted,
     fontSize: 14,

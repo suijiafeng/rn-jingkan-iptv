@@ -1,5 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
+import { AppState } from "react-native";
 import type { Channel } from "../../../domain/types";
+import type { StoredCheck } from "../../../data/availability";
 import {
   AUTO_CHECK_MAX,
   CHECK_FRESH_MS,
@@ -26,21 +28,49 @@ const channel = (id: string, extra: Partial<Channel> = {}) =>
   }) as Channel;
 
 function options(more: Partial<AutoCheckOptions> = {}): AutoCheckOptions {
+  const channels = more.channels ?? [channel("a"), channel("b")];
+  const cache = new Map<string, StoredCheck>();
+  for (const row of channels) {
+    if (row.checkedAt !== null)
+      cache.set(row.streamUrl, {
+        streamUrl: row.streamUrl,
+        checkedAt: row.checkedAt,
+        checkStatus: row.checkStatus ?? "ok",
+      });
+  }
   return {
     filterKey: "news",
     listComplete: true,
-    channels: [channel("a"), channel("b")],
+    channels,
     paused: false,
     remoteAllowed: true,
     mobileWarning: true,
     mobileAccepted: false,
-    save: jest.fn(async () => {}),
+    repo: {
+      getCheckResults: jest.fn(async (urls) =>
+        urls.flatMap((url) => (cache.has(url) ? [cache.get(url)!] : [])),
+      ),
+      saveCheckResults: jest.fn(async (results) => {
+        for (const result of results)
+          cache.set(result.streamUrl, {
+            streamUrl: result.streamUrl,
+            checkedAt: Date.now(),
+            checkStatus: result.ok ? "ok" : "unreachable",
+          });
+      }),
+    },
     onFinished: jest.fn(),
+    onError: jest.fn(),
     ...more,
   };
 }
 
 beforeEach(() => {
+  Object.defineProperty(AppState, "currentState", {
+    configurable: true,
+    writable: true,
+    value: "active",
+  });
   mockNetwork
     .mockReset()
     .mockResolvedValue({ type: "WIFI", isConnected: true });
@@ -65,7 +95,7 @@ test("a category switch checks the shown channels once and re-sorts once", async
   expect(
     mockCheck.mock.calls[0][0].map((checked: Channel) => checked.id),
   ).toEqual(["a", "b"]);
-  expect(opts.save).toHaveBeenCalledWith([
+  expect(opts.repo!.saveCheckResults).toHaveBeenCalledWith([
     { channelId: "a", streamUrl: "https://a.example.com/a", ok: true },
     { channelId: "b", streamUrl: "https://a.example.com/b", ok: false },
   ]);
@@ -104,12 +134,19 @@ test("recently checked channels are skipped and at most AUTO_CHECK_MAX run", asy
     channel(`c${index}`),
   );
   const opts = options({ channels: [fresh, stale, ...many] });
-  await renderHook(() => useAutoAvailabilityCheck(opts));
+  const { rerender } = await renderHook(
+    (next: AutoCheckOptions) => useAutoAvailabilityCheck(next),
+    { initialProps: opts },
+  );
   await waitFor(() => expect(mockCheck).toHaveBeenCalled());
   const ids = mockCheck.mock.calls[0][0].map((checked: Channel) => checked.id);
   expect(ids).not.toContain("fresh");
   expect(ids[0]).toBe("stale");
   expect(ids).toHaveLength(AUTO_CHECK_MAX);
+  await waitFor(() => expect(opts.onFinished).toHaveBeenCalledTimes(1));
+  await act(async () => rerender({ ...opts, listComplete: false }));
+  await act(async () => rerender({ ...opts, listComplete: true }));
+  expect(mockCheck).toHaveBeenCalledTimes(1);
 });
 
 test("switching category aborts the running sweep without re-sorting", async () => {
@@ -134,5 +171,20 @@ test("switching category aborts the running sweep without re-sorting", async () 
     rerender({ ...opts, filterKey: "sports", channels: [] }),
   );
   expect(signal?.aborted).toBe(true);
+  expect(opts.onFinished).not.toHaveBeenCalled();
+});
+
+test("database failures are visible and never fall back to duplicate network probes", async () => {
+  const opts = options();
+  (opts.repo!.getCheckResults as jest.Mock).mockRejectedValueOnce(
+    new Error("database unavailable"),
+  );
+  await renderHook(() => useAutoAvailabilityCheck(opts));
+  await waitFor(() =>
+    expect(opts.onError).toHaveBeenCalledWith(
+      "可用性检测未完成，可在来源管理中重试",
+    ),
+  );
+  expect(mockCheck).not.toHaveBeenCalled();
   expect(opts.onFinished).not.toHaveBeenCalled();
 });

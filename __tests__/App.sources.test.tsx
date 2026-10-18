@@ -20,7 +20,19 @@ import App from "../src/App";
 import { checkChannels } from "../src/features/source/availability";
 import type { Channel, ChannelQuery } from "../src/domain/types";
 
-beforeEach(resetAppMocks);
+beforeEach(() => {
+  resetAppMocks();
+  // The source fixture reports two channels: give the shared checker real
+  // targets instead of relying on an empty sweep still running a preflight.
+  repo.listChannels.mockImplementation(async (query?: { sourceId?: string }) =>
+    query?.sourceId
+      ? ([
+          { id: "a", streamUrl: "https://a.example.com/a" },
+          { id: "b", streamUrl: "https://a.example.com/b" },
+        ] as never[])
+      : [],
+  );
+});
 
 test("availability check never sends requests without network consent", async () => {
   jest

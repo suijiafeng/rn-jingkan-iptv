@@ -14,6 +14,28 @@ import {
 import { PlayerScreen } from "../PlayerScreen";
 
 describe("one overlay instead of native controls", () => {
+  test("mute toggles in portrait, fullscreen and docked layouts and survives channel changes", async () => {
+    const initial = props();
+    const ui = await render(<PlayerScreen {...initial} />);
+    await fireEvent.press(ui.getByRole("button", { name: "静音" }));
+    expect(
+      ui.getByRole("button", { name: "取消静音" }).props.accessibilityState
+        .selected,
+    ).toBe(true);
+    expect(mockNative.muted).toBe(true);
+    expect(mockMounts).toHaveBeenCalledTimes(1);
+    const next = { ...initial, channel: second, sources: [second] };
+    await ui.rerender(<PlayerScreen {...next} />);
+    expect(ui.getByRole("button", { name: "取消静音" })).toBeTruthy();
+    expect(mockNative.muted).toBe(true);
+    await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
+    await fireEvent.press(ui.getByRole("button", { name: "取消静音" }));
+    expect(mockNative.muted).toBe(false);
+    await ui.rerender(<PlayerScreen {...next} mini />);
+    await fireEvent.press(ui.getByRole("button", { name: "静音" }));
+    expect(mockNative.muted).toBe(true);
+    expect(mockMounts).toHaveBeenCalledTimes(2);
+  });
   const start = async () => {
     await act(() =>
       mockAttempt?.controller.nativeStarted(mockAttempt.attemptId),

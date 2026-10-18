@@ -1,4 +1,5 @@
 import { M3U_LIMITS, utf8ByteLength } from "../domain/m3u";
+import { synchronizeChecks } from "./availability";
 import type {
   Channel,
   ChannelQuery,
@@ -240,6 +241,7 @@ export async function upsertChannels(
       params,
     );
   }
+  await synchronizeChecks(tx, sourceId);
   // Favorite/recent state is keyed by groupKey, so newly imported
   // alternatives inherit it without copying per-stream rows.
 }

@@ -132,7 +132,7 @@ test("filters chosen in the sheet are the channel page's filters", async () => {
   await waitFor(() =>
     expect(screen.queryByLabelText("英语体育，播放")).toBeNull(),
   );
-  expect(screen.getByLabelText("美国英语，播放")).toBeTruthy();
+  expect(await screen.findByLabelText("美国英语，播放")).toBeTruthy();
 });
 
 test("locating from the sheet shows every country without changing the saved choice", async () => {

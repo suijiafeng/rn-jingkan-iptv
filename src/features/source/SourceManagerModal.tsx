@@ -38,7 +38,7 @@ interface ManagerProps {
   onRemove: (source: Source) => void;
   sourceSaving?: string | null;
   onEnabledChange: (source: Source, enabled: boolean) => void;
-  onCheck: (source: Source) => void;
+  onCheck: (source: Source, force?: boolean) => void;
   onStopCheck: () => void;
   /** Source whose languages are being looked up in the iptv-org database. */
   languageLookup?: string | null;
@@ -93,6 +93,9 @@ export function SourceManagerModal(props: ManagerProps) {
               onPress={() => props.onAdd("file")}
             />
           </View>
+          <Text style={styles.muted}>
+            可用性按播放地址全局共用，6 小时内复用结果；“重新检测”才会强制更新。统计按去重后的地址计数，可访问不代表一定能播放。
+          </Text>
           {props.sources.length === 0 && (
             <View style={managerStyles.emptyCard}>
               <View style={managerStyles.emptyMark} accessible={false}>
@@ -267,7 +270,7 @@ export function SourceManagerModal(props: ManagerProps) {
                   ) : (
                     <Button
                       compact
-                      label="检测可用性"
+                      label={summary ? "重新检测" : "检测可用性"}
                       secondary
                       disabled={
                         !source.enabled ||
@@ -275,7 +278,11 @@ export function SourceManagerModal(props: ManagerProps) {
                         !!check ||
                         !source.channelCount
                       }
-                      onPress={() => props.onCheck(source)}
+                      onPress={() =>
+                        summary
+                          ? props.onCheck(source, true)
+                          : props.onCheck(source)
+                      }
                     />
                   )}
                   {props.onLookupLanguages &&

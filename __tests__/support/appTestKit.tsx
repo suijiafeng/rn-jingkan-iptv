@@ -101,6 +101,7 @@ export const repo = {
   cancelRefresh: jest.fn(),
   toggleFavorite: jest.fn(),
   saveCheckResults: jest.fn(async () => {}),
+  getCheckResults: jest.fn(async () => []),
   // Playback reads just the chosen channel; derive it from the list mock.
   getChannel: jest.fn(
     async (id: string): Promise<unknown> =>
@@ -167,6 +168,7 @@ export function resetAppMocks() {
   repo.clearRecent.mockReset().mockResolvedValue(undefined);
   repo.recordRecent.mockReset().mockResolvedValue(undefined);
   repo.saveCheckResults.mockReset().mockResolvedValue(undefined);
+  repo.getCheckResults.mockReset().mockResolvedValue([]);
   (Localization.getLocales as jest.Mock).mockReturnValue([
     { regionCode: null, languageCode: "zh" },
   ]);

@@ -5,8 +5,9 @@ import {
   qualityFromIptvOrgId,
 } from "../domain/channelSources";
 import { RepositoryError, type SqlExecutor } from "./sql";
+import { synchronizeChecks } from "./availability";
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 /**
  * Brings a database at any older user_version up to SCHEMA_VERSION inside
@@ -26,6 +27,12 @@ export async function migrateSchema(tx: SqlExecutor): Promise<void> {
   if (current < 5) await migrateV5(tx);
   if (current < 6) await migrateV6(tx);
   if (current < 7) await migrateV7(tx);
+  if (current < 8) {
+    await tx.execAsync(
+      "CREATE INDEX IF NOT EXISTS channels_stream_check ON channels(streamUrl, checkedAt DESC);",
+    );
+    await synchronizeChecks(tx);
+  }
   await tx.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
 }
 

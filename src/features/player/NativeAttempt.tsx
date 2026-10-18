@@ -13,6 +13,7 @@ import { classifyPlayerError } from "./sourceFailover";
 import { resolveContentType } from "./streamFormat";
 
 interface Props {
+  muted?: boolean;
   backgroundAllowed?: boolean;
   title?: string;
   uri: string;
@@ -30,10 +31,12 @@ export function NativeAttempt({
   media,
   backgroundAllowed = false,
   title = "静看",
+  muted = false,
 }: Props) {
   const [player, setPlayer] = useState<VideoPlayer | null>(null);
   const view = useRef<VideoView>(null);
   const backgroundPolicy = useRef(backgroundAllowed);
+  const mutePolicy = useRef(muted);
   const pipActive = useRef(false);
   const exitPictureInPicture = useRef<(() => void) | null>(null);
   const pendingPip = useRef<{
@@ -43,6 +46,15 @@ export function NativeAttempt({
   } | null>(null);
   const alive = useRef(false);
   const currentInstance = useRef<VideoPlayer | null>(null);
+  useEffect(() => {
+    mutePolicy.current = muted;
+    if (!currentInstance.current) return;
+    try {
+      currentInstance.current.muted = muted;
+    } catch {
+      controller.nativeStatus(attemptId, "error");
+    }
+  }, [muted, controller, attemptId]);
   useEffect(() => {
     backgroundPolicy.current = backgroundAllowed;
     if (currentInstance.current) {
@@ -67,6 +79,7 @@ export function NativeAttempt({
       const ownedPlayer = instance;
       currentInstance.current = instance;
       ownedPlayer.audioMixingMode = "doNotMix";
+      ownedPlayer.muted = mutePolicy.current;
       ownedPlayer.staysActiveInBackground = backgroundPolicy.current;
       ownedPlayer.showNowPlayingNotification = backgroundPolicy.current;
       ownedPlayer.allowsExternalPlayback = false;

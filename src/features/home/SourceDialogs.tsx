@@ -81,7 +81,7 @@ export function SourceDialogs({
             setSourceSaving(null),
           );
         }}
-        onCheck={(source) => void sourceTasks.runCheck(source)}
+        onCheck={(source, force) => void sourceTasks.runCheck(source, force)}
         onStopCheck={sourceTasks.stopCheck}
         languageLookup={sourceTasks.languageLookup}
         languageMessages={sourceTasks.languageMessages}

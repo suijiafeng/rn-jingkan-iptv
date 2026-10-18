@@ -29,6 +29,8 @@ import type { FailoverView } from "./useSourceFailover";
 import { sessionStyles } from "./channelSessionStyles";
 
 export interface SessionProps extends PlayerScreenProps {
+  muted: boolean;
+  onMutedChange: (muted: boolean) => void;
   /** Automatic switching between this channel's addresses after a failure. */
   failover: FailoverView;
   fullscreen: boolean;
@@ -124,6 +126,7 @@ export function ChannelSession(props: SessionProps) {
             media={media}
             backgroundAllowed={props.backgroundAllowed}
             title={title}
+            muted={props.muted}
           />
         )}
         {/* The whole picture: tap toggles the overlay; in fullscreen a
@@ -302,6 +305,7 @@ export function ChannelSession(props: SessionProps) {
               />
             </View>
             <View style={sessionStyles.portraitTopRight}>
+              {view.muteButton}
               {view.pictureInPictureButton}
             </View>
           </>
@@ -331,6 +335,7 @@ export function ChannelSession(props: SessionProps) {
             disabled={primaryDisabled}
             onPress={primaryAction}
           />
+          {view.muteButton}
           <OverlayButton
             label="✕"
             accessibilityLabel="停止播放"
