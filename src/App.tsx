@@ -14,6 +14,8 @@ import {
   FlatList,
   View,
   Keyboard,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as DocumentPicker from "expo-document-picker";
@@ -59,6 +61,7 @@ import { useChannelFilters } from "./features/channel/useChannelFilters";
 import { lookupIptvOrgLanguages } from "./features/source/iptvOrgLanguages";
 import { isIptvOrgId } from "./domain/channelFacets";
 import { SettingsScreen } from "./features/settings/SettingsScreen";
+import { createScrollRestore } from "./features/channel/scrollRestore";
 import {
   BottomTabs,
   ChannelListEmpty,
@@ -177,7 +180,21 @@ export default function App() {
     restoreTab = useRef<Tab | null>(null),
     // Resolves to the complete current list (the play queue) once loaded.
     fullList = useRef<Promise<Channel[]>>(Promise.resolve([])),
-    listSettled = useRef(true);
+    listSettled = useRef(true),
+    [scrollRestore] = useState(createScrollRestore);
+  // Re-sent each frame until the list reports the offset (see scrollRestore).
+  const restoreOffset = useCallback(
+    (target: number) => {
+      const send = (offset: number | null) => {
+        if (offset === null) return;
+        listRef.current?.scrollToOffset({ offset, animated: false });
+        if (scrollRestore.pending())
+          requestAnimationFrame(() => send(scrollRestore.retry()));
+      };
+      send(scrollRestore.request(target));
+    },
+    [scrollRestore],
+  );
   // Read by async handlers that must act on the tab shown when they finish.
   const tabRef = useRef(tab);
   useEffect(() => {
@@ -230,8 +247,11 @@ export default function App() {
     () =>
       Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
         useNativeDriver: true,
+        // Only the restore watches the offset here; saving waits for a drag.
+        listener: (e: NativeSyntheticEvent<NativeScrollEvent>) =>
+          scrollRestore.scrolled(e.nativeEvent.contentOffset.y),
       }),
-    [scrollY],
+    [scrollY, scrollRestore],
   );
   const hasCurrentList =
     loadedRequest?.tab === tab &&
@@ -315,6 +335,7 @@ export default function App() {
     let active = true;
     const id = ++loadGeneration.current;
     const current = () => active && id === loadGeneration.current;
+    scrollRestore.cancel();
     const restoring = restoreTab.current === tab;
     // Restoring a scroll offset needs every row laid out, so read it whole.
     const paged = !(restoring && (tabOffsets.current[tab] ?? 0) > 0);
@@ -374,8 +395,7 @@ export default function App() {
         restoreTab.current = null;
         const offset = tabOffsets.current[tab] ?? 0;
         requestAnimationFrame(() => {
-          if (current())
-            listRef.current?.scrollToOffset({ offset, animated: false });
+          if (current()) restoreOffset(offset);
         });
       }
       if (!partial) return c;
@@ -418,6 +438,8 @@ export default function App() {
     region.ready,
     region.preference,
     region.result,
+    scrollRestore,
+    restoreOffset,
   ]);
   useEffect(() => {
     const sub = Network.addNetworkStateListener((net) => {
@@ -1303,14 +1325,17 @@ export default function App() {
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
               onScroll={onListScroll}
+              onScrollBeginDrag={scrollRestore.cancel}
               // Each tab's offset is recorded when a drag or fling settles.
               onScrollEndDrag={(e) => {
-                if (!listLoading)
-                  tabOffsets.current[tab] = e.nativeEvent.contentOffset.y;
+                const y = e.nativeEvent.contentOffset.y;
+                if (!listLoading && scrollRestore.scrolled(y))
+                  tabOffsets.current[tab] = y;
               }}
               onMomentumScrollEnd={(e) => {
-                if (!listLoading)
-                  tabOffsets.current[tab] = e.nativeEvent.contentOffset.y;
+                const y = e.nativeEvent.contentOffset.y;
+                if (!listLoading && scrollRestore.scrolled(y))
+                  tabOffsets.current[tab] = y;
               }}
               scrollEventThrottle={16}
               keyExtractor={listKey}
