@@ -294,6 +294,13 @@ test("the sheet shows the page's result in its order; the visible playable rows 
       .disabled,
   ).toBe(true);
   await fireEvent.press(ui.getByRole("button", { name: "打开频道列表" }));
+  expect(ui.getByTestId("player-channel-list").props).toMatchObject({
+    initialNumToRender: 12,
+    maxToRenderPerBatch: 16,
+    updateCellsBatchingPeriod: 16,
+    windowSize: 21,
+    removeClippedSubviews: false,
+  });
   expect(
     within(ui.getByTestId("player-channel-list"))
       .getAllByRole("button", { name: /，(播放|来源已不再提供)$/ })

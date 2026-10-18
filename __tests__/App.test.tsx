@@ -1489,6 +1489,13 @@ test("the title and filters live in an overlay above the list, not inside it", a
   // channel rows scrolled underneath it.
   expect(list.props.stickyHeaderIndices ?? []).toEqual([]);
   expect(list.props.data[0]).toMatchObject({ id: "a" });
+  expect(list.props).toMatchObject({
+    initialNumToRender: 12,
+    maxToRenderPerBatch: 16,
+    updateCellsBatchingPeriod: 16,
+    windowSize: 21,
+    removeClippedSubviews: false,
+  });
   const overlay = screen.getByTestId("channel-header-overlay");
   expect(within(overlay).getByLabelText("搜索频道名称")).toBeTruthy();
 });

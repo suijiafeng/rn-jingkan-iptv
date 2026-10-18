@@ -59,6 +59,8 @@
 - 频道行 `React.memo`，行内名称解析只算一次；行回调改为稳定引用；分隔组件不再每次渲染新建；FlatList `windowSize` 11、`maxToRenderPerBatch` 8、`removeClippedSubviews`。
 - 选台面板按频道对象缓存搜索文本、分组与标题（WeakMap，行对象替换即失效）。
 
+后续修正（2026-10-19）：实际快速滚动时观察到列表短暂空白。保留分页与虚拟化，但将主列表和播放器选台列表统一调整为 `windowSize` 21、`maxToRenderPerBatch` 16、`updateCellsBatchingPeriod` 16 ms，并关闭 `removeClippedSubviews`。上表的滚动数据仍对应原来的较小窗口配置；新配置需在三星真机重新采样。
+
 评估但未采用：
 - 固定行高 + `getItemLayout`：行高随标签、两行名称和系统字号变化，吸顶栏和标题高度也不固定，固定高度会改变界面并在大字体下出错。
 - `@shopify/flash-list`：要新增依赖并验证吸顶哨兵行；对比了三组 FlatList 设置（全部调优 / 去掉 removeClippedSubviews / 只做 memo 不调参数），卡顿帧均值 4.3% / 5.4% / 4.6%，基线 6.0%，差异接近噪声，模拟器瓶颈在软件渲染。建议在 S25 Ultra 上仍感到卡顿时再评估。

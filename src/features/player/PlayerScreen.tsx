@@ -424,6 +424,11 @@ export function PlayerScreen(props: PlayerScreenProps) {
               keyExtractor={(item) => item.id}
               style={s.channelList}
               contentContainerStyle={s.listContent}
+              initialNumToRender={12}
+              maxToRenderPerBatch={16}
+              updateCellsBatchingPeriod={16}
+              windowSize={21}
+              removeClippedSubviews={false}
               ListEmptyComponent={
                 sheet.loading ? (
                   <ActivityIndicator

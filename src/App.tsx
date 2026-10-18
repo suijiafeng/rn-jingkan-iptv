@@ -1299,11 +1299,13 @@ export default function App() {
               scrollEventThrottle={16}
               keyExtractor={listKey}
               // Rows vary in height (tags, two-line names, font scale), so no
-              // getItemLayout; a smaller window keeps 10k-row lists light.
-              initialNumToRender={10}
-              maxToRenderPerBatch={8}
-              windowSize={11}
-              removeClippedSubviews
+              // getItemLayout. Keep virtualization, but render far enough
+              // ahead of a fast Android fling that the next viewport is ready.
+              initialNumToRender={12}
+              maxToRenderPerBatch={16}
+              updateCellsBatchingPeriod={16}
+              windowSize={21}
+              removeClippedSubviews={false}
               contentContainerStyle={[
                 styles.content,
                 { paddingTop: headerHeight + 12 },
