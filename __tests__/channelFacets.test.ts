@@ -8,7 +8,10 @@ import {
   matchesChannelFacets,
   normalizeCountries,
   normalizeLanguages,
+  countryFromIptvOrgId,
+  isIptvOrgId,
 } from "../src/domain/channelFacets";
+import { parseM3U } from "../src/domain/m3u";
 import { UNGROUPED } from "../src/domain/channelLabels";
 
 describe("explicit channel facets", () => {
@@ -139,14 +142,69 @@ describe("explicit channel facets", () => {
       value: undefined,
     });
     try {
+      // Like Hermes on Android: no DisplayNames data, static names still work.
       expect(countryLabel("CN")).toBe("中国");
-      expect(countryLabel("IS")).toBe("IS");
+      expect(countryLabel("IS")).toBe("冰岛");
+      expect(countryLabel("TT")).toBe("特立尼达和多巴哥");
+      expect(countryLabel("HK")).toBe("中国香港");
       expect(languageLabel("en")).toBe("英语");
-      expect(languageLabel("en-US")).toBe("en-US");
+      expect(languageLabel("en-US")).toBe("英语");
+      expect(languageLabel("yue")).toBe("粤语");
       expect(countryLabel("")).toBe("未标注");
     } finally {
       if (descriptor) Object.defineProperty(Intl, "DisplayNames", descriptor);
       else Reflect.deleteProperty(Intl, "DisplayNames");
     }
   });
+});
+
+describe("iptv-org metadata", () => {
+  test("country comes only from a strict iptv-org tvg-id suffix", () => {
+    expect(countryFromIptvOrgId("CCTV1.cn@SD")).toEqual(["CN"]);
+    expect(countryFromIptvOrgId("BBCOne.uk@HD")).toEqual(["GB"]);
+    expect(countryFromIptvOrgId("TVB.hk")).toEqual(["HK"]);
+    expect(countryFromIptvOrgId("RTK1.xk@SD")).toEqual(["XK"]);
+    // Not the iptv-org format, or not a country: never guessed.
+    for (const id of ["CCTV1", "cctv1.hd", "a.b.cn@SD", "x.zz@SD", "", null])
+      expect(countryFromIptvOrgId(id)).toEqual([]);
+    expect(isIptvOrgId("1Plus1International.ua@HD")).toBe(true);
+    expect(isIptvOrgId("CCTV-1 综合")).toBe(false);
+  });
+
+  test("ISO 639-3 codes from iptv-org normalize to two-letter tags", () => {
+    expect(normalizeLanguages("zho;spa;eng")).toEqual(["zh", "es", "en"]);
+    expect(normalizeLanguages("yue")).toEqual(["yue"]);
+    expect(languageLabel("yue")).toBeTruthy();
+  });
+
+  test("import uses explicit tvg-country first, then the iptv-org id", async () => {
+    const preview = await parseM3U(
+      [
+        "#EXTM3U",
+        '#EXTINF:-1 tvg-id="CCTV1.cn@SD",CCTV-1',
+        "https://a.example.com/1.m3u8",
+        '#EXTINF:-1 tvg-id="CCTV4.cn@SD" tvg-country="US",CCTV-4 美洲',
+        "https://a.example.com/4.m3u8",
+        '#EXTINF:-1 tvg-id="LocalOne",本地台',
+        "https://a.example.com/l.m3u8",
+      ].join("\n"),
+    );
+    expect(preview.channels.map((c) => c.countries)).toEqual([
+      ["CN"],
+      ["US"],
+      [],
+    ]);
+  });
+});
+
+test("long menus pin Chinese-relevant countries and languages first", () => {
+  const options = buildFacetOptions([
+    { countries: ["US"], languages: ["en"], groupName: "新闻" },
+    { countries: ["TW"], languages: ["zh"], groupName: "新闻" },
+    { countries: ["AL"], languages: ["sq"], groupName: "新闻" },
+    { countries: ["CN"], languages: ["yue"], groupName: "新闻" },
+    { countries: [], languages: [], groupName: "新闻" },
+  ]);
+  expect(options.countries).toEqual(["CN", "TW", "AL", "US", ""]);
+  expect(options.languages).toEqual(["zh", "yue", "en", "sq", ""]);
 });

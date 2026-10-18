@@ -7,6 +7,8 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  StyleSheet,
   AppState,
   BackHandler,
   FlatList,
@@ -51,13 +53,14 @@ import {
   SourceManagerModal,
 } from "./features/source/SourceManagerModal";
 import { checkChannels } from "./features/source/availability";
+import { lookupIptvOrgLanguages } from "./features/source/iptvOrgLanguages";
+import { isIptvOrgId } from "./domain/channelFacets";
 import { SettingsScreen } from "./features/settings/SettingsScreen";
 import {
   BottomTabs,
   ChannelListEmpty,
   ChannelFilterBar,
   ChannelListTitle,
-  hasFilterBar,
   type HeaderProps,
   ListTab,
   Tab,
@@ -69,21 +72,15 @@ type ListFilters = {
   language: string | null;
   search: string;
 };
-// Sentinel rows: the sticky filter bar and the empty state live inside the
-// list data so the one virtualized list keeps its header pinned.
-const FILTER_ROW = { kind: "filters" } as const;
+// The empty state is a sentinel row so it renders below the header overlay.
 const EMPTY_ROW = { kind: "empty" } as const;
-type ListItem = Channel | typeof FILTER_ROW | typeof EMPTY_ROW;
+type ListItem = Channel | typeof EMPTY_ROW;
 // A screenful is shown first; the rest of a 10k-row list follows in a second
 // read so switching tabs or filters does not wait for the whole table.
 const FIRST_PAGE = 40;
 const ListSeparator = () => <View style={{ height: 12 }} />;
 const listKey = (item: ListItem) =>
-  item === FILTER_ROW
-    ? "__filters__"
-    : item === EMPTY_ROW
-      ? "__empty__"
-      : (item as Channel).id;
+  item === EMPTY_ROW ? "__empty__" : (item as Channel).id;
 
 export default function App() {
   const [repo, setRepo] = useState<Repository | null>(null),
@@ -137,6 +134,10 @@ export default function App() {
     [manage, setManage] = useState(false),
     [rename, setRename] = useState<Source | null>(null),
     [renameText, setRenameText] = useState("");
+  // Drives the header overlay from the list's native scroll events.
+  const [scrollY] = useState(() => new Animated.Value(0));
+  const [headerHeight, setHeaderHeight] = useState(0),
+    [titleSpace, setTitleSpace] = useState(0);
   const [playing, setPlaying] = useState<Channel | null>(null),
     // For "回到上一个频道": the channel watched before the current one.
     [previousChannel, setPreviousChannel] = useState<Channel | null>(null),
@@ -149,9 +150,15 @@ export default function App() {
   const [check, setCheck] = useState<CheckProgress | null>(null),
     [checkSummaries, setCheckSummaries] = useState<
       Record<string, CheckSummary>
-    >({});
+    >({}),
+    // iptv-org language lookup (user-triggered, one download).
+    [languageLookup, setLanguageLookup] = useState<string | null>(null),
+    [languageMessages, setLanguageMessages] = useState<Record<string, string>>(
+      {},
+    );
   const controller = useRef<AbortController | null>(null),
     checkController = useRef<AbortController | null>(null),
+    languageController = useRef<AbortController | null>(null),
     generation = useRef(0),
     checkGeneration = useRef(0),
     playGeneration = useRef(0),
@@ -209,6 +216,14 @@ export default function App() {
     [repo, tab, sourceId, group, language, countryKey, query, revision],
   );
   const listLoading = loadedRequest !== loadRequest;
+  // Native-driven: moves the header overlay without a JS listener.
+  const onListScroll = useMemo(
+    () =>
+      Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+        useNativeDriver: true,
+      }),
+    [scrollY],
+  );
   const hasCurrentList =
     loadedRequest?.tab === tab &&
     loadedRequest.sourceId === sourceId &&
@@ -226,6 +241,11 @@ export default function App() {
     checkController.current?.abort();
     checkController.current = null;
     setCheck(null);
+  }, []);
+  const stopLanguageLookup = useCallback(() => {
+    languageController.current?.abort();
+    languageController.current = null;
+    setLanguageLookup(null);
   }, []);
   useEffect(() => {
     mounted.current = true;
@@ -257,6 +277,7 @@ export default function App() {
       mounted.current = false;
       controller.current?.abort();
       checkController.current?.abort();
+      languageController.current?.abort();
     };
   }, [startupAttempt]);
   useEffect(() => {
@@ -369,9 +390,10 @@ export default function App() {
       if (state === "active") return;
       if (controller.current) cancelTask();
       stopCheck();
+      stopLanguageLookup();
     });
     return () => sub.remove();
-  }, [cancelTask, stopCheck]);
+  }, [cancelTask, stopCheck, stopLanguageLookup]);
   const guardRemote = async (signal?: AbortSignal) => {
     if (signal?.aborted) return false;
     if (remoteRef.current) return true;
@@ -614,6 +636,69 @@ export default function App() {
     }
   };
   /** Manual, user-started availability sweep of one source's channels. */
+  /**
+   * Fills missing languages for this source's iptv-org formatted channels
+   * from the iptv-org database. Same gates as any other remote request.
+   */
+  const runLanguageLookup = async (s: Source) => {
+    if (!repo || languageController.current) return;
+    const c = new AbortController();
+    languageController.current = c;
+    const epoch = permissionEpoch.current;
+    const current = () =>
+      mounted.current &&
+      languageController.current === c &&
+      !c.signal.aborted &&
+      epoch === permissionEpoch.current;
+    const say = (message: string) =>
+      setLanguageMessages((all) => ({ ...all, [s.id]: message }));
+    setLanguageLookup(s.id);
+    try {
+      if (!(await guardRemote(c.signal)) || !current()) return;
+      if (!(await checkNetwork(c.signal)) || !current()) return;
+      const targets = (await repo.listChannels({ sourceId: s.id })).filter(
+        (channel) => isIptvOrgId(channel.tvgId) && !channel.languages?.length,
+      );
+      if (!current()) return;
+      if (!targets.length) {
+        say("没有需要补全语言的 iptv-org 频道。");
+        return;
+      }
+      const found = await lookupIptvOrgLanguages(
+        new Set(targets.map((channel) => channel.tvgId!)),
+        c.signal,
+      );
+      if (!current()) return;
+      const changedCount = await repo.saveLookedUpLanguages(
+        targets.flatMap((channel) => {
+          const languages = found.get(channel.tvgId!);
+          return languages
+            ? [{ channelId: channel.id, tvgId: channel.tvgId!, languages }]
+            : [];
+        }),
+      );
+      say(
+        `已为 ${changedCount} 个频道补全语言` +
+          (targets.length > changedCount
+            ? `，${targets.length - changedCount} 个在数据库中没有语言记录。`
+            : "。"),
+      );
+      invalidateCatalog();
+      changed();
+    } catch (e) {
+      if (mounted.current && epoch === permissionEpoch.current)
+        say(
+          e instanceof Error && e.message
+            ? e.message
+            : "补全语言失败，请稍后重试",
+        );
+    } finally {
+      if (languageController.current === c) {
+        languageController.current = null;
+        setLanguageLookup(null);
+      }
+    }
+  };
   const runCheck = async (s: Source) => {
     if (!repo || checkController.current || AppState.currentState !== "active")
       return;
@@ -831,6 +916,7 @@ export default function App() {
       return;
     cancelTask();
     if (check?.sourceId === s.id) stopCheck();
+    if (languageLookup === s.id) stopLanguageLookup();
     if (playing?.sourceId === s.id) setPlaying(null);
     if (previousChannel?.sourceId === s.id) setPreviousChannel(null);
     if (lastWatched.current?.sourceId === s.id) lastWatched.current = null;
@@ -878,6 +964,7 @@ export default function App() {
     setPlaying(null);
     cancelTask();
     stopCheck();
+    stopLanguageLookup();
     region.cancel();
     try {
       await repo.setSetting("remoteAllowed", false);
@@ -945,6 +1032,7 @@ export default function App() {
     setPlaying(null);
     cancelTask();
     stopCheck();
+    stopLanguageLookup();
     region.cancel();
     try {
       await repo.clearAll();
@@ -1088,11 +1176,16 @@ export default function App() {
     },
   };
   const rows = !hasCurrentList || listError ? [] : channels;
-  const showFilterBar = hasFilterBar({ tab: listTab, recentEditing });
-  const listData: ListItem[] = [
-    ...(showFilterBar ? [FILTER_ROW] : []),
-    ...(rows.length ? rows : [EMPTY_ROW]),
-  ];
+  const listData: ListItem[] = rows.length ? rows : [EMPTY_ROW];
+  // Pinned filters: the title + filter bar sit in an overlay above the list
+  // (so taps land on them, not on rows scrolled underneath, which is what an
+  // in-list stickyHeaderIndices row did on Android) and slide up by the title
+  // height as the list scrolls.
+  const headerCollapse = scrollY.interpolate({
+    inputRange: [0, Math.max(1, titleSpace)],
+    outputRange: [0, -titleSpace],
+    extrapolate: "clamp",
+  });
   return (
     <SafeAreaView
       style={styles.screen}
@@ -1164,80 +1257,105 @@ export default function App() {
             onClearAll={() => void clearAll()}
           />
         ) : (
-          <FlatList<ListItem>
-            testID="channel-list"
-            ref={listRef}
-            data={listData}
-            extraData={listHeaderProps}
-            // Index 0 is the title (ListHeaderComponent); 1 is the filter bar.
-            stickyHeaderIndices={showFilterBar ? [1] : undefined}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            onScroll={(e) => {
-              if (!listLoading)
-                tabOffsets.current[tab] = e.nativeEvent.contentOffset.y;
-            }}
-            scrollEventThrottle={100}
-            keyExtractor={listKey}
-            // Rows vary in height (tags, two-line names, font scale), so no
-            // getItemLayout; a smaller window keeps 10k-row lists light.
-            initialNumToRender={10}
-            maxToRenderPerBatch={8}
-            windowSize={11}
-            removeClippedSubviews
-            contentContainerStyle={styles.content}
-            ListHeaderComponent={<ChannelListTitle {...listHeaderProps} />}
-            ItemSeparatorComponent={ListSeparator}
-            renderItem={({ item }) => {
-              if (item === FILTER_ROW)
-                return <ChannelFilterBar key={listTab} {...listHeaderProps} />;
-              if (item === EMPTY_ROW)
+          // Clip: the collapsing title must not slide over the status bar.
+          <View style={{ flex: 1, overflow: "hidden" }}>
+            <Animated.FlatList<ListItem>
+              testID="channel-list"
+              ref={listRef}
+              data={listData}
+              extraData={listHeaderProps}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              onScroll={onListScroll}
+              // Each tab's offset is recorded when a drag or fling settles.
+              onScrollEndDrag={(e) => {
+                if (!listLoading)
+                  tabOffsets.current[tab] = e.nativeEvent.contentOffset.y;
+              }}
+              onMomentumScrollEnd={(e) => {
+                if (!listLoading)
+                  tabOffsets.current[tab] = e.nativeEvent.contentOffset.y;
+              }}
+              scrollEventThrottle={16}
+              keyExtractor={listKey}
+              // Rows vary in height (tags, two-line names, font scale), so no
+              // getItemLayout; a smaller window keeps 10k-row lists light.
+              initialNumToRender={10}
+              maxToRenderPerBatch={8}
+              windowSize={11}
+              removeClippedSubviews
+              contentContainerStyle={[
+                styles.content,
+                { paddingTop: headerHeight + 12 },
+              ]}
+              ItemSeparatorComponent={ListSeparator}
+              renderItem={({ item }) => {
+                if (item === EMPTY_ROW)
+                  return (
+                    <ChannelListEmpty
+                      tab={listTab}
+                      loading={listLoading}
+                      error={listError}
+                      hasSources={sources.length > 0}
+                      filtered={
+                        !!query ||
+                        !!sourceId ||
+                        group !== null ||
+                        language !== null ||
+                        country !== null
+                      }
+                      onRetry={changed}
+                      onAddUrl={() => startForm("url")}
+                      onAddFile={() => startForm("file")}
+                      onShowAll={() => {
+                        setRecentEditing(false);
+                        setTab("all");
+                        setSourceId("");
+                        setGroup(null);
+                        setLanguage(null);
+                        void region.selectManualCountry(null);
+                        setSearch("");
+                        setQuery("");
+                      }}
+                    />
+                  );
                 return (
-                  <ChannelListEmpty
-                    tab={listTab}
-                    loading={listLoading}
-                    error={listError}
-                    hasSources={sources.length > 0}
-                    filtered={
-                      !!query ||
-                      !!sourceId ||
-                      group !== null ||
-                      language !== null ||
-                      country !== null
+                  <ChannelRow
+                    channel={item as Channel}
+                    artworkEnabled={
+                      artworkAllowed && remoteAllowed && !revokePending
                     }
-                    onRetry={changed}
-                    onAddUrl={() => startForm("url")}
-                    onAddFile={() => startForm("file")}
-                    onShowAll={() => {
-                      setRecentEditing(false);
-                      setTab("all");
-                      setSourceId("");
-                      setGroup(null);
-                      setLanguage(null);
-                      void region.selectManualCountry(null);
-                      setSearch("");
-                      setQuery("");
-                    }}
+                    onPlay={onRowPlay}
+                    onFavorite={onRowFavorite}
+                    onRemoveRecent={
+                      tab === "recent" && recentEditing
+                        ? onRowRemoveRecent
+                        : undefined
+                    }
+                    recentBusy={recentBusy}
                   />
                 );
-              return (
-                <ChannelRow
-                  channel={item as Channel}
-                  artworkEnabled={
-                    artworkAllowed && remoteAllowed && !revokePending
-                  }
-                  onPlay={onRowPlay}
-                  onFavorite={onRowFavorite}
-                  onRemoveRecent={
-                    tab === "recent" && recentEditing
-                      ? onRowRemoveRecent
-                      : undefined
-                  }
-                  recentBusy={recentBusy}
-                />
-              );
-            }}
-          />
+              }}
+            />
+            <Animated.View
+              testID="channel-header-overlay"
+              style={[
+                s.headerOverlay,
+                { transform: [{ translateY: headerCollapse }] },
+              ]}
+              onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+            >
+              <View
+                onLayout={(e) =>
+                  // Title plus the gap above the bar collapses away.
+                  setTitleSpace(e.nativeEvent.layout.height + 20)
+                }
+              >
+                <ChannelListTitle {...listHeaderProps} />
+              </View>
+              <ChannelFilterBar key={listTab} {...listHeaderProps} />
+            </Animated.View>
+          </View>
         )}
         <BottomTabs tab={tab} onChange={changeTab} />
       </View>
@@ -1266,6 +1384,10 @@ export default function App() {
         onRemove={(s) => void remove(s)}
         onCheck={(s) => void runCheck(s)}
         onStopCheck={stopCheck}
+        languageLookup={languageLookup}
+        languageMessages={languageMessages}
+        onLookupLanguages={(s) => void runLanguageLookup(s)}
+        onStopLanguageLookup={stopLanguageLookup}
       />
       <RenameSourceModal
         source={rename}
@@ -1375,3 +1497,15 @@ export default function App() {
     </SafeAreaView>
   );
 }
+
+const s = StyleSheet.create({
+  headerOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    backgroundColor: colors.bg,
+  },
+});

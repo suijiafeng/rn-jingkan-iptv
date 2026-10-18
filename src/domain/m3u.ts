@@ -6,7 +6,11 @@ import type {
 } from "./types";
 import { normalizeRemoteUrl, UrlValidationError } from "./url";
 import { normalizeGroups } from "./channelLabels";
-import { normalizeCountries, normalizeLanguages } from "./channelFacets";
+import {
+  countryFromIptvOrgId,
+  normalizeCountries,
+  normalizeLanguages,
+} from "./channelFacets";
 
 // 8 MiB fits the full iptv-org index (~2.5 MiB, 11k+ entries) with headroom;
 // still bounded because the text is held in memory while parsing.
@@ -126,8 +130,11 @@ function parseExtinf(line: string, lineNumber: number): PendingChannel | null {
     tvgId: attributes["tvg-id"] || null,
     // Loading remote artwork requires a separate informed application consent.
     logoUrl: attributes["tvg-logo"] || null,
-    countries: normalizeCountries(
-      attributes["tvg-country"] || attributes.country,
+    // Explicit attributes win; otherwise only an iptv-org formatted tvg-id
+    // (its lists no longer carry tvg-country) supplies the country.
+    countries: ((explicit) =>
+      explicit.length ? explicit : countryFromIptvOrgId(attributes["tvg-id"]))(
+      normalizeCountries(attributes["tvg-country"] || attributes.country),
     ),
     languages: normalizeLanguages(
       attributes["tvg-language"] || attributes.language,

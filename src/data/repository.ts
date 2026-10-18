@@ -15,12 +15,13 @@ import {
 } from "../domain/channelLabels";
 import {
   buildFacetOptions,
+  countryFromIptvOrgId,
   normalizeCountries,
   normalizeLanguages,
   type ChannelFacetOptions,
 } from "../domain/channelFacets";
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export type SqlValue = string | number | null;
 export interface SqlExecutor {
@@ -73,6 +74,7 @@ interface RawChannel extends Omit<
   favorite: number;
   countries: string;
   languages: string;
+  lookupLanguages?: string;
 }
 export interface RefreshOptions {
   content?: string;
@@ -152,13 +154,13 @@ function channelFilter(query: ChannelQuery): {
     }
   }
   for (const [column, value] of [
-    ["countries", query.country],
-    ["languages", query.language],
+    ["c.countries", query.country],
+    [EFFECTIVE_LANGUAGES, query.language],
   ] as const) {
     if (value === undefined) continue;
-    if (value === "") where.push(`c.${column} = ''`);
+    if (value === "") where.push(`${column} = ''`);
     else {
-      where.push(`(';' || c.${column} || ';') LIKE ? ESCAPE '\\'`);
+      where.push(`(';' || ${column} || ';') LIKE ? ESCAPE '\\'`);
       params.push(`%;${value.replace(/[\\%_]/g, "\\$&")};%`);
     }
   }
@@ -193,11 +195,16 @@ function assertContent(content: string): void {
   )
     throw new RepositoryError("invalid_input");
 }
+// Playlist labels win; otherwise the iptv-org lookup (if the user ran it).
+const EFFECTIVE_LANGUAGES =
+  "(CASE WHEN c.languages <> '' THEN c.languages ELSE c.lookupLanguages END)";
+
 function mapChannel(row: RawChannel): Channel {
+  const { lookupLanguages, ...rest } = row;
   return {
-    ...row,
+    ...rest,
     countries: normalizeCountries(row.countries),
-    languages: normalizeLanguages(row.languages),
+    languages: normalizeLanguages(row.languages || lookupLanguages),
     active: row.active === 1,
     favorite: row.favorite === 1,
   };
@@ -238,6 +245,7 @@ export class Repository {
         if (current < 1) await this.createV1(tx);
         if (current < 2) await this.migrateV2(tx);
         if (current < 3) await this.migrateV3(tx);
+        if (current < 4) await this.migrateV4(tx);
         await tx.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
       });
     });
@@ -290,6 +298,37 @@ export class Repository {
       ALTER TABLE channels ADD COLUMN countries TEXT NOT NULL DEFAULT '';
       ALTER TABLE channels ADD COLUMN languages TEXT NOT NULL DEFAULT '';
     `);
+  }
+
+  /**
+   * v4: languages looked up in the iptv-org database live apart from playlist
+   * labels, so a refresh can clear removed labels yet keep the lookup.
+   */
+  private async migrateV4(tx: SqlExecutor): Promise<void> {
+    await tx.execAsync(
+      "ALTER TABLE channels ADD COLUMN lookupLanguages TEXT NOT NULL DEFAULT '';",
+    );
+    // Backfill countries for already-imported iptv-org ids (offline, same
+    // strict rule as import) so existing lists need no refresh.
+    const rows = await tx.getAllAsync<{ id: string; tvgId: string }>(
+      "SELECT id, tvgId FROM channels WHERE countries = '' AND tvgId IS NOT NULL",
+    );
+    // Grouped by country and chunked: one statement per ~900 rows instead of
+    // one per channel (11k single updates held the splash for seconds).
+    const byCountry = new Map<string, string[]>();
+    for (const row of rows) {
+      const [country] = countryFromIptvOrgId(row.tvgId);
+      if (country)
+        byCountry.set(country, [...(byCountry.get(country) ?? []), row.id]);
+    }
+    for (const [country, ids] of byCountry)
+      for (let start = 0; start < ids.length; start += 900) {
+        const chunk = ids.slice(start, start + 900);
+        await tx.runAsync(
+          `UPDATE channels SET countries = ? WHERE id IN (${chunk.map(() => "?").join(",")})`,
+          [country, ...chunk],
+        );
+      }
   }
 
   async listSources(): Promise<Source[]> {
@@ -376,7 +415,7 @@ export class Repository {
       languages: string;
       groupName: string;
     }>(
-      `SELECT DISTINCT countries, languages, groupName FROM channels WHERE active = 1${sourceId ? " AND sourceId = ?" : ""}`,
+      `SELECT DISTINCT countries, CASE WHEN languages <> '' THEN languages ELSE lookupLanguages END AS languages, groupName FROM channels WHERE active = 1${sourceId ? " AND sourceId = ?" : ""}`,
       sourceId ? [sourceId] : [],
     );
     return buildFacetOptions(
@@ -545,12 +584,40 @@ export class Repository {
         VALUES${batch.map(() => `(${CHANNEL_BOUND_COLUMNS.map(() => "?").join(",")},1)`).join(",")} ON CONFLICT(sourceId, identityKey) DO UPDATE SET
         name=excluded.name,groupName=excluded.groupName,tvgId=excluded.tvgId,logoUrl=excluded.logoUrl,
         countries=excluded.countries,languages=excluded.languages,
+        lookupLanguages=CASE WHEN channels.tvgId IS excluded.tvgId THEN channels.lookupLanguages ELSE '' END,
         checkStatus=CASE WHEN channels.streamUrl=excluded.streamUrl THEN channels.checkStatus END,
         checkedAt=CASE WHEN channels.streamUrl=excluded.streamUrl THEN channels.checkedAt END,
         streamUrl=excluded.streamUrl,sortIndex=excluded.sortIndex,active=1,lastSeenRevision=excluded.lastSeenRevision`,
         params,
       );
     }
+  }
+
+  /**
+   * Fills languages looked up in the iptv-org database (user-triggered).
+   * Stored apart from playlist labels and applied only while the channel
+   * still has the tvg-id that was looked up; playlist labels still win.
+   */
+  async saveLookedUpLanguages(
+    updates: { channelId: string; tvgId: string; languages: string[] }[],
+  ): Promise<number> {
+    let changed = 0;
+    await this.serialize(async () => {
+      await this.db.withExclusiveTransactionAsync(async (tx) => {
+        for (const update of updates) {
+          const value = normalizeLanguages(update.languages.join(";")).join(
+            ";",
+          );
+          if (!value) continue;
+          const result = await tx.runAsync(
+            "UPDATE channels SET lookupLanguages = ? WHERE id = ? AND tvgId = ?",
+            [value, update.channelId, update.tvgId],
+          );
+          changed += result.changes;
+        }
+      });
+    });
+    return changed;
   }
 
   /**

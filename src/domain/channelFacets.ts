@@ -1,5 +1,7 @@
 import { splitGroups, UNGROUPED } from "./channelLabels";
 import type { Channel } from "./types";
+import { ISO639_3_NAMES, ISO639_3_ONLY, ISO639_3_TO_1 } from "./iso639";
+import { COUNTRY_NAMES_ZH, LANGUAGE_NAMES_ZH } from "./displayNamesZh";
 
 export type FacetKind = "country" | "language" | "content";
 export interface ChannelFacetSelection {
@@ -23,10 +25,12 @@ export const EMPTY_FACET_OPTIONS: ChannelFacetOptions = {
   contents: [],
 };
 
-// Assigned ISO 3166-1 alpha-2 codes, including territories. Never infer these
-// from a channel title, URL, tvg-id or a device's location.
+// Assigned ISO 3166-1 alpha-2 codes, including territories, plus XK (Kosovo,
+// the widely used user-assigned code that iptv-org also uses). Never infer these
+// from a channel title, URL or a device's location; the only tvg-id source is
+// the strict iptv-org format below.
 const COUNTRY_CODES = new Set(
-  "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW".split(
+  "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS XK YE YT ZA ZM ZW".split(
     " ",
   ),
 );
@@ -219,7 +223,11 @@ function namedCountry(value: string): string | undefined {
   if (!countryNames) {
     countryNames = new Map(Object.entries(COUNTRY_ALIASES));
     for (const code of COUNTRY_CODES) {
-      const names = [COUNTRY_FALLBACK[code], displayName("region", code)];
+      const names = [
+        COUNTRY_NAMES_ZH[code],
+        COUNTRY_FALLBACK[code],
+        displayName("region", code),
+      ];
       try {
         if (typeof Intl.DisplayNames === "function")
           names.push(
@@ -252,6 +260,29 @@ function normalizeList(
   return [...values];
 }
 
+// iptv-org channel ids: "<Name>.<country>@<feed>", e.g. "CCTV1.cn@SD".
+// The suffix is that database's country field (verified identical for all
+// 11,356 entries of its full index); "uk" is its code for GB.
+const IPTV_ORG_ID = /^[A-Za-z0-9][A-Za-z0-9-]*\.([a-z]{2})(?:@[A-Za-z0-9-]+)?$/;
+
+/** True when a tvg-id follows the iptv-org database format. */
+export function isIptvOrgId(tvgId: string | null | undefined): boolean {
+  return !!tvgId && IPTV_ORG_ID.test(tvgId);
+}
+
+/**
+ * Country from an iptv-org formatted tvg-id only. Any other id format yields
+ * nothing: titles, URLs and free-form ids are never guessed from.
+ */
+export function countryFromIptvOrgId(
+  tvgId: string | null | undefined,
+): string[] {
+  const match = tvgId ? IPTV_ORG_ID.exec(tvgId) : null;
+  if (!match) return [];
+  const code = match[1] === "uk" ? "GB" : match[1].toUpperCase();
+  return isCountryCode(code) ? [code] : [];
+}
+
 export function normalizeCountries(raw: string | null | undefined): string[] {
   return normalizeList(raw, (part) => {
     const code = part.toUpperCase();
@@ -262,6 +293,8 @@ export function normalizeCountries(raw: string | null | undefined): string[] {
 function normalizeLanguage(part: string): string | undefined {
   const lower = part.toLowerCase().replace(/_/g, "-");
   if (LANGUAGE_ALIASES[lower]) return LANGUAGE_ALIASES[lower];
+  // iptv-org uses ISO 639-3 ("zho", "spa"); store the two-letter form.
+  if (ISO639_3_TO_1[lower]) return ISO639_3_TO_1[lower];
   if (!/^[a-z]{2,3}(?:-[a-z0-9]{2,8}){0,4}$/.test(lower)) return undefined;
   const [original, ...subtags] = lower.split("-");
   const base = LANGUAGE_ALIASES[original] ?? original;
@@ -272,6 +305,7 @@ function normalizeLanguage(part: string): string | undefined {
     known =
       LANGUAGE_CODES.has(base) ||
       THREE_LETTER_LANGUAGES.has(base) ||
+      ISO639_3_ONLY.has(base) ||
       (!!name && name !== base);
     knownLanguages.set(base, known);
   }
@@ -310,11 +344,22 @@ export function normalizeLanguages(raw: string | null | undefined): string[] {
 export function countryLabel(value: string): string {
   return !value
     ? "未标注"
-    : (displayName("region", value) ?? COUNTRY_FALLBACK[value] ?? value);
+    : (COUNTRY_NAMES_ZH[value] ??
+        displayName("region", value) ??
+        COUNTRY_FALLBACK[value] ??
+        value);
 }
 export function languageLabel(value: string): string {
   if (!value) return "未标注";
-  return displayName("language", value) ?? LANGUAGE_FALLBACK[value] ?? value;
+  // Static names first: Hermes has no Intl.DisplayNames data on Android.
+  return (
+    LANGUAGE_NAMES_ZH[value] ??
+    LANGUAGE_NAMES_ZH[value.split("-")[0]] ??
+    displayName("language", value) ??
+    LANGUAGE_FALLBACK[value] ??
+    ISO639_3_NAMES[value] ??
+    value
+  );
 }
 export function facetLabel(kind: FacetKind, value: string | null): string {
   if (value === null) return "全部";
@@ -333,7 +378,18 @@ function contentValues(channel: FacetChannel): string[] {
   );
 }
 const facetOrder = new Intl.Collator("zh-Hans-CN");
+// Pinned to the top of long menus (200+ languages, 160+ countries), in
+// this order; everything else follows by Chinese collation, unlabeled last.
+const PINNED: Partial<Record<FacetKind, readonly string[]>> = {
+  country: ["CN", "HK", "TW", "MO"],
+  language: ["zh", "yue", "en"],
+};
 function sortOptions(values: Set<string>, kind: FacetKind): string[] {
+  const pinned = PINNED[kind] ?? [];
+  const rank = (value: string) => {
+    const index = pinned.indexOf(value);
+    return index >= 0 ? index : pinned.length;
+  };
   return [...values].sort((a, b) =>
     !a
       ? !b
@@ -341,7 +397,8 @@ function sortOptions(values: Set<string>, kind: FacetKind): string[] {
         : 1
       : !b
         ? -1
-        : facetOrder.compare(facetLabel(kind, a), facetLabel(kind, b)),
+        : rank(a) - rank(b) ||
+          facetOrder.compare(facetLabel(kind, a), facetLabel(kind, b)),
   );
 }
 export function buildFacetOptions(

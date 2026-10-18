@@ -30,6 +30,11 @@ interface ManagerProps {
   onRemove: (source: Source) => void;
   onCheck: (source: Source) => void;
   onStopCheck: () => void;
+  /** Source whose languages are being looked up in the iptv-org database. */
+  languageLookup?: string | null;
+  languageMessages?: Record<string, string>;
+  onLookupLanguages?: (source: Source) => void;
+  onStopLanguageLookup?: () => void;
 }
 
 export function SourceManagerModal(props: ManagerProps) {
@@ -114,6 +119,34 @@ export function SourceManagerModal(props: ManagerProps) {
                     onPress={() => props.onCheck(s)}
                   />
                 )}
+                {props.languageLookup === s.id && (
+                  <Text style={styles.body} accessibilityLiveRegion="polite">
+                    正在下载 iptv-org 数据库（约 8 MB）并补全语言…
+                  </Text>
+                )}
+                {props.languageLookup !== s.id &&
+                  props.languageMessages?.[s.id] && (
+                    <Text style={styles.muted}>
+                      {props.languageMessages[s.id]}
+                    </Text>
+                  )}
+                {props.onLookupLanguages &&
+                  (props.languageLookup === s.id ? (
+                    <Button
+                      label="停止补全语言"
+                      secondary
+                      onPress={() => props.onStopLanguageLookup?.()}
+                    />
+                  ) : (
+                    <Button
+                      label="补全语言（iptv-org 数据库）"
+                      secondary
+                      disabled={
+                        !!props.languageLookup || !!check || !s.channelCount
+                      }
+                      onPress={() => props.onLookupLanguages?.(s)}
+                    />
+                  ))}
                 <View style={styles.row}>
                   <Button
                     label="改名"
@@ -135,6 +168,10 @@ export function SourceManagerModal(props: ManagerProps) {
           <Notice
             title="关于可用性检测"
             body="只在你点击时进行：每个频道发一次很小的请求（最多 1 KiB），同时最多 4 个。结果只说明服务器当时是否有响应，地区限制、节目暂停或格式不支持仍可能无法播放。"
+          />
+          <Notice
+            title="关于补全语言"
+            body="iptv-org 的节目单不再写语言。点击后会从 iptv-org.github.io 下载一次它的公开数据库（约 8 MB），只为 tvg-id 是 iptv-org 格式、且节目单没有写语言的频道补上语言，不上传你的列表。国家已在导入时从 tvg-id 读取，无需联网。"
           />
           <Button secondary label="返回" onPress={props.onClose} />
         </ScrollView>

@@ -194,7 +194,10 @@ export function FacetFilters({
                 {available.every((value) => !value) && (
                   <Text style={s.hint}>
                     {available.length
-                      ? `节目单未提供${LABELS[open]}标注，可选择全部或未标注。`
+                      ? `节目单未提供${LABELS[open]}标注，可选择全部或未标注。` +
+                        (open === "language"
+                          ? "iptv-org 列表可在 设置 › 管理节目来源 中补全语言。"
+                          : "")
                       : `当前来源暂无${LABELS[open]}选项。`}
                   </Text>
                 )}

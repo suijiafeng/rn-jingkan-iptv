@@ -12,6 +12,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react-native";
 import App from "../src/App";
 import { openRepository } from "../src/data/repository";
@@ -1301,7 +1302,7 @@ test("the player opens without waiting for the full catalog, which is loaded onc
   expect(catalogCalls.filter((q) => q === undefined).length).toBe(loads);
 });
 
-test("the filter bar is pinned while the title scrolls away", async () => {
+test("the title and filters live in an overlay above the list, not inside it", async () => {
   (repo.listSources as jest.Mock).mockImplementation(async () => [
     { id: "s", name: "来源", channelCount: 1 },
   ]);
@@ -1324,10 +1325,12 @@ test("the filter bar is pinned while the title scrolls away", async () => {
   await render(<App />);
   await screen.findByLabelText("甲台，播放");
   const list = screen.getByTestId("channel-list");
-  expect(list.props.stickyHeaderIndices).toEqual([1]);
-  // Row 0 of the data is the filter bar itself, so search stays reachable.
-  expect(list.props.data[0]).toEqual({ kind: "filters" });
-  expect(screen.getByLabelText("搜索频道名称")).toBeTruthy();
+  // Not an in-list sticky row: on Android taps on such a row reached the
+  // channel rows scrolled underneath it.
+  expect(list.props.stickyHeaderIndices ?? []).toEqual([]);
+  expect(list.props.data[0]).toMatchObject({ id: "a" });
+  const overlay = screen.getByTestId("channel-header-overlay");
+  expect(within(overlay).getByLabelText("搜索频道名称")).toBeTruthy();
 });
 
 function setupFacetCatalog() {

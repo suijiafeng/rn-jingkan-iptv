@@ -174,7 +174,7 @@ describe("SQLite repository with real SQLite", () => {
       { id: channel.id, favorite: true },
     ]);
     expect(await db.getFirstAsync("PRAGMA user_version")).toEqual({
-      user_version: 3,
+      user_version: 4,
     });
   });
 
@@ -569,12 +569,12 @@ describe("SQLite repository with real SQLite", () => {
   });
 
   it("does not rewrite a database newer than this app", async () => {
-    await db.execAsync("PRAGMA user_version = 4");
+    await db.execAsync("PRAGMA user_version = 5");
     await expect(createRepository(db)).rejects.toMatchObject({
       code: "newer_schema",
     });
     expect(await db.getFirstAsync("PRAGMA user_version")).toEqual({
-      user_version: 4,
+      user_version: 5,
     });
   });
 
@@ -599,7 +599,7 @@ describe("SQLite repository with real SQLite", () => {
     `);
     const migrated = await createRepository(legacy);
     expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
-      user_version: 3,
+      user_version: 4,
     });
     expect(await migrated.listGroups()).toEqual(
       ["纪录片", "旅游", "文化", UNGROUPED].sort((a, b) =>
@@ -837,7 +837,7 @@ describe("SQLite repository with real SQLite", () => {
         { id: "legacy-channel" },
       ]);
       expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
-        user_version: 3,
+        user_version: 4,
       });
       expect(await legacy.getAllAsync("PRAGMA foreign_key_check")).toEqual([]);
     } finally {
@@ -978,4 +978,74 @@ describe("SQLite repository with real SQLite", () => {
     ).rejects.toMatchObject({ code: "invalid_input" });
     expect(await repo.listSources()).toEqual([]);
   });
+});
+
+describe("looked-up and derived metadata", () => {
+  const listText = (url: string) =>
+    "#EXTM3U\n" +
+    `#EXTINF:-1 tvg-id="CCTV1.cn@SD",CCTV-1\n${url}\n` +
+    `#EXTINF:-1 tvg-id="Own",自有台 \nhttps://a.example.com/own\n`;
+
+  it("fills only empty languages for the looked-up tvg-id and keeps them across refresh", async () => {
+    const first = listText("https://a.example.com/1");
+    const source = await repo.importSource({
+      name: "iptv",
+      kind: "file",
+      location: "i.m3u",
+      content: first,
+      preview: await parseM3U(first),
+    });
+    const [cctv, own] = await repo.listChannels();
+    expect(cctv).toMatchObject({ countries: ["CN"], languages: [] });
+    const changed = await repo.saveLookedUpLanguages([
+      { channelId: cctv.id, tvgId: "CCTV1.cn@SD", languages: ["zho"] },
+      // Wrong tvg-id for this channel: must not be applied.
+      { channelId: own.id, tvgId: "CCTV1.cn@SD", languages: ["eng"] },
+    ]);
+    expect(changed).toBe(1);
+    const second = listText("https://a.example.com/1-new");
+    const token = await repo.beginRefresh(source.id);
+    await repo.refreshSource(
+      source.id,
+      token.revision,
+      await parseM3U(second),
+      {
+        generation: token.generation,
+        content: second,
+      },
+    );
+    const [after, ownAfter] = await repo.listChannels();
+    expect(after).toMatchObject({
+      id: cctv.id,
+      countries: ["CN"],
+      languages: ["zh"],
+      streamUrl: "https://a.example.com/1-new",
+    });
+    expect(ownAfter.languages).toEqual([]);
+    expect(
+      await repo
+        .listChannels({ language: "zh" })
+        .then((l) => l.map((c) => c.id)),
+    ).toEqual([cctv.id]);
+  });
+});
+
+it("v4 migration backfills countries from stored iptv-org tvg-ids only", async () => {
+  const legacy = new TestDatabase();
+  await createRepository(legacy);
+  legacy.native.exec(`
+    INSERT INTO sources(id,name,kind,location,content,createdAt,lastSuccessAt,lastErrorCategory,revision)
+      VALUES ('s','旧','url','https://a.example.com/l.m3u',NULL,1,1,NULL,1);
+    INSERT INTO channels(id,sourceId,identityKey,name,groupName,tvgId,logoUrl,streamUrl,sortIndex,active,lastSeenRevision)
+      VALUES ('a','s','id:CCTV1.cn@SD','CCTV-1','综合','CCTV1.cn@SD',NULL,'https://a.example.com/1',0,1,1),
+             ('b','s','url:2','自有','综合','own-id',NULL,'https://a.example.com/2',1,1,1);
+    ALTER TABLE channels DROP COLUMN lookupLanguages;
+    PRAGMA user_version = 3;
+  `);
+  const migrated = await createRepository(legacy);
+  const byId = Object.fromEntries(
+    (await migrated.listChannels()).map((c) => [c.id, c.countries]),
+  );
+  expect(byId).toEqual({ a: ["CN"], b: [] });
+  legacy.native.close();
 });
