@@ -1,6 +1,6 @@
-# 静看 1.0 发布与验收
+# 静看 TV 1.0 发布与验收
 
-本仓库面向个人 Android 手机使用。正式候选配置：`com.jingkan.personal`，版本 `1.0.0`，versionCode `2`，arm64-v8a（Galaxy S25 Ultra）。后续覆盖更新保持包名、签名不变，并递增 versionCode。
+本仓库面向个人 Android 手机使用。正式候选配置：`com.jingkan.personal`，版本 `1.0.0`，versionCode `3`，arm64-v8a（Galaxy S25 Ultra）。后续覆盖更新保持包名、签名不变，并递增 versionCode。
 
 ## 生成发行文件
 

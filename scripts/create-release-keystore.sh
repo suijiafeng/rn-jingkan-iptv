@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates your own release key for 静看 and registers it in
+# Creates your own release key for 静看 TV and registers it in
 # ~/.gradle/gradle.properties (outside the repository, mode 600).
 # Run it yourself; passwords are typed here and never echoed or committed.
 # BACK UP the keystore and passwords: losing them means future versions can

@@ -8,14 +8,14 @@ import { RISK } from "../common/confirm";
 import { Chevron, SettingRow } from "./SettingRows";
 
 export const versionLabel = () =>
-  `静看 ${Constants.expoConfig?.version ?? "未知版本"} · 构建 ${Constants.expoConfig?.android?.versionCode ?? "未知"}`;
+  `静看 TV ${Constants.expoConfig?.version ?? "未知版本"} · 构建 ${Constants.expoConfig?.android?.versionCode ?? "未知"}`;
 
 export function About() {
   const [open, setOpen] = useState(false);
   return (
     <>
       <SettingRow
-        title="关于静看"
+        title="关于静看 TV"
         caption={versionLabel()}
         trailing={<Chevron />}
         onPress={() => setOpen(true)}
@@ -30,7 +30,7 @@ export function About() {
           edges={["top", "bottom", "left", "right"]}
         >
           <ScrollView contentContainerStyle={styles.content}>
-            <Heading title="静看" subtitle={versionLabel()} />
+            <Heading title="静看 TV" subtitle={versionLabel()} />
             <Text style={styles.body}>安静地看，资料自己保管。</Text>
             <Text style={styles.muted}>
               个人 Android IPTV

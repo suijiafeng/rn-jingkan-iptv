@@ -1,4 +1,4 @@
-# 静看 · 个人 Android IPTV
+# 静看 TV · 个人 Android IPTV
 
 给三星 Galaxy S25 Ultra 做的安静播放器：无应用广告、无账号、无后端，节目源、收藏和观看记录留在本机。
 
@@ -97,6 +97,6 @@ fixtures/example.m3u 是自有结构测试夹具，example.com 地址是占位�
 
 实际首帧与声音、连续播放、弱网与切台、明文 HLS 子资源、证书失败、来电/耳机/蓝牙音频焦点、旋转与方向锁、字体放大/TalkBack、三星省电、60 分钟内存耗电，以及数据库升级/杀进程恢复。完整清单见 docs/TEST_REPORT.md。
 
-设计：[Figma 静看](https://www.figma.com/design/5oX9LZla0jzHQevtEEFpLc)。架构及映射见 docs/ARCHITECTURE.md。
+设计：[Figma 静看 TV](https://www.figma.com/design/5oX9LZla0jzHQevtEEFpLc)。架构及映射见 docs/ARCHITECTURE.md。
 
 国家/地区默认推荐交叉核对手机地区、语言和时区；IP 查询（ipapi.co）与前台单次定位分别在应用内授权后使用。手动选择（含全部）优先；证据冲突或当前节目单没有相应国家/地区标注时回退全部。国家/地区、语言仅使用节目单明确提供的属性，旧资料需要手动刷新才能补充，不能从频道名或地址猜测。

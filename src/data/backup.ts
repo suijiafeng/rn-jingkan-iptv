@@ -51,7 +51,7 @@ export interface LocalBackup {
   preferences: Record<string, boolean>;
 }
 export class BackupError extends Error {
-  constructor(message = "备份格式无效或数据不完整，请选择静看导出的备份。") {
+  constructor(message = "备份格式无效或数据不完整，请选择静看 TV 导出的备份。") {
     super(message);
   }
 }
@@ -103,7 +103,7 @@ export function parseBackup(text: string): LocalBackup {
   try {
     const data = object(JSON.parse(text));
     if (data.format !== "jingkan-backup" || data.version !== 1)
-      throw new BackupError("备份版本不受支持，请更新静看后重试。");
+      throw new BackupError("备份版本不受支持，请更新静看 TV 后重试。");
     const sourceIds = new Set<string>();
     const sources = rows(data.sources).map((row) => {
       const id = string(row.id);

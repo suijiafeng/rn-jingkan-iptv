@@ -355,7 +355,7 @@ export function WaitProgress() {
   if (seconds <= 0) return null;
   const line = slow
     ? `已等 ${seconds} 秒 · 比平时慢`
-    : `已等 ${seconds} 秒（最多 30 秒）`;
+    : `已等 ${seconds} 秒，最多 30 秒`;
   return (
     <Text style={styles.noticeBody} numberOfLines={1}>
       {line}
