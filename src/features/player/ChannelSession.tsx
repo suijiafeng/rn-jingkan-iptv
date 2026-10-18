@@ -26,7 +26,7 @@ import {
 } from "./playerShared";
 import { useChannelSession } from "./useChannelSession";
 import type { FailoverView } from "./useSourceFailover";
-import { s } from "./channelSessionStyles";
+import { sessionStyles } from "./channelSessionStyles";
 
 export interface SessionProps extends PlayerScreenProps {
   /** Automatic switching between this channel's addresses after a failure. */
@@ -94,7 +94,13 @@ export function ChannelSession(props: SessionProps) {
     .join(" · ");
   return (
     <View
-      style={props.mini ? s.miniBar : props.fullscreen ? s.flex : undefined}
+      style={
+        props.mini
+          ? sessionStyles.miniBar
+          : props.fullscreen
+            ? sessionStyles.flex
+            : undefined
+      }
       importantForAccessibility={
         props.sheetOpen ? "no-hide-descendants" : "auto"
       }
@@ -103,10 +109,10 @@ export function ChannelSession(props: SessionProps) {
       <View
         testID="video-stage"
         style={[
-          s.videoStage,
+          sessionStyles.videoStage,
           !props.fullscreen && !props.mini && { height: portraitStageHeight },
-          props.fullscreen && s.fullscreenVideo,
-          props.mini && s.miniVideo,
+          props.fullscreen && sessionStyles.fullscreenVideo,
+          props.mini && sessionStyles.miniVideo,
         ]}
       >
         {props.remoteAllowed && state.attemptId !== null && (
@@ -179,16 +185,16 @@ export function ChannelSession(props: SessionProps) {
         )}
         {props.fullscreen && !controlsVisible && state.phase === "playing" && (
           <View
-            style={[s.swipeHint, { right: insets.right + 14 }]}
+            style={[sessionStyles.swipeHint, { right: insets.right + 14 }]}
             pointerEvents="none"
           >
-            <Text style={s.swipeHintText}>上下滑动换台</Text>
+            <Text style={sessionStyles.swipeHintText}>上下滑动换台</Text>
           </View>
         )}
         {props.fullscreen && osd && !props.sheetOpen && (
           <View
             style={[
-              s.osd,
+              sessionStyles.osd,
               {
                 top: insets.top + 24,
                 marginLeft: insets.left,
@@ -198,7 +204,7 @@ export function ChannelSession(props: SessionProps) {
             pointerEvents="none"
             testID="channel-osd"
           >
-            <Text style={s.osdText} numberOfLines={1}>
+            <Text style={sessionStyles.osdText} numberOfLines={1}>
               {osd}
             </Text>
           </View>
@@ -208,26 +214,31 @@ export function ChannelSession(props: SessionProps) {
           !(state.phase === "paused" && state.attemptId !== null) && (
             // box-none: swipes on the dimmed area still reach the gesture layer.
             <View
-              style={[s.videoNotice, waiting && s.videoNoticeSoft]}
+              style={[
+                sessionStyles.videoNotice,
+                waiting && sessionStyles.videoNoticeSoft,
+              ]}
               pointerEvents="box-none"
               accessibilityLiveRegion="polite"
             >
-              <View pointerEvents="none" style={s.noticeText}>
+              <View pointerEvents="none" style={sessionStyles.noticeText}>
                 {waiting ? (
                   <LoadingTitle
                     title={description.title}
-                    style={s.noticeTitle}
+                    style={sessionStyles.noticeTitle}
                   />
                 ) : (
                   !(state.phase === "paused" && !pausedBody) && (
-                    <Text style={s.noticeTitle}>{description.title}</Text>
+                    <Text style={sessionStyles.noticeTitle}>
+                      {description.title}
+                    </Text>
                   )
                 )}
                 {waiting ? (
                   <WaitProgress key={state.attemptId ?? "checking"} />
                 ) : (
                   !!noticeLine && (
-                    <Text style={s.noticeBody} numberOfLines={1}>
+                    <Text style={sessionStyles.noticeBody} numberOfLines={1}>
                       {noticeLine}
                     </Text>
                   )
@@ -236,12 +247,12 @@ export function ChannelSession(props: SessionProps) {
               {(state.attemptId === null || starting) && zapCluster(false)}
               {state.phase === "cellular" && (
                 <Pressable
-                  style={s.quietLink}
+                  style={sessionStyles.quietLink}
                   accessibilityRole="button"
                   accessibilityLabel="暂不播放"
                   onPress={() => controller.pause("cellular-declined")}
                 >
-                  <Text style={s.quietLinkText}>暂不播放</Text>
+                  <Text style={sessionStyles.quietLinkText}>暂不播放</Text>
                 </Pressable>
               )}
             </View>
@@ -267,10 +278,10 @@ export function ChannelSession(props: SessionProps) {
         )}
         {!props.fullscreen && !props.mini && controlsVisible && (
           <>
-            <View style={s.portraitMedia} pointerEvents="box-none">
+            <View style={sessionStyles.portraitMedia} pointerEvents="box-none">
               <MediaStatus media={media} onScrubbingChange={setScrubbing} />
             </View>
-            <View style={s.portraitTopLeft}>
+            <View style={sessionStyles.portraitTopLeft}>
               <OverlayButton
                 label="收起播放器"
                 icon={<ChevronLeftIcon size={20} />}
@@ -279,7 +290,7 @@ export function ChannelSession(props: SessionProps) {
                 onPress={props.onClose}
               />
             </View>
-            <View style={s.portraitBottomRight}>
+            <View style={sessionStyles.portraitBottomRight}>
               <OverlayButton
                 label="横屏全屏"
                 icon={<FullscreenIcon size={20} />}
@@ -294,15 +305,15 @@ export function ChannelSession(props: SessionProps) {
       {props.mini && (
         <>
           <Pressable
-            style={s.miniText}
+            style={sessionStyles.miniText}
             accessibilityRole="button"
             accessibilityLabel={`展开播放器，${title}`}
             onPress={props.onExpand}
           >
-            <Text style={s.miniTitle} numberOfLines={1}>
+            <Text style={sessionStyles.miniTitle} numberOfLines={1}>
               {title}
             </Text>
-            <Text style={s.miniSubtitle} numberOfLines={1}>
+            <Text style={sessionStyles.miniSubtitle} numberOfLines={1}>
               {state.phase === "playing"
                 ? `${qualityName(props.channel)} · ${props.channel.sourceName}`
                 : description.title}
@@ -324,26 +335,26 @@ export function ChannelSession(props: SessionProps) {
         </>
       )}
       {!props.fullscreen && !props.mini && (
-        <View style={s.portraitInfo} testID="portrait-info">
+        <View style={sessionStyles.portraitInfo} testID="portrait-info">
           {/* Title on its own line: room for longer names and extra text. */}
           <View>
-            <Text style={s.infoTitle} numberOfLines={2}>
+            <Text style={sessionStyles.infoTitle} numberOfLines={2}>
               {title}
             </Text>
-            <Text style={s.infoSubtitle} numberOfLines={1}>
+            <Text style={sessionStyles.infoSubtitle} numberOfLines={1}>
               {[
                 displayGroups(props.channel.groupName),
                 ...channelTitle(props.channel.name).tags,
               ].join(" · ")}
             </Text>
           </View>
-          <View style={s.infoRow}>
+          <View style={sessionStyles.infoRow}>
             {sourceButton}
-            <View style={s.flex} />
+            <View style={sessionStyles.flex} />
             {favoriteButton}
           </View>
           {props.orientationError && (
-            <Text accessibilityRole="alert" style={s.warning}>
+            <Text accessibilityRole="alert" style={sessionStyles.warning}>
               设备未能切换屏幕方向，可以继续播放或退出全屏。
             </Text>
           )}
@@ -354,7 +365,7 @@ export function ChannelSession(props: SessionProps) {
         <View
           testID="fullscreen-sources"
           style={[
-            s.fullscreenSources,
+            sessionStyles.fullscreenSources,
             {
               top: insets.top + 82,
               right: insets.right + 24,

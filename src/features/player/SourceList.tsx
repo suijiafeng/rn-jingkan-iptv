@@ -14,7 +14,11 @@ export function SourceList({
   onSelect: (source: Channel) => void;
 }) {
   return (
-    <View style={s.sourceList} accessibilityRole="list" testID="source-list">
+    <View
+      style={styles.sourceList}
+      accessibilityRole="list"
+      testID="source-list"
+    >
       {sources.map((source) => {
         const selected = source.id === current.id;
         return (
@@ -24,20 +28,20 @@ export function SourceList({
             accessibilityState={{ selected }}
             accessibilityLabel={`${qualityName(source)}，${source.sourceName}${selected ? "，当前来源" : ""}`}
             style={({ pressed }) => [
-              s.sourceRow,
-              selected && s.sourceRowSelected,
-              pressed && s.pressed,
+              styles.sourceRow,
+              selected && styles.sourceRowSelected,
+              pressed && styles.pressed,
             ]}
             onPress={() => onSelect(source)}
           >
             <Text
-              style={[s.sourceText, selected && s.accent]}
+              style={[styles.sourceText, selected && styles.accent]}
               numberOfLines={1}
             >
               {selected ? "●" : "○"} {qualityName(source)} · {source.sourceName}
             </Text>
             {source.checkStatus === "unreachable" && (
-              <Text style={s.sourceWarning}>上次检测未响应</Text>
+              <Text style={styles.sourceWarning}>上次检测未响应</Text>
             )}
           </Pressable>
         );
@@ -46,7 +50,7 @@ export function SourceList({
   );
 }
 
-const s = StyleSheet.create({
+const styles = StyleSheet.create({
   accent: { color: colors.accent },
   pressed: { opacity: 0.7 },
   sourceList: { gap: 4 },

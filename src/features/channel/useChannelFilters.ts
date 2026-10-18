@@ -35,18 +35,23 @@ export function useChannelFilters() {
   }, [filters.search]);
 
   const setSearch = useCallback((search: string) => {
-    setFilters((f) => ({ ...f, search }));
+    setFilters((previous) => ({ ...previous, search }));
   }, []);
   const clearSearch = useCallback(() => {
-    setFilters((f) => ({ ...f, search: "" }));
+    setFilters((previous) => ({ ...previous, search: "" }));
     setQuery("");
   }, []);
   const setSource = useCallback((sourceId: string) => {
-    setFilters((f) => ({ ...f, sourceId, group: null, language: null }));
+    setFilters((previous) => ({
+      ...previous,
+      sourceId,
+      group: null,
+      language: null,
+    }));
   }, []);
   const setFacets = useCallback((selection: ChannelFacetSelection) => {
-    setFilters((f) => ({
-      ...f,
+    setFilters((previous) => ({
+      ...previous,
       group: selection.content,
       language: selection.language,
     }));
@@ -85,10 +90,10 @@ export function useChannelFilters() {
           language: null,
         };
     }
-    setFilters((f) =>
-      f.sourceId === sourceId
-        ? { ...f, sourceId: "", group: null, language: null }
-        : f,
+    setFilters((previous) =>
+      previous.sourceId === sourceId
+        ? { ...previous, sourceId: "", group: null, language: null }
+        : previous,
     );
   }, []);
   const forgetSaved = useCallback(() => {

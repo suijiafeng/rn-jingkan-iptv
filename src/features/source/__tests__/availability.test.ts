@@ -54,9 +54,9 @@ test("sweeps with bounded concurrency and reports progress", async () => {
     return !url.endsWith("bad");
   });
   const progress: number[] = [];
-  const targets = Array.from({ length: 10 }, (_, i) => ({
-    id: `c${i}`,
-    streamUrl: `https://a.example.com/${i === 3 ? "bad" : i}`,
+  const targets = Array.from({ length: 10 }, (_unused, index) => ({
+    id: `c${index}`,
+    streamUrl: `https://a.example.com/${index === 3 ? "bad" : index}`,
   }));
   const results = await checkChannels(targets, {
     signal: signal(),
@@ -66,7 +66,7 @@ test("sweeps with bounded concurrency and reports progress", async () => {
   });
   expect(peak).toBeLessThanOrEqual(3);
   expect(results).toHaveLength(10);
-  expect(results.find((r) => r.channelId === "c3")?.ok).toBe(false);
+  expect(results.find((result) => result.channelId === "c3")?.ok).toBe(false);
   expect(progress[progress.length - 1]).toBe(10);
 });
 
@@ -76,9 +76,9 @@ test("stopping keeps finished results and starts no new checks", async () => {
     if (check.mock.calls.length === 2) owner.abort();
     return true;
   });
-  const targets = Array.from({ length: 6 }, (_, i) => ({
-    id: `c${i}`,
-    streamUrl: `https://a.example.com/${i}`,
+  const targets = Array.from({ length: 6 }, (_unused, index) => ({
+    id: `c${index}`,
+    streamUrl: `https://a.example.com/${index}`,
   }));
   const results = await checkChannels(targets, {
     signal: owner.signal,
@@ -86,5 +86,5 @@ test("stopping keeps finished results and starts no new checks", async () => {
     check,
   });
   expect(check).toHaveBeenCalledTimes(2);
-  expect(results.map((r) => r.channelId)).toEqual(["c0"]);
+  expect(results.map((result) => result.channelId)).toEqual(["c0"]);
 });

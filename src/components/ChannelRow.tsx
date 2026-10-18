@@ -71,7 +71,7 @@ export const ChannelRow = memo(function ChannelRow({
   const editingRecent = !!onRemoveRecent;
   const playbackDisabled = !channel.active || editingRecent;
   return (
-    <View style={[s.row, { height: rowHeight }]}>
+    <View style={[rowStyles.row, { height: rowHeight }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={
@@ -82,7 +82,7 @@ export const ChannelRow = memo(function ChannelRow({
         accessibilityState={{ disabled: playbackDisabled, selected: current }}
         onPress={() => onPlay(channel)}
         disabled={playbackDisabled}
-        style={({ pressed }) => [s.main, pressed && { opacity: 0.65 }]}
+        style={({ pressed }) => [rowStyles.main, pressed && { opacity: 0.65 }]}
       >
         <ChannelLogo
           uri={channel.logoUrl}
@@ -93,10 +93,10 @@ export const ChannelRow = memo(function ChannelRow({
         <View style={{ flex: 1, gap: 3 }}>
           {/* One line: tags sit beside the title so every row has the
               same height (see channelRowHeight). */}
-          <View style={s.titleLine}>
+          <View style={rowStyles.titleLine}>
             <Text
               numberOfLines={1}
-              style={[s.title, current && s.currentTitle]}
+              style={[rowStyles.title, current && rowStyles.currentTitle]}
             >
               {title}
             </Text>
@@ -104,7 +104,7 @@ export const ChannelRow = memo(function ChannelRow({
               <Text
                 key={label}
                 numberOfLines={1}
-                style={[s.tag, label === "不可用" && s.badTag]}
+                style={[rowStyles.tag, label === "不可用" && rowStyles.badTag]}
               >
                 {label}
               </Text>
@@ -127,11 +127,11 @@ export const ChannelRow = memo(function ChannelRow({
           disabled={recentBusy}
           onPress={() => onRemoveRecent(channel)}
           style={({ pressed }) => [
-            s.removeRecent,
+            rowStyles.removeRecent,
             { opacity: recentBusy ? 0.4 : pressed ? 0.65 : 1 },
           ]}
         >
-          <Text style={s.removeRecentText}>删除</Text>
+          <Text style={rowStyles.removeRecentText}>删除</Text>
         </Pressable>
       )}
       {!editingRecent && (
@@ -140,7 +140,7 @@ export const ChannelRow = memo(function ChannelRow({
           accessibilityLabel={`${channel.favorite ? "取消收藏" : "收藏"}${title}`}
           accessibilityState={{ selected: channel.favorite }}
           onPress={() => onFavorite(channel)}
-          style={s.star}
+          style={rowStyles.star}
         >
           <Text
             style={{
@@ -155,7 +155,7 @@ export const ChannelRow = memo(function ChannelRow({
     </View>
   );
 });
-const s = StyleSheet.create({
+const rowStyles = StyleSheet.create({
   // No own background: rows sit directly on the page and the player sheet.
   row: {
     flexDirection: "row",

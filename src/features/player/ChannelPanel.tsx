@@ -119,7 +119,7 @@ export function ChannelPanel(props: ChannelPanelProps) {
 
   const locateButton = (
     <Pressable
-      style={s.headingAction}
+      style={styles.headingAction}
       accessibilityRole="button"
       accessibilityLabel="定位当前频道"
       accessibilityState={{ disabled: !channel.active }}
@@ -137,14 +137,14 @@ export function ChannelPanel(props: ChannelPanelProps) {
   return (
     <>
       {props.fullscreen && (
-        <View style={s.heading}>
-          <Text accessibilityRole="header" style={s.headingTitle}>
+        <View style={styles.heading}>
+          <Text accessibilityRole="header" style={styles.headingTitle}>
             频道列表
           </Text>
-          <View style={s.flex} />
+          <View style={styles.flex} />
           {locateButton}
           <Pressable
-            style={s.headingAction}
+            style={styles.headingAction}
             accessibilityRole="button"
             accessibilityLabel="关闭频道列表"
             onPress={props.onClose}
@@ -214,9 +214,9 @@ export function ChannelPanel(props: ChannelPanelProps) {
           }, 100);
         }}
         keyExtractor={(item) => item.id}
-        getItemLayout={(_, index) => channelRowLayout(rowHeight, index)}
-        style={s.list}
-        contentContainerStyle={s.listContent}
+        getItemLayout={(_data, index) => channelRowLayout(rowHeight, index)}
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
         initialNumToRender={12}
         maxToRenderPerBatch={16}
         updateCellsBatchingPeriod={16}
@@ -224,11 +224,14 @@ export function ChannelPanel(props: ChannelPanelProps) {
         removeClippedSubviews={false}
         ListEmptyComponent={
           sheet.loading ? (
-            <View style={s.emptyLoading} accessibilityLiveRegion="polite">
-              <LoadingTitle title="正在载入频道" style={s.emptyLoadingText} />
+            <View style={styles.emptyLoading} accessibilityLiveRegion="polite">
+              <LoadingTitle
+                title="正在载入频道"
+                style={styles.emptyLoadingText}
+              />
             </View>
           ) : (
-            <Text style={s.empty}>
+            <Text style={styles.empty}>
               {filtered
                 ? `没有匹配频道，试试清除搜索${scope === "all" ? "或调整筛选" : ""}`
                 : scope === "recent"
@@ -253,7 +256,7 @@ export function ChannelPanel(props: ChannelPanelProps) {
   );
 }
 
-const s = StyleSheet.create({
+const styles = StyleSheet.create({
   flex: { flex: 1 },
   heading: {
     flexDirection: "row",

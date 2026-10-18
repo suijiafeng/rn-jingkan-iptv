@@ -80,7 +80,7 @@ export const SLOW_START_SECONDS = 15;
 /** Minimum vertical travel (dp) for a fullscreen swipe to change channel. */
 export const SWIPE_MIN_DP = 60;
 export const TAP_SLOP_DP = 12;
-export const sameChannel = (a: Channel, b: Channel) =>
-  (a.groupKey ?? a.id) === (b.groupKey ?? b.id);
+export const sameChannel = (left: Channel, right: Channel) =>
+  (left.groupKey ?? left.id) === (right.groupKey ?? right.id);
 
 /** Fullscreen and sheet belong to the screen, not to the replaceable channel. */

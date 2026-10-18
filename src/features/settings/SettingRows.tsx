@@ -12,12 +12,12 @@ export function SettingSection({
 }) {
   const rows = React.Children.toArray(children).filter(Boolean);
   return (
-    <View style={s.section}>
-      <Text style={[styles.caption, s.sectionLabel]}>{label}</Text>
-      <View style={s.card}>
+    <View style={rowStyles.section}>
+      <Text style={[styles.caption, rowStyles.sectionLabel]}>{label}</Text>
+      <View style={rowStyles.card}>
         {rows.map((row, index) => (
           <React.Fragment key={index}>
-            {index > 0 && <View style={s.divider} />}
+            {index > 0 && <View style={rowStyles.divider} />}
             {row}
           </React.Fragment>
         ))}
@@ -54,11 +54,13 @@ export function SettingRow({
 }) {
   const body = (
     <>
-      <View style={s.text}>
-        <View style={s.titleLine}>
-          <Text style={[styles.body, danger && s.dangerTitle]}>{title}</Text>
+      <View style={rowStyles.text}>
+        <View style={rowStyles.titleLine}>
+          <Text style={[styles.body, danger && rowStyles.dangerTitle]}>
+            {title}
+          </Text>
           {status && (
-            <Text style={[s.pill, s[`pill_${status.tone}`]]}>
+            <Text style={[rowStyles.pill, rowStyles[`pill_${status.tone}`]]}>
               {status.label}
             </Text>
           )}
@@ -68,13 +70,16 @@ export function SettingRow({
       {trailing}
     </>
   );
-  if (!onPress) return <View style={[s.row, dimmed && s.dimmed]}>{body}</View>;
+  if (!onPress)
+    return (
+      <View style={[rowStyles.row, dimmed && rowStyles.dimmed]}>{body}</View>
+    );
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? title}
       onPress={onPress}
-      style={({ pressed }) => [s.row, pressed && s.pressed]}
+      style={({ pressed }) => [rowStyles.row, pressed && rowStyles.pressed]}
     >
       {body}
     </Pressable>
@@ -98,22 +103,24 @@ export function RowAction({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       onPress={onPress}
-      style={({ pressed }) => [s.action, pressed && s.pressed]}
+      style={({ pressed }) => [rowStyles.action, pressed && rowStyles.pressed]}
     >
-      <Text style={[s.actionText, danger && s.dangerTitle]}>{label}</Text>
+      <Text style={[rowStyles.actionText, danger && rowStyles.dangerTitle]}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
 
 export function Chevron() {
   return (
-    <Text accessible={false} style={s.chevron}>
+    <Text accessible={false} style={rowStyles.chevron}>
       ›
     </Text>
   );
 }
 
-const s = StyleSheet.create({
+const rowStyles = StyleSheet.create({
   section: { gap: 6 },
   sectionLabel: { paddingHorizontal: 4 },
   card: {

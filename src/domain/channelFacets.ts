@@ -394,15 +394,15 @@ function sortOptions(values: Set<string>, kind: FacetKind): string[] {
     const index = pinned.indexOf(value);
     return index >= 0 ? index : pinned.length;
   };
-  return [...values].sort((a, b) =>
-    !a
-      ? !b
+  return [...values].sort((left, right) =>
+    !left
+      ? !right
         ? 0
         : 1
-      : !b
+      : !right
         ? -1
-        : rank(a) - rank(b) ||
-          facetOrder.compare(facetLabel(kind, a), facetLabel(kind, b)),
+        : rank(left) - rank(right) ||
+          facetOrder.compare(facetLabel(kind, left), facetLabel(kind, right)),
   );
 }
 /**

@@ -210,7 +210,7 @@ describe("iptv-org metadata", () => {
         "https://a.example.com/l.m3u8",
       ].join("\n"),
     );
-    expect(preview.channels.map((c) => c.countries)).toEqual([
+    expect(preview.channels.map((channel) => channel.countries)).toEqual([
       ["CN"],
       ["US"],
       [],

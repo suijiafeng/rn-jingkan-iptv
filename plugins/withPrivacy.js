@@ -21,7 +21,9 @@ const DOMAINS = [
   "device_sharedpref",
 ];
 const excludeAll = (indent) =>
-  DOMAINS.map((d) => `${indent}<exclude domain="${d}" path="." />`).join("\n");
+  DOMAINS.map(
+    (domain) => `${indent}<exclude domain="${domain}" path="." />`,
+  ).join("\n");
 const DATA_EXTRACTION_RULES = `<?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
   <cloud-backup>
@@ -35,8 +37,8 @@ ${excludeAll("    ")}
 // Android 11 and lower read fullBackupContent; device_* domains do not exist there.
 const FULL_BACKUP_CONTENT = `<?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-${DOMAINS.filter((d) => !d.startsWith("device_"))
-  .map((d) => `  <exclude domain="${d}" path="." />`)
+${DOMAINS.filter((domain) => !domain.startsWith("device_"))
+  .map((domain) => `  <exclude domain="${domain}" path="." />`)
   .join("\n")}
 </full-backup-content>
 `;

@@ -68,34 +68,34 @@ export function useAutoAvailabilityCheck(options: AutoCheckOptions) {
       )
       .slice(0, AUTO_CHECK_MAX);
     if (!targets.length) return;
-    const c = new AbortController();
+    const abortController = new AbortController();
     controller.current?.abort();
-    controller.current = c;
+    controller.current = abortController;
     const run = async () => {
       const net = await Network.getNetworkStateAsync();
-      if (c.signal.aborted || isOffline(net)) return;
+      if (abortController.signal.aborted || isOffline(net)) return;
       if (mobileWarning && !mobileAccepted && mightUseMobileData(net)) return;
       for (const target of targets) attempted.current.set(target.id, now);
       setProgress({ done: 0, total: targets.length });
       const results = await checkChannels(targets, {
-        signal: c.signal,
+        signal: abortController.signal,
         onProgress: (done, total) => {
-          if (!c.signal.aborted) setProgress({ done, total });
+          if (!abortController.signal.aborted) setProgress({ done, total });
         },
       });
       if (results.length) await latest.current.save(results);
       // Re-sort once at the end, not under the user's finger mid-check.
-      if (!c.signal.aborted) latest.current.onFinished();
+      if (!abortController.signal.aborted) latest.current.onFinished();
     };
     run()
       .catch(() => {})
       .finally(() => {
-        if (controller.current === c) {
+        if (controller.current === abortController) {
           controller.current = null;
           setProgress(null);
         }
       });
-    return () => c.abort();
+    return () => abortController.abort();
   }, [
     filterKey,
     listComplete,

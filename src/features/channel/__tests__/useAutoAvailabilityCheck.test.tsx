@@ -45,10 +45,10 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ type: "WIFI", isConnected: true });
   mockCheck.mockReset().mockImplementation(async (targets: Channel[]) =>
-    targets.map((t) => ({
-      channelId: t.id,
-      streamUrl: t.streamUrl,
-      ok: t.id !== "b",
+    targets.map((target) => ({
+      channelId: target.id,
+      streamUrl: target.streamUrl,
+      ok: target.id !== "b",
     })),
   );
 });
@@ -56,16 +56,15 @@ beforeEach(() => {
 test("a category switch checks the shown channels once and re-sorts once", async () => {
   const opts = options();
   const { rerender } = await renderHook(
-    (o: AutoCheckOptions) => useAutoAvailabilityCheck(o),
+    (hookOptions: AutoCheckOptions) => useAutoAvailabilityCheck(hookOptions),
     {
       initialProps: opts,
     },
   );
   await waitFor(() => expect(opts.onFinished).toHaveBeenCalledTimes(1));
-  expect(mockCheck.mock.calls[0][0].map((c: Channel) => c.id)).toEqual([
-    "a",
-    "b",
-  ]);
+  expect(
+    mockCheck.mock.calls[0][0].map((checked: Channel) => checked.id),
+  ).toEqual(["a", "b"]);
   expect(opts.save).toHaveBeenCalledWith([
     { channelId: "a", streamUrl: "https://a.example.com/a", ok: true },
     { channelId: "b", streamUrl: "https://a.example.com/b", ok: false },
@@ -101,13 +100,13 @@ test("recently checked channels are skipped and at most AUTO_CHECK_MAX run", asy
   const stale = channel("stale", {
     checkedAt: Date.now() - CHECK_FRESH_MS - 1,
   });
-  const many = Array.from({ length: AUTO_CHECK_MAX + 5 }, (_, i) =>
-    channel(`c${i}`),
+  const many = Array.from({ length: AUTO_CHECK_MAX + 5 }, (_unused, index) =>
+    channel(`c${index}`),
   );
   const opts = options({ channels: [fresh, stale, ...many] });
   await renderHook(() => useAutoAvailabilityCheck(opts));
   await waitFor(() => expect(mockCheck).toHaveBeenCalled());
-  const ids = mockCheck.mock.calls[0][0].map((c: Channel) => c.id);
+  const ids = mockCheck.mock.calls[0][0].map((checked: Channel) => checked.id);
   expect(ids).not.toContain("fresh");
   expect(ids[0]).toBe("stale");
   expect(ids).toHaveLength(AUTO_CHECK_MAX);
@@ -116,16 +115,16 @@ test("recently checked channels are skipped and at most AUTO_CHECK_MAX run", asy
 test("switching category aborts the running sweep without re-sorting", async () => {
   let signal: AbortSignal | undefined;
   mockCheck.mockImplementationOnce(
-    (_targets: Channel[], o: { signal: AbortSignal }) => {
-      signal = o.signal;
+    (_targets: Channel[], checkOptions: { signal: AbortSignal }) => {
+      signal = checkOptions.signal;
       return new Promise((resolve) =>
-        o.signal.addEventListener("abort", () => resolve([])),
+        checkOptions.signal.addEventListener("abort", () => resolve([])),
       );
     },
   );
   const opts = options();
   const { rerender } = await renderHook(
-    (o: AutoCheckOptions) => useAutoAvailabilityCheck(o),
+    (hookOptions: AutoCheckOptions) => useAutoAvailabilityCheck(hookOptions),
     {
       initialProps: opts,
     },

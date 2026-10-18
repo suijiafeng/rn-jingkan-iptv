@@ -66,10 +66,14 @@ export function FacetFilters({
     }
     const generation = ++measureGeneration.current;
     setOpen(kind);
-    bar.current?.measureInWindow((x, y, _width, measuredHeight) => {
+    bar.current?.measureInWindow((windowX, windowY, _width, measuredHeight) => {
       if (generation !== measureGeneration.current) return;
-      if (Number.isFinite(x) && Number.isFinite(y) && measuredHeight > 0)
-        setAnchor({ x, y, height: measuredHeight });
+      if (
+        Number.isFinite(windowX) &&
+        Number.isFinite(windowY) &&
+        measuredHeight > 0
+      )
+        setAnchor({ x: windowX, y: windowY, height: measuredHeight });
     });
   };
   const choose = (value: string | null) => {
@@ -95,17 +99,17 @@ export function FacetFilters({
   );
   const maxHeight = Math.max(1, Math.min(panelHeight, height - top - 24));
   const menuKinds = contentAsTabs
-    ? KINDS.filter((k) => k !== "content")
+    ? KINDS.filter((kind) => kind !== "content")
     : KINDS;
   // "" (unlabeled) is shown as 未分组 among the tabs.
   const contentTabs = options.contents.map((value) => value || UNGROUPED);
   const selectedTab = selected.content === "" ? UNGROUPED : selected.content;
   return (
-    <View style={s.column}>
+    <View style={styles.column}>
       <View
         ref={bar}
         testID={testID}
-        style={[s.bar, tabsOnly && s.hidden]}
+        style={[styles.bar, tabsOnly && styles.hidden]}
         collapsable={false}
       >
         {menuKinds.map((kind) => (
@@ -117,18 +121,18 @@ export function FacetFilters({
             accessibilityState={{ expanded: open === kind }}
             onPress={() => toggle(kind)}
             style={({ pressed }) => [
-              s.trigger,
-              selected[kind] !== null && s.selectedTrigger,
+              styles.trigger,
+              selected[kind] !== null && styles.selectedTrigger,
               pressed && { opacity: 0.7 },
             ]}
           >
-            <Text numberOfLines={1} style={s.triggerText}>
-              <Text style={s.dimension}>{LABELS[kind]} </Text>
-              <Text style={s.value}>
+            <Text numberOfLines={1} style={styles.triggerText}>
+              <Text style={styles.dimension}>{LABELS[kind]} </Text>
+              <Text style={styles.value}>
                 {facetLabel(kind, selected[kind])}
               </Text>
             </Text>
-            <Text style={s.arrow}>{open === kind ? "▴" : "▾"}</Text>
+            <Text style={styles.arrow}>{open === kind ? "▴" : "▾"}</Text>
           </Pressable>
         ))}
         <Modal
@@ -142,7 +146,7 @@ export function FacetFilters({
           {open && (
             <View
               accessibilityViewIsModal
-              style={s.overlay}
+              style={styles.overlay}
               testID={`${testID}-modal`}
             >
               <Pressable
@@ -153,7 +157,7 @@ export function FacetFilters({
               />
               <View
                 style={[
-                  s.panel,
+                  styles.panel,
                   {
                     width: panelWidth,
                     maxHeight,
@@ -169,7 +173,7 @@ export function FacetFilters({
                   testID={`${testID}-options`}
                   keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator
-                  contentContainerStyle={s.menuContent}
+                  contentContainerStyle={styles.menuContent}
                 >
                   {[null, ...available].map((value, index) => {
                     const label = facetLabel(open, value);
@@ -183,18 +187,21 @@ export function FacetFilters({
                         accessibilityState={{ selected: isSelected }}
                         onPress={() => choose(value)}
                         style={({ pressed }) => [
-                          s.option,
-                          isSelected && s.chosenOption,
+                          styles.option,
+                          isSelected && styles.chosenOption,
                           pressed && { opacity: 0.7 },
                         ]}
                       >
                         <Text
-                          style={[s.optionText, isSelected && s.chosenText]}
+                          style={[
+                            styles.optionText,
+                            isSelected && styles.chosenText,
+                          ]}
                         >
                           {label}
                           {value === "全部" ? "（内容分类）" : ""}
                         </Text>
-                        {isSelected && <Text style={s.chosenText}>✓</Text>}
+                        {isSelected && <Text style={styles.chosenText}>✓</Text>}
                       </Pressable>
                     );
                   })}
@@ -224,7 +231,7 @@ export function FacetFilters({
   );
 }
 
-const s = StyleSheet.create({
+const styles = StyleSheet.create({
   column: { gap: 8 },
   hidden: { display: "none" },
   bar: { flexDirection: "row", gap: 8 },

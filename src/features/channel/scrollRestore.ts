@@ -34,9 +34,9 @@ export function createScrollRestore(): ScrollRestore {
       return offset > 0 ? offset : 0;
     },
     retry,
-    scrolled(y) {
+    scrolled(offsetY) {
       if (target === null) return true;
-      if (Math.abs(y - target) > 1) return false;
+      if (Math.abs(offsetY - target) > 1) return false;
       target = null;
       return true;
     },

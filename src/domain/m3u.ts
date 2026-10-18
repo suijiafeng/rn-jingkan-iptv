@@ -11,10 +11,7 @@ import {
   normalizeCountries,
   normalizeLanguages,
 } from "./channelFacets";
-import {
-  parseDeclaredQuality,
-  qualityFromIptvOrgId,
-} from "./channelSources";
+import { parseDeclaredQuality, qualityFromIptvOrgId } from "./channelSources";
 
 // 8 MiB fits the full iptv-org index (~2.5 MiB, 11k+ entries) with headroom;
 // still bounded because the text is held in memory while parsing.
@@ -67,13 +64,13 @@ export interface ParseM3UOptions {
 /** Also validates surrogate pairs; U+FFFD is rejected conservatively after lossy decodes. */
 export function utf8ByteLength(value: string): number {
   let length = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    const code = value.charCodeAt(i);
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
     if (code === 0xfffd) throw new M3UParseError("invalid_encoding");
     if (code < 0x80) length += 1;
     else if (code < 0x800) length += 2;
     else if (code >= 0xd800 && code <= 0xdbff) {
-      const low = value.charCodeAt(++i);
+      const low = value.charCodeAt(++index);
       if (!(low >= 0xdc00 && low <= 0xdfff))
         throw new M3UParseError("invalid_encoding");
       length += 4;
@@ -102,14 +99,17 @@ interface Candidate extends PendingChannel {
 function parseExtinf(line: string, lineNumber: number): PendingChannel | null {
   let quote = "";
   let comma = -1;
-  for (let i = 8; i < line.length; i += 1) {
-    const char = line[i];
-    if ((char === '"' || char === "'") && (i === 0 || line[i - 1] !== "\\")) {
+  for (let position = 8; position < line.length; position += 1) {
+    const char = line[position];
+    if (
+      (char === '"' || char === "'") &&
+      (position === 0 || line[position - 1] !== "\\")
+    ) {
       if (!quote) quote = char;
       else if (quote === char) quote = "";
     }
     if (char === "," && !quote) {
-      comma = i;
+      comma = position;
       break;
     }
   }
@@ -256,22 +256,22 @@ export async function parseM3U(
   }
   if (pending) addIssue(pending.line, "dangling_extinf");
   const idUrls = new Map<string, Set<string>>();
-  for (let i = 0; i < candidates.length; i += 1) {
-    const candidate = candidates[i];
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
     if (candidate.tvgId) {
       const urls = idUrls.get(candidate.tvgId) ?? new Set<string>();
       urls.add(candidate.streamUrl);
       idUrls.set(candidate.tvgId, urls);
     }
-    if (i > 0 && i % M3U_LIMITS.yieldEveryLines === 0) {
+    if (index > 0 && index % M3U_LIMITS.yieldEveryLines === 0) {
       await yieldControl();
       checkCancelled();
     }
   }
   const identities = new Set<string>();
   const channels: ParsedChannel[] = [];
-  for (let i = 0; i < candidates.length; i += 1) {
-    const candidate = candidates[i];
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
     // Exact normalized URLs avoid hash collisions and retain every authentication token.
     const identityKey =
       candidate.tvgId && idUrls.get(candidate.tvgId)?.size === 1
@@ -295,7 +295,7 @@ export async function parseM3U(
       });
       if (candidate.streamUrl.startsWith("http:")) stats.http += 1;
     }
-    if (i > 0 && i % M3U_LIMITS.yieldEveryLines === 0) {
+    if (index > 0 && index % M3U_LIMITS.yieldEveryLines === 0) {
       await yieldControl();
       checkCancelled();
     }

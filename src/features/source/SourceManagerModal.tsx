@@ -70,18 +70,18 @@ export function SourceManagerModal(props: ManagerProps) {
             secondary
             onPress={() => props.onAdd("file")}
           />
-          {props.sources.map((s) => {
-            const running = check?.sourceId === s.id;
-            const summary = props.summaries[s.id];
+          {props.sources.map((source) => {
+            const running = check?.sourceId === source.id;
+            const summary = props.summaries[source.id];
             return (
-              <Card key={s.id}>
-                <Text style={styles.heading}>{s.name}</Text>
+              <Card key={source.id}>
+                <Text style={styles.heading}>{source.name}</Text>
                 <Text style={styles.muted}>
-                  {s.channelCount} 个频道 · {s.favoriteCount} 个收藏
+                  {source.channelCount} 个频道 · {source.favoriteCount} 个收藏
                   {String.fromCharCode(10)}上次更新{" "}
-                  {new Date(s.lastSuccessAt).toLocaleString()}
+                  {new Date(source.lastSuccessAt).toLocaleString()}
                 </Text>
-                {s.lastErrorCategory && (
+                {source.lastErrorCategory && (
                   <Text style={{ color: colors.warn }}>
                     上次刷新未完成，旧频道已保留。
                   </Text>
@@ -101,11 +101,13 @@ export function SourceManagerModal(props: ManagerProps) {
                 )}
                 <Button
                   label={
-                    s.kind === "file" ? "重新解析 / 更换文件" : "刷新并预览"
+                    source.kind === "file"
+                      ? "重新解析 / 更换文件"
+                      : "刷新并预览"
                   }
                   secondary
                   disabled={!!check}
-                  onPress={() => props.onRefresh(s)}
+                  onPress={() => props.onRefresh(source)}
                 />
                 {running ? (
                   <Button
@@ -117,23 +119,23 @@ export function SourceManagerModal(props: ManagerProps) {
                   <Button
                     label="检测可用性"
                     secondary
-                    disabled={!!check || !s.channelCount}
-                    onPress={() => props.onCheck(s)}
+                    disabled={!!check || !source.channelCount}
+                    onPress={() => props.onCheck(source)}
                   />
                 )}
-                {props.languageLookup === s.id && (
+                {props.languageLookup === source.id && (
                   <Text style={styles.body} accessibilityLiveRegion="polite">
                     正在补全语言…
                   </Text>
                 )}
-                {props.languageLookup !== s.id &&
-                  props.languageMessages?.[s.id] && (
+                {props.languageLookup !== source.id &&
+                  props.languageMessages?.[source.id] && (
                     <Text style={styles.muted}>
-                      {props.languageMessages[s.id]}
+                      {props.languageMessages[source.id]}
                     </Text>
                   )}
                 {props.onLookupLanguages &&
-                  (props.languageLookup === s.id ? (
+                  (props.languageLookup === source.id ? (
                     <Button
                       label="停止补全语言"
                       secondary
@@ -144,9 +146,11 @@ export function SourceManagerModal(props: ManagerProps) {
                       label="补全语言"
                       secondary
                       disabled={
-                        !!props.languageLookup || !!check || !s.channelCount
+                        !!props.languageLookup ||
+                        !!check ||
+                        !source.channelCount
                       }
-                      onPress={() => props.onLookupLanguages?.(s)}
+                      onPress={() => props.onLookupLanguages?.(source)}
                     />
                   ))}
                 <View style={styles.row}>
@@ -154,14 +158,14 @@ export function SourceManagerModal(props: ManagerProps) {
                     label="改名"
                     secondary
                     style={{ flex: 1 }}
-                    onPress={() => props.onRename(s)}
+                    onPress={() => props.onRename(source)}
                   />
                   <Button
                     label="删除"
                     secondary
                     danger
                     style={{ flex: 1 }}
-                    onPress={() => props.onRemove(s)}
+                    onPress={() => props.onRemove(source)}
                   />
                 </View>
               </Card>

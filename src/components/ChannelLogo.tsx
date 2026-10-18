@@ -21,7 +21,7 @@ export function ChannelLogo({
     <View
       accessible={false}
       importantForAccessibility="no-hide-descendants"
-      style={[s.badge, { width: size, height: size }]}
+      style={[logoStyles.badge, { width: size, height: size }]}
     >
       {safeUri ? (
         <RemoteLogo key={safeUri} uri={safeUri} title={title} size={size} />
@@ -65,7 +65,7 @@ function RemoteLogo({
   );
 }
 
-const s = StyleSheet.create({
+const logoStyles = StyleSheet.create({
   badge: {
     borderRadius: 10,
     backgroundColor: colors.raised,

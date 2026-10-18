@@ -22,7 +22,7 @@ export async function readBoundedStream(
       let timer: ReturnType<typeof setTimeout> | undefined;
       const result = await Promise.race([
         reader.read(),
-        new Promise<never>((_, reject) => {
+        new Promise<never>((_unused, reject) => {
           timer = setTimeout(
             () => reject(new ImportIOError("读取超时，请检查连接后重试")),
             15000,

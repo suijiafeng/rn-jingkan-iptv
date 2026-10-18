@@ -77,6 +77,7 @@ app/  Expo Router 路由，保持薄页面
 src/features/source/  添加、刷新、来源管理
 src/features/channel/  列表、搜索、收藏、最近
 src/features/player/  播放页面和控制面板
+src/features/home/  首页状态 hook、频道列表页、来源对话框、播放器容器
 src/domain/  类型、M3U 解析、身份及错误规则
 src/data/  SQLite 仓库、迁移、文件和下载
 src/playback/  expo-video 适配器与会话状态

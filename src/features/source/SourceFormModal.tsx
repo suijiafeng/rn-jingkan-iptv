@@ -84,7 +84,7 @@ export function SourceFormModal({
                       maxLength={100}
                       placeholder="可留空，使用主机或文件名"
                       placeholderTextColor={colors.muted}
-                      onChangeText={(v) => onUpdate({ name: v })}
+                      onChangeText={(name) => onUpdate({ name })}
                     />
                     {!form.refresh && (
                       <View style={styles.row}>
@@ -115,7 +115,7 @@ export function SourceFormModal({
                           editable={!busy && !form.refresh}
                           style={styles.input}
                           value={form.url}
-                          onChangeText={(v) => onUpdate({ url: v })}
+                          onChangeText={(url) => onUpdate({ url })}
                           placeholder="https://example.com/channels.m3u"
                           placeholderTextColor={colors.muted}
                         />
@@ -158,11 +158,11 @@ export function SourceFormModal({
                         </Text>
                       ),
                     )}
-                    {form.preview.channels.slice(0, 5).map((c) => (
-                      <Card key={c.identityKey}>
-                        <Text style={styles.heading}>{c.name}</Text>
+                    {form.preview.channels.slice(0, 5).map((channel) => (
+                      <Card key={channel.identityKey}>
+                        <Text style={styles.heading}>{channel.name}</Text>
                         <Text style={styles.muted}>
-                          {displayGroups(c.groupName)}
+                          {displayGroups(channel.groupName)}
                         </Text>
                       </Card>
                     ))}

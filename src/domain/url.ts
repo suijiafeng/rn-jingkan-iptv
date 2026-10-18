@@ -20,21 +20,26 @@ export class UrlValidationError extends Error {
 }
 
 function unsafeIPv4(host: string): boolean {
-  const n = host.split(".").map(Number);
-  if (n.length !== 4 || n.some((v) => !Number.isInteger(v) || v < 0 || v > 255))
+  const octets = host.split(".").map(Number);
+  if (
+    octets.length !== 4 ||
+    octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)
+  )
     return true;
-  const [a, b, c] = n;
+  const [first, second, third] = octets;
   return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    a >= 224 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && (b === 168 || b === 0 || (b === 88 && c === 99))) ||
-    (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) ||
-    (a === 203 && b === 0 && c === 113)
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    first >= 224 ||
+    (first === 100 && second >= 64 && second <= 127) ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 &&
+      (second === 168 || second === 0 || (second === 88 && third === 99))) ||
+    (first === 198 &&
+      (second === 18 || second === 19 || (second === 51 && third === 100))) ||
+    (first === 203 && second === 0 && third === 113)
   );
 }
 

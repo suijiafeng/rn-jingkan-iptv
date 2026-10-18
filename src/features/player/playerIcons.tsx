@@ -15,7 +15,10 @@ interface IconProps {
 export function ChevronLeftIcon({ size = 22, color = colors.text }: IconProps) {
   const arm = size * 0.42;
   return (
-    <View style={[s.box, { width: size, height: size }]} pointerEvents="none">
+    <View
+      style={[styles.box, { width: size, height: size }]}
+      pointerEvents="none"
+    >
       <View
         style={{
           width: arm,
@@ -36,31 +39,34 @@ export function FullscreenIcon({ size = 22, color = colors.text }: IconProps) {
   const corner = size * 0.32;
   const edge = { width: corner, height: corner, borderColor: color };
   return (
-    <View style={[s.box, { width: size, height: size }]} pointerEvents="none">
+    <View
+      style={[styles.box, { width: size, height: size }]}
+      pointerEvents="none"
+    >
       <View
         style={[
-          s.corner,
+          styles.corner,
           edge,
           { top: 1, left: 1, borderTopWidth: 2.5, borderLeftWidth: 2.5 },
         ]}
       />
       <View
         style={[
-          s.corner,
+          styles.corner,
           edge,
           { top: 1, right: 1, borderTopWidth: 2.5, borderRightWidth: 2.5 },
         ]}
       />
       <View
         style={[
-          s.corner,
+          styles.corner,
           edge,
           { bottom: 1, left: 1, borderBottomWidth: 2.5, borderLeftWidth: 2.5 },
         ]}
       />
       <View
         style={[
-          s.corner,
+          styles.corner,
           edge,
           {
             bottom: 1,
@@ -84,7 +90,10 @@ export function CloseIcon({ size = 20, color = colors.text }: IconProps) {
     backgroundColor: color,
   };
   return (
-    <View style={[s.box, { width: size, height: size }]} pointerEvents="none">
+    <View
+      style={[styles.box, { width: size, height: size }]}
+      pointerEvents="none"
+    >
       <View style={[bar, { transform: [{ rotate: "45deg" }] }]} />
       <View style={[bar, { transform: [{ rotate: "-45deg" }] }]} />
     </View>
@@ -95,7 +104,10 @@ export function CloseIcon({ size = 20, color = colors.text }: IconProps) {
 export function LocateIcon({ size = 20, color = colors.text }: IconProps) {
   const ring = size * 0.7;
   return (
-    <View style={[s.box, { width: size, height: size }]} pointerEvents="none">
+    <View
+      style={[styles.box, { width: size, height: size }]}
+      pointerEvents="none"
+    >
       <View
         style={{
           width: ring,
@@ -128,7 +140,7 @@ export function MenuIcon({ size = 20, color = colors.text }: IconProps) {
   };
   return (
     <View
-      style={[s.box, { width: size, height: size, gap: size * 0.18 }]}
+      style={[styles.box, { width: size, height: size, gap: size * 0.18 }]}
       pointerEvents="none"
     >
       <View style={bar} />
@@ -138,7 +150,7 @@ export function MenuIcon({ size = 20, color = colors.text }: IconProps) {
   );
 }
 
-const s = StyleSheet.create({
+const styles = StyleSheet.create({
   box: { alignItems: "center", justifyContent: "center" },
   corner: { position: "absolute" },
 });

@@ -79,7 +79,7 @@ describe("M3U bounded import parser", () => {
       ),
     );
     expect(result.stats).toMatchObject({ valid: 4, duplicates: 2, total: 6 });
-    expect(result.channels.map((c) => c.identityKey)).toEqual([
+    expect(result.channels.map((channel) => channel.identityKey)).toEqual([
       "url:https://a.example.com/one",
       "url:https://a.example.com/two",
       "url:https://a.example.com/three",
@@ -176,7 +176,9 @@ describe("M3U bounded import parser", () => {
         line("", "https://a.example.com/2"),
       ),
     );
-    expect(result.channels.map((c) => [c.name, c.groupName])).toEqual([
+    expect(
+      result.channels.map((channel) => [channel.name, channel.groupName]),
+    ).toEqual([
       ["备用", "未分组"],
       ["未命名频道", "未分组"],
     ]);
@@ -199,7 +201,7 @@ describe("M3U bounded import parser", () => {
     const result = await parseM3U(
       "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-APP-NOTE:x\n#EXTINF:-1,新闻\nhttps://a.example.com/news.m3u8",
     );
-    expect(result.channels.map((c) => c.name)).toEqual(["新闻"]);
+    expect(result.channels.map((channel) => channel.name)).toEqual(["新闻"]);
   });
 
   it.each([
@@ -235,8 +237,8 @@ describe("M3U bounded import parser", () => {
     const scheduler = jest.fn(async () => undefined);
     await parseM3U(
       m3u(
-        ...Array.from({ length: 220 }, (_, i) =>
-          line(`频道${i}`, `https://a.example.com/${i}`),
+        ...Array.from({ length: 220 }, (_unused, index) =>
+          line(`频道${index}`, `https://a.example.com/${index}`),
         ),
       ),
       { yieldControl: scheduler },
@@ -246,8 +248,8 @@ describe("M3U bounded import parser", () => {
     await expect(
       parseM3U(
         m3u(
-          ...Array.from({ length: 300 }, (_, i) =>
-            line(`${i}`, `https://a.example.com/${i}`),
+          ...Array.from({ length: 300 }, (_unused, index) =>
+            line(`${index}`, `https://a.example.com/${index}`),
           ),
         ),
         {
