@@ -38,9 +38,12 @@ module.exports = (config) =>
           path.join(directory, "jingkan_mark.xml"),
           `<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="160dp" android:height="160dp" android:viewportWidth="1024" android:viewportHeight="1024">
-<path android:strokeColor="#8de5d2" android:strokeWidth="28" android:fillColor="#00000000" android:pathData="M288,284H736Q792,284 792,340V628Q792,684 736,684H288Q232,684 232,628V340Q232,284 288,284Z"/>
-<path android:fillColor="#8de5d2" android:pathData="M432,396L616,496L432,596Z"/>
-<path android:strokeColor="#8de5d2" android:strokeWidth="28" android:strokeLineCap="round" android:pathData="M436,744H588"/>
+<group android:scaleX="0.9" android:scaleY="0.9" android:pivotX="512" android:pivotY="512">
+<path android:fillColor="#8de5d2" android:strokeColor="#8de5d2" android:strokeWidth="40" android:strokeLineJoin="round" android:pathData="M432,260L672,400L432,540Z"/>
+<path android:strokeColor="#8de5d2" android:strokeWidth="26" android:strokeLineCap="round" android:pathData="M312,650H712"/>
+<path android:strokeColor="#8de5d2" android:strokeAlpha="0.6" android:strokeWidth="26" android:strokeLineCap="round" android:pathData="M372,710H652"/>
+<path android:strokeColor="#8de5d2" android:strokeAlpha="0.3" android:strokeWidth="26" android:strokeLineCap="round" android:pathData="M432,770H592"/>
+</group>
 </vector>`,
         );
         fs.writeFileSync(

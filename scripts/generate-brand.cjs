@@ -1,32 +1,78 @@
-// Reproducible code-drawn mark: a quiet screen with a play-shaped mountain.
+// Reproducible code-drawn mark "静水播放": a rounded play triangle above three
+// fading ripples on still water. Drawn on a 1024 grid, then scaled to 90%
+// around the centre so it stays inside Android's adaptive-icon safe circle.
 // Built-in Node only; 4x supersampling keeps the small launcher mark crisp.
 const fs = require("node:fs");
 const path = require("node:path");
 const zlib = require("node:zlib");
 const { Buffer } = require("node:buffer");
 const root = path.dirname(require.resolve("../package.json"));
-const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#0b1115"/><rect x="232" y="284" width="560" height="400" rx="56" fill="none" stroke="#8de5d2" stroke-width="28"/><path d="M432 396L616 496L432 596Z" fill="#8de5d2"/><path d="M436 744H588" stroke="#8de5d2" stroke-width="28" stroke-linecap="round"/></svg>\n`;
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#0b1115"/><g transform="translate(51.2 51.2) scale(0.9)" stroke="#8de5d2" stroke-linecap="round" stroke-linejoin="round"><path d="M432 260L672 400L432 540Z" fill="#8de5d2" stroke-width="40"/><path d="M312 650H712" stroke-width="26"/><path d="M372 710H652" stroke-width="26" opacity="0.6"/><path d="M432 770H592" stroke-width="26" opacity="0.3"/></g></svg>\n`;
 fs.writeFileSync(path.join(root, "assets/brand.svg"), svg);
+const MARK_SCALE = 0.9;
+const TRIANGLE = [
+  [432, 260],
+  [672, 400],
+  [432, 540],
+];
+const TRIANGLE_CORNER_RADIUS = 20;
+const RIPPLE_HALF_WIDTH = 13;
+const RIPPLES = [
+  { start: 312, end: 712, level: 650, opacity: 1 },
+  { start: 372, end: 652, level: 710, opacity: 0.6 },
+  { start: 432, end: 592, level: 770, opacity: 0.3 },
+];
+function distanceToSegment(pointX, pointY, [startX, startY], [endX, endY]) {
+  const spanX = endX - startX,
+    spanY = endY - startY;
+  const along = Math.min(
+    Math.max(
+      ((pointX - startX) * spanX + (pointY - startY) * spanY) /
+        (spanX * spanX + spanY * spanY),
+      0,
+    ),
+    1,
+  );
+  return Math.hypot(
+    pointX - (startX + along * spanX),
+    pointY - (startY + along * spanY),
+  );
+}
+function insideTriangle(pointX, pointY) {
+  const sides = TRIANGLE.map(([startX, startY], index) => {
+    const [endX, endY] = TRIANGLE[(index + 1) % TRIANGLE.length];
+    return (
+      (endX - startX) * (pointY - startY) - (endY - startY) * (pointX - startX)
+    );
+  });
+  return sides.every((side) => side >= 0) || sides.every((side) => side <= 0);
+}
+// Returns the mark's opacity (0..1) at a point of the 1024 canvas.
 function mark(horizontal, vertical) {
-  const dx = Math.max(Math.abs(horizontal - 512) - 224, 0);
-  const dy = Math.max(Math.abs(vertical - 484) - 144, 0);
-  const distance = Math.hypot(dx, dy);
-  const screen =
-    Math.abs(distance - 56) <= 14 &&
-    horizontal >= 218 &&
-    horizontal <= 806 &&
-    vertical >= 270 &&
-    vertical <= 698;
-  const play =
-    horizontal >= 432 &&
-    horizontal <= 616 &&
-    Math.abs(vertical - 496) <= ((616 - horizontal) * 100) / 184;
-  const foot =
-    horizontal >= 436 && horizontal <= 588 && Math.abs(vertical - 744) <= 14;
-  const ends =
-    Math.hypot(horizontal - 436, vertical - 744) <= 14 ||
-    Math.hypot(horizontal - 588, vertical - 744) <= 14;
-  return screen || play || foot || ends;
+  const pointX = (horizontal - 512) / MARK_SCALE + 512;
+  const pointY = (vertical - 512) / MARK_SCALE + 512;
+  const nearEdge = TRIANGLE.some(
+    (corner, index) =>
+      distanceToSegment(
+        pointX,
+        pointY,
+        corner,
+        TRIANGLE[(index + 1) % TRIANGLE.length],
+      ) <= TRIANGLE_CORNER_RADIUS,
+  );
+  if (nearEdge || insideTriangle(pointX, pointY)) return 1;
+  let opacity = 0;
+  for (const ripple of RIPPLES)
+    if (
+      distanceToSegment(
+        pointX,
+        pointY,
+        [ripple.start, ripple.level],
+        [ripple.end, ripple.level],
+      ) <= RIPPLE_HALF_WIDTH
+    )
+      opacity = Math.max(opacity, ripple.opacity);
+  return opacity;
 }
 function crc32(bytes) {
   let crc = 0xffffffff;
@@ -52,13 +98,10 @@ function png(size, transparent) {
       let covered = 0;
       for (let subY = 0; subY < 4; subY++)
         for (let subX = 0; subX < 4; subX++) {
-          if (
-            mark(
-              ((horizontal + (subX + 0.5) / 4) * 1024) / size,
-              ((vertical + (subY + 0.5) / 4) * 1024) / size,
-            )
-          )
-            covered++;
+          covered += mark(
+            ((horizontal + (subX + 0.5) / 4) * 1024) / size,
+            ((vertical + (subY + 0.5) / 4) * 1024) / size,
+          );
         }
       const fraction = covered / 16,
         offset = vertical * (size * 4 + 1) + horizontal * 4 + 1;
