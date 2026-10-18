@@ -14,6 +14,7 @@ import {
   FlatList,
   View,
   Keyboard,
+  useWindowDimensions,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "react-native";
@@ -39,7 +40,12 @@ import {
   readPickedFile,
 } from "./data/importIO";
 import { Button, Heading, Notice } from "./components/ui";
-import { ChannelRow } from "./components/ChannelRow";
+import {
+  CHANNEL_ROW_GAP,
+  ChannelRow,
+  channelRowHeight,
+  channelRowLayout,
+} from "./components/ChannelRow";
 import { colors, styles } from "./theme";
 import { PlayerScreen } from "./features/player/PlayerScreen";
 import {
@@ -80,11 +86,13 @@ type ListItem = Channel | typeof EMPTY_ROW;
 // A screenful is shown first; the rest of a 10k-row list follows in a second
 // read so switching tabs or filters does not wait for the whole table.
 const FIRST_PAGE = 40;
-const ListSeparator = () => <View style={{ height: 4 }} />;
+const ListSeparator = () => <View style={{ height: CHANNEL_ROW_GAP }} />;
 const listKey = (item: ListItem) =>
   item === EMPTY_ROW ? "__empty__" : (item as Channel).id;
 
 export default function App() {
+  // Channel rows grow with the font scale; see channelRowHeight.
+  const { fontScale } = useWindowDimensions();
   const [repo, setRepo] = useState<Repository | null>(null),
     [startupAttempt, setStartupAttempt] = useState(0),
     [loadedRequest, setLoadedRequest] = useState<{
@@ -1339,9 +1347,17 @@ export default function App() {
               }}
               scrollEventThrottle={16}
               keyExtractor={listKey}
-              // Rows vary in height (tags, two-line names, font scale), so no
-              // getItemLayout. Keep virtualization, but render far enough
-              // ahead of a fast Android fling that the next viewport is ready.
+              // Rows share one height, so the list places them without
+              // measuring; a cell also holds the separator below it. Render
+              // far enough ahead of a fast Android fling as well.
+              getItemLayout={(_, index) => {
+                const layout = channelRowLayout(
+                  channelRowHeight(fontScale),
+                  index,
+                  headerHeight + 12,
+                );
+                return { ...layout, length: layout.length + CHANNEL_ROW_GAP };
+              }}
               initialNumToRender={12}
               maxToRenderPerBatch={16}
               updateCellsBatchingPeriod={16}

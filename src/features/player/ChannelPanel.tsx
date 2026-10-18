@@ -6,8 +6,14 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
-import { ChannelRow } from "../../components/ChannelRow";
+import {
+  CHANNEL_ROW_GAP,
+  ChannelRow,
+  channelRowHeight,
+  channelRowLayout,
+} from "../../components/ChannelRow";
 import { ChannelFilterBar } from "../channel/ChannelListParts";
 import { Button, Notice } from "../../components/ui";
 import { colors } from "../../theme";
@@ -54,6 +60,7 @@ export function ChannelPanel(props: ChannelPanelProps) {
   const shownChannels = sheet.channels;
   const range = sheet.rangeKey;
   const channelList = useRef<FlatList<Channel>>(null);
+  const rowHeight = channelRowHeight(useWindowDimensions().fontScale);
   const scrollRetry = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollTarget = useRef<{ index: number; retries: number } | null>(null);
   const [locateRequest, setLocateRequest] = useState(0);
@@ -207,6 +214,7 @@ export function ChannelPanel(props: ChannelPanelProps) {
           }, 100);
         }}
         keyExtractor={(item) => item.id}
+        getItemLayout={(_, index) => channelRowLayout(rowHeight, index)}
         style={s.list}
         contentContainerStyle={s.listContent}
         initialNumToRender={12}
@@ -266,7 +274,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   list: { flex: 1 },
-  listContent: { gap: 4 },
+  listContent: { gap: CHANNEL_ROW_GAP },
   empty: { color: colors.muted, paddingVertical: 24, textAlign: "center" },
   emptyLoading: { paddingVertical: 24 },
   emptyLoadingText: { color: colors.muted },
