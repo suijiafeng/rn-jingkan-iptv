@@ -6,7 +6,7 @@ import {
 } from "../domain/channelSources";
 import { RepositoryError, type SqlExecutor } from "./sql";
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 /**
  * Brings a database at any older user_version up to SCHEMA_VERSION inside
@@ -25,7 +25,21 @@ export async function migrateSchema(tx: SqlExecutor): Promise<void> {
   if (current < 4) await migrateV4(tx);
   if (current < 5) await migrateV5(tx);
   if (current < 6) await migrateV6(tx);
+  if (current < 7) await migrateV7(tx);
   await tx.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
+}
+
+/** v7: a source can be hidden without deleting its channels or user data. */
+async function migrateV7(tx: SqlExecutor): Promise<void> {
+  const columns = new Set(
+    (await tx.getAllAsync<{ name: string }>("PRAGMA table_info(sources)")).map(
+      (column) => column.name,
+    ),
+  );
+  if (!columns.has("enabled"))
+    await tx.execAsync(
+      "ALTER TABLE sources ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1));",
+    );
 }
 
 async function createV1(tx: SqlExecutor): Promise<void> {

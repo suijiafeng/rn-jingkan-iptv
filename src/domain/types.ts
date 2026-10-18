@@ -5,6 +5,8 @@ export interface Source {
   id: string;
   name: string;
   kind: SourceKind;
+  /** Disabled sources stay stored but do not contribute playable channels. */
+  enabled: boolean;
   /** A remote URL or just the original file name (never a public file copy). */
   location: string;
   createdAt: number;

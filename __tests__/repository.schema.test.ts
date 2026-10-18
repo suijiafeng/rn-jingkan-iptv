@@ -33,6 +33,7 @@ describe("SQLite repository with real SQLite", () => {
       location: "channels.m3u",
       revision: 1,
       channelCount: 3,
+      enabled: true,
     });
     expect(await repo.getSourceContent(source.id)).toBe(initialText);
     const [channel] = await repo.listChannels();
@@ -42,17 +43,17 @@ describe("SQLite repository with real SQLite", () => {
       { id: channel.id, favorite: true },
     ]);
     expect(await db.getFirstAsync("PRAGMA user_version")).toEqual({
-      user_version: 6,
+      user_version: 7,
     });
   });
 
   it("does not rewrite a database newer than this app", async () => {
-    await db.execAsync("PRAGMA user_version = 7");
+    await db.execAsync("PRAGMA user_version = 8");
     await expect(createRepository(db)).rejects.toMatchObject({
       code: "newer_schema",
     });
     expect(await db.getFirstAsync("PRAGMA user_version")).toEqual({
-      user_version: 7,
+      user_version: 8,
     });
   });
 
@@ -77,7 +78,7 @@ describe("SQLite repository with real SQLite", () => {
     `);
     const migrated = await createRepository(legacy);
     expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
-      user_version: 6,
+      user_version: 7,
     });
     expect(await migrated.listGroups()).toEqual(
       ["纪录片", "旅游", "文化", UNGROUPED].sort((left, right) =>
@@ -134,7 +135,7 @@ describe("SQLite repository with real SQLite", () => {
         "hd",
       );
       expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
-        user_version: 6,
+        user_version: 7,
       });
     } finally {
       legacy.native.close();
@@ -164,7 +165,7 @@ describe("SQLite repository with real SQLite", () => {
         Repository,
       );
       expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
-        user_version: 6,
+        user_version: 7,
       });
     } finally {
       legacy.native.close();
@@ -238,7 +239,7 @@ describe("SQLite repository with real SQLite", () => {
         { id: "legacy-channel" },
       ]);
       expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
-        user_version: 6,
+        user_version: 7,
       });
       expect(await legacy.getAllAsync("PRAGMA foreign_key_check")).toEqual([]);
     } finally {

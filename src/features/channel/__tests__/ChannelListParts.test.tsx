@@ -16,6 +16,7 @@ const source: Source = {
   id: "s",
   name: "自己的来源",
   kind: "file",
+  enabled: true,
   location: "channels.m3u",
   createdAt: 1,
   lastSuccessAt: 1,

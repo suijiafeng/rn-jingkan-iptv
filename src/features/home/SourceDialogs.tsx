@@ -25,6 +25,7 @@ export function SourceDialogs({
   importer,
   sourceTasks,
   onRemoveSource,
+  onSetSourceEnabled,
   changed,
 }: {
   repo: Repository;
@@ -38,9 +39,11 @@ export function SourceDialogs({
   importer: SourceImport;
   sourceTasks: ReturnType<typeof useSourceTasks>;
   onRemoveSource: (source: Source) => void;
+  onSetSourceEnabled: (source: Source, enabled: boolean) => Promise<void>;
   changed: () => void;
 }) {
   const [renameText, setRenameText] = useState("");
+  const [sourceSaving, setSourceSaving] = useState<string | null>(null);
   const backToManagement = () => {
     setRenaming(null);
     setManaging(true);
@@ -70,6 +73,14 @@ export function SourceDialogs({
           setManaging(false);
         }}
         onRemove={onRemoveSource}
+        sourceSaving={sourceSaving}
+        onEnabledChange={(source, enabled) => {
+          if (sourceSaving) return;
+          setSourceSaving(source.id);
+          void onSetSourceEnabled(source, enabled).finally(() =>
+            setSourceSaving(null),
+          );
+        }}
         onCheck={(source) => void sourceTasks.runCheck(source)}
         onStopCheck={sourceTasks.stopCheck}
         languageLookup={sourceTasks.languageLookup}

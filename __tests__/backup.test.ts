@@ -10,6 +10,7 @@ test("offline backup round-trip preserves stable identities, sources and favorit
     target = await openTestRepository();
   try {
     await importInitialInto(origin.repo);
+    const [originSource] = await origin.repo.listSources();
     const [channel] = await origin.repo.listChannels();
     await origin.repo.toggleFavorite(channel.id);
     await origin.repo.recordRecent(channel.id);
@@ -19,6 +20,7 @@ test("offline backup round-trip preserves stable identities, sources and favorit
       ipAllowed: true,
       locationAllowed: true,
     });
+    await origin.repo.setSourceEnabled(originSource.id, false);
     const text = await origin.repo.exportBackup();
     expect(text).not.toContain("lastPlayedAt");
     expect(text).not.toContain("remoteAllowed");
@@ -26,7 +28,12 @@ test("offline backup round-trip preserves stable identities, sources and favorit
     await importInitialInto(target.repo);
     await target.repo.setSetting("remoteAllowed", true);
     await target.repo.restoreBackup(text);
-    expect(await target.repo.listSources()).toHaveLength(1);
+    expect(await target.repo.listSources()).toMatchObject([
+      { id: originSource.id, enabled: false },
+    ]);
+    expect(await target.repo.listChannels()).toEqual([]);
+    await target.repo.setSourceEnabled(originSource.id, true);
+    await origin.repo.setSourceEnabled(originSource.id, true);
     expect((await target.repo.listChannels()).map((row) => row.id)).toEqual(
       (await origin.repo.listChannels()).map((row) => row.id),
     );

@@ -85,6 +85,32 @@ export function useDataControls({
     }
   };
 
+  const setSourceEnabled = async (source: Source, enabled: boolean) => {
+    if (!repo || source.enabled === enabled) return;
+    setError("");
+    if (!enabled) {
+      importer.cancelTask();
+      sourceTasks.stopForSource(source.id);
+      repo.cancelRefresh(source.id);
+    }
+    try {
+      await repo.setSourceEnabled(source.id, enabled);
+      if (!enabled) {
+        playback.forgetSource(source.id);
+        filters.forgetSource(source.id);
+        try {
+          await playback.reconcilePlayingSources();
+        } catch {
+          playback.stopPlayback();
+          setError("来源已停用；播放器来源列表更新失败，已停止当前播放。");
+        }
+      }
+      list.changed();
+    } catch {
+      setError(enabled ? "启用来源失败，请重试" : "停用来源失败，请重试");
+    }
+  };
+
   const revoke = async () => {
     if (!repo) return;
     if (
@@ -153,5 +179,5 @@ export function useDataControls({
     list.changed();
   };
 
-  return { removeSource, revoke, clearAll, restoreBackup };
+  return { removeSource, setSourceEnabled, revoke, clearAll, restoreBackup };
 }

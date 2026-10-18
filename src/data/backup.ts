@@ -14,6 +14,7 @@ const SOURCE_COLUMNS = [
   "createdAt",
   "lastSuccessAt",
   "revision",
+  "enabled",
 ] as const;
 const CHANNEL_COLUMNS = [
   "id",
@@ -118,7 +119,9 @@ export function parseBackup(text: string): LocalBackup {
       integer(row.createdAt);
       integer(row.lastSuccessAt);
       integer(row.revision, 1);
-      return select(row, SOURCE_COLUMNS);
+      if (row.enabled !== undefined && row.enabled !== 0 && row.enabled !== 1)
+        throw new BackupError();
+      return select({ ...row, enabled: row.enabled ?? 1 }, SOURCE_COLUMNS);
     });
     const channelIds = new Set<string>(),
       identities = new Set<string>(),

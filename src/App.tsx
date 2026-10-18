@@ -262,11 +262,12 @@ export default function App() {
     );
 
   const listTab: ListTab = tab === "settings" ? "all" : tab;
+  const enabledSources = sources.filter((source) => source.enabled);
   /** A filter change starts the current tab from its top again. */
   const restartList = () => list.scrollToTopOnNextLoad(tab);
   const listHeaderProps: HeaderProps = {
     tab: listTab,
-    sources,
+    sources: enabledSources,
     channelCount: list.channelTotal ?? channels.length,
     search,
     sourceId,
@@ -436,6 +437,7 @@ export default function App() {
         importer={importer}
         sourceTasks={sourceTasks}
         onRemoveSource={(source) => void controls.removeSource(source)}
+        onSetSourceEnabled={controls.setSourceEnabled}
         changed={changed}
       />
       {playing && (
