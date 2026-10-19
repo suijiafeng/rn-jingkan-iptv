@@ -137,7 +137,15 @@ test("each facet clears independently and keeps the source selection", async () 
   );
   expect(screen.queryByRole("button", { name: "全部分组" })).toBeNull();
   expect(screen.queryByRole("button", { name: "最近" })).toBeNull();
-  expect(screen.getByTestId("channel-facet-filters")).toBeTruthy();
+  // Folded menus: each set dimension is a chip that clears only itself.
+  expect(screen.queryByText(/^国家\/地区 /)).toBeNull();
+  await fireEvent.press(
+    screen.getByRole("button", { name: /^清除国家\/地区筛选：/ }),
+  );
+  expect(callbacks.onFacetChange).toHaveBeenLastCalledWith(
+    { country: null, language: "zh", content: "体育" },
+    "country",
+  );
   // One tap on the content tabs; tapping the selected tab clears it.
   const tabs = screen.getByTestId("channel-facet-filters-content-tabs");
   await fireEvent.press(within(tabs).getByRole("button", { name: "全部" }));
@@ -154,7 +162,10 @@ test("each facet clears independently and keeps the source selection", async () 
       facets={{ countries: [], languages: [], contents: [] }}
     />,
   );
-  expect(screen.getByTestId("channel-facet-filters")).toBeTruthy();
+  // With nothing to list the menus still have a way in.
+  expect(
+    screen.getByRole("button", { name: "按国家/地区或语言筛选" }),
+  ).toBeTruthy();
 });
 
 test("the region basis is one small line atop the country menu only", async () => {
@@ -162,6 +173,9 @@ test("the region basis is one small line atop the country menu only", async () =
     <ChannelListHeader {...props()} countryHint="依据：手机地区与时区设置" />,
   );
   expect(screen.queryByText("依据：手机地区与时区设置")).toBeNull();
+  await fireEvent.press(
+    screen.getByRole("button", { name: "按国家/地区或语言筛选" }),
+  );
   await fireEvent.press(screen.getByTestId("channel-facet-filters-country"));
   expect(
     screen.getByTestId("channel-facet-filters-country-hint").props.children,
@@ -242,7 +256,9 @@ test("returning to channels restores the selected facets without duplicating con
     <ChannelListHeader {...callbacks} facetSelection={selection} />,
   );
   expect(selectedContent()).toBe("体育");
-  expect(screen.getByRole("button", { name: "语言：中文" })).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "清除语言筛选：中文" }),
+  ).toBeTruthy();
 });
 
 test("empty history and an empty search have distinct next steps", async () => {

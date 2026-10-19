@@ -1,3 +1,4 @@
+import { parseDeclaredQuality } from "./channelSources";
 /** Groups are stored as a ";"-joined, translated, de-duplicated list. */
 export const UNGROUPED = "未分组";
 export const GROUP_SEPARATOR = ";";
@@ -107,16 +108,25 @@ const TAG_TRANSLATIONS: Record<string, string> = {
 };
 
 /**
- * Splits trailing "[Geo-blocked]" / "[Not 24/7]" style markers off a channel
- * name for display. The stored name is unchanged, so search still matches.
+ * Splits trailing "[Geo-blocked]" / "[Not 24/7]" style markers, and a
+ * quality written in parentheses ("(1080p)", "（HD）"), off a channel name
+ * for display. The stored name is unchanged, so search still matches, and
+ * nothing here feeds identity or the source's declared quality.
  */
 export function channelTitle(name: string): { title: string; tags: string[] } {
   const tags: string[] = [];
   let title = name.trim();
   let match: RegExpMatchArray | null;
-  while ((match = title.match(/\s*\[([^\]\n]{1,40})\]$/))) {
-    const tag = match[1].trim();
-    tags.unshift(TAG_TRANSLATIONS[tag.toLowerCase()] ?? tag);
+  for (;;) {
+    if ((match = title.match(/\s*\[([^\]\n]{1,40})\]$/))) {
+      const tag = match[1].trim();
+      tags.unshift(TAG_TRANSLATIONS[tag.toLowerCase()] ?? tag);
+    } else if ((match = title.match(/\s*[(（]([^)）\n]{1,10})[)）]$/))) {
+      // Only a recognisable quality: "(Beijing)" stays part of the name.
+      const quality = parseDeclaredQuality(match[1]);
+      if (!quality) break;
+      tags.unshift(quality.label);
+    } else break;
     title = title.slice(0, title.length - match[0].length).trim();
   }
   // A name made only of brackets is the name itself, not markers.

@@ -344,8 +344,7 @@ export function useChannelSession(props: SessionProps) {
   // the alternatives (a popover in fullscreen, a bottom sheet in portrait).
   const sourceButton = (
     <SourceChip
-      quality={qualityName(props.channel)}
-      qualityKnown={!!props.channel.qualityLabel}
+      quality={props.channel.qualityLabel ?? null}
       position={
         Math.max(
           props.sources.findIndex((source) => source.id === props.channel.id),

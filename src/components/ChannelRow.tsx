@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { Channel } from "../domain/types";
 import { channelTitle, displayGroups } from "../domain/channelLabels";
+import { isQualityTag } from "../domain/channelSources";
 import { colors, sizes, styles, type } from "../theme";
 import { ChannelLogo } from "./ChannelLogo";
 
@@ -112,7 +113,12 @@ export const ChannelRow = memo(function ChannelRow({
               {title}
             </Text>
             {tags.map((label) => (
-              <Text key={label} numberOfLines={1} style={rowStyles.tag}>
+              <Text
+                key={label}
+                numberOfLines={1}
+                // Quality is information, markers like 地区限制 are caveats.
+                style={[rowStyles.tag, isQualityTag(label) && rowStyles.quiet]}
+              >
                 {label}
               </Text>
             ))}
@@ -191,6 +197,7 @@ const rowStyles = StyleSheet.create({
     paddingHorizontal: 6,
     overflow: "hidden",
   },
+  quiet: { color: colors.muted },
   unreachable: { opacity: 0.5 },
   badDot: {
     width: 6,

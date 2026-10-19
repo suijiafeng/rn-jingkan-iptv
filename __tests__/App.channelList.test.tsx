@@ -5,6 +5,7 @@ import {
   checkSource,
   rowsFor,
   chooseFacet,
+  openFacetMenus,
   selectedContent,
   setupFacetCatalog,
   contentTabs,
@@ -292,6 +293,10 @@ test("manual country all persists over a matching device recommendation and app 
   await ui.unmount();
   await render(<App />);
   expect(await screen.findByLabelText("美国中文，播放")).toBeTruthy();
+  expect(
+    screen.queryByRole("button", { name: /^清除国家\/地区筛选/ }),
+  ).toBeNull();
+  await openFacetMenus();
   expect(screen.getByRole("button", { name: "国家/地区：全部" })).toBeTruthy();
 });
 

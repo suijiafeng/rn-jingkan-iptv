@@ -137,12 +137,11 @@ export function OverlayButton({
 /**
  * Quality in the accent colour, then which source of how many ("1/3");
  * opens the alternatives. The source's name is in the list it opens.
- * An unknown quality says nothing useful, so it stays in the
- * muted colour instead of drawing the eye.
+ * An unknown quality is left out ("1/2"); with no quality and one source
+ * the chip would say nothing, so it is not drawn.
  */
 export function SourceChip({
   quality,
-  qualityKnown = true,
   position,
   count,
   solid = false,
@@ -150,8 +149,8 @@ export function SourceChip({
   accessibilityLabel,
   onPress,
 }: {
-  quality: string;
-  qualityKnown?: boolean;
+  /** Declared quality only; never guessed from the channel name. */
+  quality: string | null;
   /** 1-based index of the playing source among `count`. */
   position: number;
   count: number;
@@ -161,6 +160,7 @@ export function SourceChip({
   accessibilityLabel: string;
   onPress: () => void;
 }) {
+  if (!quality && count < 2) return null;
   return (
     <Pressable
       accessibilityRole="button"
@@ -177,12 +177,8 @@ export function SourceChip({
       onPress={onPress}
     >
       <Text style={styles.chipText} numberOfLines={1}>
-        <Text
-          style={qualityKnown ? styles.chipQuality : styles.chipQualityUnknown}
-        >
-          {quality}
-        </Text>
-        {count > 1 ? ` · ${position}/${count}` : ""}
+        {!!quality && <Text style={styles.chipQuality}>{quality}</Text>}
+        {count > 1 ? `${quality ? " · " : ""}${position}/${count}` : ""}
       </Text>
     </Pressable>
   );
@@ -431,7 +427,6 @@ const styles = StyleSheet.create({
   chipDisabled: { opacity: 0.7 },
   chipText: { color: colors.text, fontSize: 12, lineHeight: 18 },
   chipQuality: { color: colors.accent, fontWeight: "600" },
-  chipQualityUnknown: { color: colors.muted },
   shade: { position: "absolute", left: 0, right: 0 },
   shadeTop: {
     top: 0,

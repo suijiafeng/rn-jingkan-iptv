@@ -126,7 +126,9 @@ test("filters chosen in the sheet are the channel page's filters", async () => {
     mockPlayerProps.mock.calls.at(-1)![0].sheet.filters.onSearchChange("美国"),
   );
   await act(async () => mockPlayerProps.mock.calls.at(-1)![0].onClose());
-  expect(screen.getByRole("button", { name: "语言：英语" })).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "清除语言筛选：英语" }),
+  ).toBeTruthy();
   expect(screen.getByLabelText("搜索频道名称").props.value).toBe("美国");
   // Search settles after the page's usual 250 ms debounce.
   await waitFor(() => {

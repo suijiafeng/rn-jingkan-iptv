@@ -214,11 +214,20 @@ export async function chooseFacet(
     );
     return;
   }
+  await openFacetMenus();
   await fireEvent.press(
     await screen.findByRole("button", { name: new RegExp(`^${kind}：`) }),
   );
   const menu = await screen.findByTestId("channel-facet-filters-modal");
   await fireEvent.press(within(menu).getByRole("button", { name: option }));
+}
+/** Unfolds the country/language menus behind the channel page's filter icon. */
+export async function openFacetMenus() {
+  const toggle = screen.queryByRole("button", {
+    name: "按国家/地区或语言筛选",
+  });
+  if (toggle && !toggle.props.accessibilityState?.expanded)
+    await fireEvent.press(toggle);
 }
 export function selectedContent(): string | undefined {
   const tabs = screen.getByTestId("channel-facet-filters-content-tabs");

@@ -16,6 +16,14 @@ const QUALITY: Record<string, DeclaredQuality> = {
   "8K": { label: "8K", rank: 4320 },
 };
 
+/** A display tag that names a quality ("720p", "高清"), not a warning. */
+export function isQualityTag(tag: string): boolean {
+  return (
+    parseDeclaredQuality(tag) !== null ||
+    Object.values(QUALITY).some((quality) => quality.label === tag)
+  );
+}
+
 /** Only explicit metadata is accepted; channel names are deliberately ignored. */
 export function parseDeclaredQuality(
   value: string | null | undefined,

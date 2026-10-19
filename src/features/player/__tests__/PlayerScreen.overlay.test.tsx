@@ -188,10 +188,8 @@ describe("portrait layout", () => {
     expect(info.getByText("纪录片")).toBeTruthy();
     expect(info.queryByText(/我的节目单/)).toBeNull();
     expect(ui.queryByRole("button", { name: /上一台|下一台/ })).toBeNull();
-    expect(
-      ui.getByRole("button", { name: "来源：未知清晰度 · 我的节目单" }).props
-        .accessibilityState.disabled,
-    ).toBe(true);
+    // One source with no declared quality: the chip would say nothing.
+    expect(ui.queryByRole("button", { name: /^来源：/ })).toBeNull();
     await fireEvent.press(
       ui.getByRole("button", { name: "停止播放并关闭播放器" }),
     );

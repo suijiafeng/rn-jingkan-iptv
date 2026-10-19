@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { Button, Heading, Notice } from "../../components/ui";
+import { ActiveFacetChips, FacetToggle, activeMenuFacets } from "./FacetChips";
 import { FacetFilters } from "../../components/FacetFilters";
 import type {
   ChannelFacetOptions,
@@ -128,6 +129,9 @@ export function ChannelFilterBar(
 ) {
   const { tab, idPrefix = "channel" } = props;
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  // Country/language menus stay folded behind one icon until asked for.
+  const [facetsOpen, setFacetsOpen] = useState(false);
+  const facetMenus = tab === "all" && !props.foldTriggers;
   const selectedSource = props.sources.find(
     (source) => source.id === props.sourceId,
   );
@@ -143,7 +147,7 @@ export function ChannelFilterBar(
           <TextInput
             accessibilityLabel="搜索频道名称"
             style={partStyles.searchInput}
-            placeholder="搜索频道名称…"
+            placeholder="搜索"
             placeholderTextColor={colors.muted}
             value={props.search}
             onChangeText={props.onSearchChange}
@@ -197,6 +201,13 @@ export function ChannelFilterBar(
             )}
           </View>
         )}
+        {facetMenus && (
+          <FacetToggle
+            open={facetsOpen}
+            active={activeMenuFacets(props.facetSelection).length > 0}
+            onPress={() => setFacetsOpen((open) => !open)}
+          />
+        )}
       </View>
       {tab === "all" && sourcesOpen && props.sources.length > 1 && (
         <View style={{ gap: 6 }}>
@@ -230,6 +241,12 @@ export function ChannelFilterBar(
           </ScrollView>
         </View>
       )}
+      {facetMenus && !facetsOpen && (
+        <ActiveFacetChips
+          selection={props.facetSelection}
+          onChange={props.onFacetChange}
+        />
+      )}
       {tab === "all" && (
         <FacetFilters
           options={props.facets}
@@ -237,7 +254,7 @@ export function ChannelFilterBar(
           onChange={props.onFacetChange}
           countryHint={props.countryHint}
           contentAsTabs
-          tabsOnly={props.foldTriggers}
+          tabsOnly={!facetMenus || !facetsOpen}
           testID={`${idPrefix}-facet-filters`}
         />
       )}
