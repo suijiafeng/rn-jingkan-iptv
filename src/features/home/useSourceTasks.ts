@@ -195,7 +195,7 @@ export function useSourceTasks({
             ? failure.message
             : failure instanceof ImportIOError
               ? failure.message
-              : "无法完成检测，请检查网络或本地资料后重试",
+              : "检测未完成，请重试",
         );
     } finally {
       if (checkController.current === abort) {

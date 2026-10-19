@@ -8,6 +8,10 @@ import {
 import { AccessibilityInfo, Alert } from "react-native";
 import { hideToast } from "../src/components/Toast";
 import {
+  answerConsent,
+  currentConsent,
+} from "../src/features/common/ConsentDialog";
+import {
   fireEvent,
   act,
   render,
@@ -154,6 +158,8 @@ test("channel artwork stays absent by default and a failed consent save does not
   ).toBeNull();
   await fireEvent.press(screen.getByRole("tab", { name: "设置" }));
   await fireEvent(screen.getByLabelText("显示频道台标"), "valueChange", true);
+  await waitFor(() => expect(currentConsent()?.title).toBe("显示频道台标？"));
+  await act(async () => answerConsent("allow"));
   expect(await screen.findByText("台标许可未能保存，请重试")).toBeTruthy();
   expect(screen.getByLabelText("显示频道台标").props.value).toBe(false);
   await fireEvent.press(screen.getByRole("tab", { name: "频道" }));
@@ -239,26 +245,23 @@ test.each(["revocation", "unmount"])(
     repo.getSetting.mockImplementation(async (key, fallback) =>
       key === "remoteAllowed" ? true : fallback,
     );
-    let grantArtwork: (() => void) | undefined;
     jest
       .spyOn(Alert, "alert")
-      .mockImplementation((title, _message, buttons) => {
-        if (title === "显示频道台标？")
-          grantArtwork = () => buttons?.[1]?.onPress?.();
-        else buttons?.[1]?.onPress?.();
-      });
+      .mockImplementation((_title, _message, buttons) =>
+        buttons?.[1]?.onPress?.(),
+      );
     const ui = await render(<App />);
     await screen.findByLabelText("中文新闻，播放");
     await fireEvent.press(screen.getByRole("tab", { name: "设置" }));
     await fireEvent(screen.getByLabelText("显示频道台标"), "valueChange", true);
-    await waitFor(() => expect(grantArtwork).toBeDefined());
+    await waitFor(() => expect(currentConsent()?.title).toBe("显示频道台标？"));
     if (action === "revocation") {
       await fireEvent.press(
         screen.getByRole("button", { name: "撤销联网许可" }),
       );
       await screen.findByRole("button", { name: "阅读风险并允许" });
     } else await ui.unmount();
-    await act(async () => grantArtwork?.());
+    await act(async () => answerConsent("allow"));
     expect(repo.setSetting).not.toHaveBeenCalledWith("artworkAllowed", true);
     if (action === "revocation") {
       await fireEvent.press(screen.getByRole("tab", { name: "频道" }));

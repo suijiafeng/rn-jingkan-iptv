@@ -157,6 +157,19 @@ test("each facet clears independently and keeps the source selection", async () 
   expect(screen.getByTestId("channel-facet-filters")).toBeTruthy();
 });
 
+test("the region basis is one small line atop the country menu only", async () => {
+  await render(
+    <ChannelListHeader {...props()} countryHint="依据：手机地区与时区设置" />,
+  );
+  expect(screen.queryByText("依据：手机地区与时区设置")).toBeNull();
+  await fireEvent.press(screen.getByTestId("channel-facet-filters-country"));
+  expect(
+    screen.getByTestId("channel-facet-filters-country-hint").props.children,
+  ).toBe("依据：手机地区与时区设置");
+  await fireEvent.press(screen.getByTestId("channel-facet-filters-language"));
+  expect(screen.queryByTestId("channel-facet-filters-country-hint")).toBeNull();
+});
+
 test("recent management replaces search and exposes only its editing actions", async () => {
   const callbacks = props();
   const ui = await render(<ChannelListHeader {...callbacks} tab="recent" />);
@@ -247,10 +260,10 @@ test("empty history and an empty search have distinct next steps", async () => {
   };
   const ui = await render(<ChannelListEmpty {...callbacks} />);
   expect(screen.getByText("还没有观看记录")).toBeTruthy();
-  expect(screen.getByText("成功播放过的频道会出现在这里。")).toBeTruthy();
+  expect(screen.queryByText("成功播放过的频道会出现在这里。")).toBeNull();
   await ui.rerender(<ChannelListEmpty {...callbacks} filtered />);
   expect(screen.getByText("没有找到频道")).toBeTruthy();
-  expect(screen.getByText("试试清空搜索或筛选条件。")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "查看全部频道" })).toBeTruthy();
 });
 
 test("loading channels shows a skeleton and status", async () => {

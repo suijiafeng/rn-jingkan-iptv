@@ -3,7 +3,6 @@ import type { Channel } from "../../domain/types";
 import {
   advanceRound,
   type AttemptFailure,
-  exhaustedBody,
   type FailoverRound,
   freshRound,
   sourceGroupKey,
@@ -15,8 +14,6 @@ import {
 export interface FailoverView {
   /** Title to show while connecting after an automatic switch; else null. */
   connectingTitle: string | null;
-  /** Body line for a failure once every address of the round was tried. */
-  failedBody: string;
   /** An attempt ended without a picture; may switch to another address. */
   onFailure: (failure: AttemptFailure) => void;
   /** The user started playback (play, retry, continue): a new round begins. */
@@ -63,9 +60,5 @@ export function useSourceFailover(
     current?.autoSelected === channel.id && position
       ? switchingTitle(position)
       : null;
-  const failedBody =
-    current && position && current.tried.length >= position.total
-      ? exhaustedBody(position.total)
-      : "";
-  return { connectingTitle, failedBody, onFailure, onUserPlay, onManualSelect };
+  return { connectingTitle, onFailure, onUserPlay, onManualSelect };
 }

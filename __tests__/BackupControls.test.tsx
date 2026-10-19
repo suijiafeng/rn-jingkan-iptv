@@ -81,7 +81,7 @@ test("declining sensitive export creates no file; accepting writes only to the c
   await waitFor(() =>
     expect(mockWrite).toHaveBeenCalledWith("content://local/backup.json", text),
   );
-  expect(ui.getByText("备份已保存。请妥善保管此文件。")).toBeTruthy();
+  expect(ui.getByText("备份已保存")).toBeTruthy();
   await ui.unmount();
 });
 test("restore validates before confirmation and cleans only the picker cache on rejection or cancellation", async () => {
@@ -97,8 +97,6 @@ test("restore validates before confirmation and cleans only the picker cache on 
   expect(onRestore).not.toHaveBeenCalled();
   await fireEvent.press(ui.getByRole("button", { name: "从备份恢复" }));
   await waitFor(() => expect(onRestore).toHaveBeenCalledWith(text));
-  expect(
-    ui.getByText("恢复完成。联网许可已重置，可先离线查看资料。"),
-  ).toBeTruthy();
+  expect(ui.getByText("已恢复，联网许可已重置")).toBeTruthy();
   await ui.unmount();
 });

@@ -10,11 +10,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { Channel, Source } from "./domain/types";
 import {
   effectiveCountry,
+  regionBasis,
   useRegionPreference,
 } from "./features/region/useRegionPreference";
 import { ErrorNotice } from "./components/ui";
 import { ToastHost } from "./components/Toast";
 import { NetworkConsentDialog } from "./features/common/NetworkConsentDialog";
+import { ConsentHost } from "./features/common/ConsentDialog";
 import { styles as theme } from "./theme";
 import { useAutoAvailabilityCheck } from "./features/channel/useAutoAvailabilityCheck";
 import { useChannelFilters } from "./features/channel/useChannelFilters";
@@ -263,12 +265,7 @@ export default function App() {
     sourceId,
     facets: list.facets,
     facetSelection: { country, language, content: group },
-    countryHint:
-      region.preference.mode === "manual"
-        ? "手动选择"
-        : region.result.countryCode && country === null
-          ? "当前来源暂无识别地区的国家/地区标注，显示全部"
-          : region.result.message,
+    countryHint: regionBasis(region.preference, region.result, country),
     autoCheck,
     recentBusy,
     recentEditing,
@@ -491,6 +488,7 @@ export default function App() {
           }}
         />
       )}
+      <ConsentHost />
       <ToastHost />
     </SafeAreaView>
   );

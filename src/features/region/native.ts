@@ -210,6 +210,6 @@ export async function detectRegion(
         : "手机位置暂不可用",
     );
   return issues.length
-    ? { ...result, message: `${issues.join("，")}。${result.message}` }
+    ? { ...result, message: `${issues.join("，")}；${result.message}` }
     : result;
 }

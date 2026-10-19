@@ -67,7 +67,9 @@ test("back and backdrop dismiss the menu, which has no auto-detect entry", async
   await fireEvent.press(
     screen.getByRole("button", { name: "国家/地区：全部" }),
   );
-  expect(screen.queryByText("按设备地区推荐")).toBeNull();
+  // The basis is a line of text atop the menu, never an option to tap.
+  expect(screen.getByText("按设备地区推荐")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "按设备地区推荐" })).toBeNull();
   expect(screen.queryByText("自动识别")).toBeNull();
   await fireEvent(
     screen.getByTestId("facet-filters-native-modal"),

@@ -310,9 +310,7 @@ export function useChannelSession(props: SessionProps) {
     playerNotice({
       phase: state.phase,
       connectingTitle: props.failover.connectingTitle,
-      failedBody: props.failover.failedBody,
       pausedBody,
-      unreachable: props.channel.checkStatus === "unreachable",
       slow,
     }),
     state.attemptId,
@@ -323,6 +321,11 @@ export function useChannelSession(props: SessionProps) {
     <CenterChip
       label="重试"
       icon={<RefreshIcon size={15} />}
+      badge={
+        props.channel.checkStatus === "unreachable"
+          ? "上次检测不可达"
+          : undefined
+      }
       disabled={primaryDisabled}
       onPress={primaryAction}
     />

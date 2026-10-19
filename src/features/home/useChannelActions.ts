@@ -50,8 +50,7 @@ export function useChannelActions({
             if (mounted.current) list.setSources(sources);
           })
           .catch(() => {
-            if (mounted.current)
-              setError("收藏已保存，但来源统计读取失败，请稍后重试。");
+            if (mounted.current) setError("收藏已保存，统计未刷新");
           });
     } catch {
       setError("收藏未能保存，请重试");
@@ -129,7 +128,7 @@ export function useChannelActions({
       list.setChannels((items) => items.map(patch));
       list.setRecent((items) => items.map(patch));
     } catch {
-      if (mounted.current) setError("播放可用性结果未能保存，请稍后重试");
+      if (mounted.current) setError("检测结果未能保存");
     }
   };
 

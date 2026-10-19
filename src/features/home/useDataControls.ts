@@ -76,7 +76,7 @@ export function useDataControls({
       } catch {
         if (settings.mounted.current) {
           playback.stopPlayback();
-          setError("来源已删除；播放器来源列表更新失败，已停止当前播放。");
+          setError("来源已删除，播放已停止");
         }
       }
       filters.forgetSource(source.id);
@@ -103,7 +103,7 @@ export function useDataControls({
           await playback.reconcilePlayingSources();
         } catch {
           playback.stopPlayback();
-          setError("来源已停用；播放器来源列表更新失败，已停止当前播放。");
+          setError("来源已停用，播放已停止");
         }
       }
       list.changed();
@@ -131,7 +131,7 @@ export function useDataControls({
       await repo.setSetting("remoteAllowed", false);
       settings.setRevokePending(false);
     } catch {
-      setError("许可已在本次运行中撤销，但未能保存。请重试撤销。");
+      setError("撤销未保存，请重试");
     }
   };
 

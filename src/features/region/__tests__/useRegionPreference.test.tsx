@@ -1,7 +1,8 @@
-import { Alert, AppState, type AppStateStatus } from "react-native";
+import { AppState, type AppStateStatus } from "react-native";
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import type { Repository } from "../../../data/repository";
 import { detectRegion } from "../native";
+import { answerConsent, currentConsent } from "../../common/ConsentDialog";
 import {
   COUNTRY_PREFERENCE_KEY,
   useRegionPreference,
@@ -194,7 +195,7 @@ test("failed manual persistence keeps the previous choice and reports the error"
     await result.current.selectManualCountry("US");
   });
   expect(result.current.preference).toEqual(DEFAULT_COUNTRY_PREFERENCE);
-  expect(error).toHaveBeenCalledWith(expect.stringContaining("未能保存"));
+  expect(error).toHaveBeenCalledWith(expect.stringContaining("未保存"));
 });
 
 test("a failed later manual write displays the earlier choice that actually committed", async () => {
@@ -224,30 +225,26 @@ test("a failed later manual write displays the earlier choice that actually comm
     mode: "manual",
     countryCode: "US",
   });
-  expect(error).toHaveBeenCalledWith(expect.stringContaining("未能保存"));
+  expect(error).toHaveBeenCalledWith(expect.stringContaining("未保存"));
 });
 
 test("separate consent identifies the IP provider and location processing before querying", async () => {
-  const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
   const { result } = await mount();
   await waitFor(() => expect(result.current.ready).toBe(true));
   let task!: Promise<void>;
   await act(async () => {
     task = result.current.detectWithConsent();
   });
-  expect(alert.mock.calls[0][1]).toContain("ipapi.co");
+  // The full text is folded in the dialog, not shortened.
+  expect(currentConsent()?.details).toContain("ipapi.co");
+  expect(currentConsent()?.points).toContain("ipapi.co 会看到你的 IP");
+  expect(detectRegion).not.toHaveBeenCalled();
+  await act(async () => answerConsent("allow"));
+  expect(currentConsent()?.details).toContain("反向地理编码");
+  expect(currentConsent()?.details).toContain("不启用后台定位");
   expect(detectRegion).not.toHaveBeenCalled();
   await act(async () => {
-    alert.mock.calls[0][2]
-      ?.find((button) => button.text === "允许")
-      ?.onPress?.();
-  });
-  expect(alert.mock.calls[1][1]).toContain("反向地理编码");
-  expect(detectRegion).not.toHaveBeenCalled();
-  await act(async () => {
-    alert.mock.calls[1][2]
-      ?.find((button) => button.text === "跳过")
-      ?.onPress?.();
+    answerConsent("skip");
     await task;
   });
   expect(detectRegion).toHaveBeenCalledWith(
@@ -262,7 +259,6 @@ test("separate consent identifies the IP provider and location processing before
 });
 
 test("dismissed consent starts no lookup and writes no permission", async () => {
-  const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
   const { result } = await mount();
   await waitFor(() => expect(result.current.ready).toBe(true));
   let task!: Promise<void>;
@@ -270,7 +266,7 @@ test("dismissed consent starts no lookup and writes no permission", async () => 
     task = result.current.detectWithConsent();
   });
   await act(async () => {
-    alert.mock.calls[0][3]?.onDismiss?.();
+    answerConsent(currentConsent()!.dismissValue);
     await task;
   });
   expect(detectRegion).not.toHaveBeenCalled();

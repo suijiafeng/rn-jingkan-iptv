@@ -105,7 +105,7 @@ describe("automatic source failover", () => {
     await seconds(30);
     await settle();
     expect(onSelectSource).toHaveBeenCalledTimes(2);
-    expect(currentToast()).toBe("连接超时，3 个来源都试过了");
+    expect(currentToast()).toBe("连接超时");
     expect(ui.getByRole("button", { name: "重试" })).toBeTruthy();
     const mountsBefore = mockMounts.mock.calls.length;
     await fireEvent.press(ui.getByRole("button", { name: "重试" }));
@@ -132,8 +132,28 @@ describe("automatic source failover", () => {
     await settle();
     expect(onSelectSource).not.toHaveBeenCalled();
     expect(mockMounts).toHaveBeenCalledTimes(1);
-    expect(currentToast()).toBe("暂时无法播放");
+    expect(currentToast()).toBe("无法播放");
     expect(ui.getByRole("button", { name: "重试" })).toBeTruthy();
+    await ui.unmount();
+  });
+  test("a failed last check is a mark on the retry chip, not a sentence", async () => {
+    const onSelectSource = jest.fn();
+    const ui = await render(
+      <Harness
+        start={{ ...low, checkStatus: "unreachable" }}
+        onSelectSource={onSelectSource}
+      />,
+    );
+    await settle();
+    await act(() =>
+      mockAttempt?.controller.nativeStatus(mockAttempt.attemptId, "error"),
+    );
+    await settle();
+    expect(currentToast()).toBe("无法播放");
+    expect(
+      ui.getByRole("button", { name: "重试，上次检测不可达" }),
+    ).toBeTruthy();
+    expect(ui.getByTestId("chip-badge")).toBeTruthy();
     await ui.unmount();
   });
   test("a manually chosen source starts the round; the walk wraps to the first", async () => {
@@ -168,7 +188,7 @@ describe("automatic source failover", () => {
     await seconds(30);
     await settle();
     expect(onSelectSource).toHaveBeenCalledTimes(3);
-    expect(currentToast()).toBe("连接超时，3 个来源都试过了");
+    expect(currentToast()).toBe("连接超时");
     await ui.unmount();
   });
   test("offline and a user pause never switch sources", async () => {

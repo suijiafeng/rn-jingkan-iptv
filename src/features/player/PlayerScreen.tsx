@@ -236,9 +236,6 @@ export function PlayerScreen(props: PlayerScreenProps) {
                 <Text accessibilityRole="header" style={theme.heading}>
                   播放来源
                 </Text>
-                <Text numberOfLines={1} style={theme.muted}>
-                  同一频道的不同地址，默认先播排在第一的
-                </Text>
               </View>
               <Pressable
                 style={screenStyles.sheetAction}

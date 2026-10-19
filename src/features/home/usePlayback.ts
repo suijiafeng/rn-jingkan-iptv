@@ -84,7 +84,7 @@ export function usePlayback({
       if (!stillWanted()) return;
       const representative = fresh?.active ? fresh : null;
       if (!representative) {
-        setError("频道已不可用，请重新读取频道后重试");
+        setError("频道已不可用");
         return;
       }
       const alternatives = await repo.listChannelSources(

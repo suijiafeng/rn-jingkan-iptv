@@ -324,16 +324,11 @@ export function ChannelListEmpty(props: EmptyProps) {
                   ? "还没有观看记录"
                   : "没有可用频道"
         }
+        // The button below says what to do; only the star needs a word.
         body={
-          !props.hasSources
-            ? "添加你信任的 M3U、TXT 链接或本地文件。频道、收藏和最近观看保存在这台手机。"
-            : props.filtered
-              ? "试试清空搜索或筛选条件。"
-              : props.tab === "favorites"
-                ? "点击频道旁的星标，将常看的频道收在这里。"
-                : props.tab === "recent"
-                  ? "成功播放过的频道会出现在这里。"
-                  : "可以添加其他节目单，或刷新现有来源。"
+          props.hasSources && !props.filtered && props.tab === "favorites"
+            ? "点频道旁的星标收藏"
+            : undefined
         }
       />
       {!props.hasSources ? (

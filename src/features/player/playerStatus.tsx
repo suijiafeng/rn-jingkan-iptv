@@ -110,19 +110,24 @@ export function CenterChip({
   label,
   icon,
   accessibilityLabel,
+  badge,
   disabled = false,
   onPress,
 }: {
   label: string;
   icon?: React.ReactNode;
   accessibilityLabel?: string;
+  /** A small mark in the corner, read out after the label. */
+  badge?: string;
   disabled?: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityLabel={[accessibilityLabel ?? label, badge]
+        .filter(Boolean)
+        .join("，")}
       accessibilityState={{ disabled }}
       disabled={disabled}
       hitSlop={6}
@@ -135,6 +140,7 @@ export function CenterChip({
     >
       {icon}
       <Text style={statusStyles.chipText}>{label}</Text>
+      {!!badge && <View testID="chip-badge" style={statusStyles.badge} />}
     </Pressable>
   );
 }
@@ -206,27 +212,23 @@ export function useSlowStart(waiting: boolean, attemptKey: unknown) {
 export function playerNotice({
   phase,
   connectingTitle,
-  failedBody,
   pausedBody,
-  unreachable,
   slow,
 }: {
   phase: PlaybackSnapshot["phase"];
   connectingTitle: string | null;
-  failedBody: string;
   pausedBody: string;
-  unreachable: boolean;
   slow: boolean;
 }): string | null {
-  if (phase === "timeout" || phase === "error")
-    return [
-      descriptions[phase].title,
-      failedBody,
-      unreachable ? "上次检测也打不开" : "",
-    ]
-      .filter(Boolean)
-      .join("，");
-  if (phase === "offline" || phase === "ended" || phase === "blocked")
+  // What happened, nothing more: the retry chip is the one action, and a
+  // failed last check is a mark on that chip, not another sentence.
+  if (
+    phase === "timeout" ||
+    phase === "error" ||
+    phase === "offline" ||
+    phase === "ended" ||
+    phase === "blocked"
+  )
     return descriptions[phase].title;
   if (phase === "paused") return pausedBody || null;
   if (slow) return "加载较慢";
@@ -265,6 +267,15 @@ const statusStyles = StyleSheet.create({
     borderColor: "#F1F5F552",
   },
   chipText: { color: colors.text, fontSize: 13, lineHeight: 20 },
+  badge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.warn,
+  },
   pressed: { opacity: 0.7 },
   disabled: { opacity: 0.4 },
   prompt: { alignItems: "center", gap: 14, paddingHorizontal: 16 },

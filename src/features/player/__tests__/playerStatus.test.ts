@@ -2,22 +2,13 @@ import { playerNotice } from "../playerStatus";
 
 const quiet = {
   connectingTitle: null,
-  failedBody: "",
   pausedBody: "",
-  unreachable: false,
   slow: false,
 };
 
-test("failures name the reason, then the round and the last check", () => {
+test("failures say only what happened", () => {
   expect(playerNotice({ ...quiet, phase: "timeout" })).toBe("连接超时");
-  expect(
-    playerNotice({
-      ...quiet,
-      phase: "error",
-      failedBody: "3 个来源都试过了",
-      unreachable: true,
-    }),
-  ).toBe("暂时无法播放，3 个来源都试过了，上次检测也打不开");
+  expect(playerNotice({ ...quiet, phase: "error" })).toBe("无法播放");
   expect(playerNotice({ ...quiet, phase: "offline" })).toBe("没有网络");
   expect(playerNotice({ ...quiet, phase: "ended" })).toBe("直播已结束");
 });

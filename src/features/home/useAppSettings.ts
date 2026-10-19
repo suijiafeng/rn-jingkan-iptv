@@ -3,6 +3,8 @@ import * as Network from "expo-network";
 import { openRepository, Repository } from "../../data/repository";
 import { ImportIOError } from "../../data/importIO";
 import { confirm } from "../common/confirm";
+import { askConsent } from "../common/ConsentDialog";
+import { ARTWORK_CONSENT, BACKGROUND_CONSENT } from "../common/consents";
 import { isOffline, mightUseMobileData } from "../player/playbackController";
 import type { Tab } from "../channel/ChannelListParts";
 
@@ -92,7 +94,7 @@ export function useAppSettings({
         }
       })
       .catch(() => {
-        if (active) setError("本地资料未能打开。可以重试，不会自动清空数据。");
+        if (active) setError("本地资料未能打开，数据未清空");
       });
     return () => {
       active = false;
@@ -112,7 +114,7 @@ export function useAppSettings({
     if (signal?.aborted) return false;
     if (remoteRef.current) return true;
     if (revokePending) {
-      setError("联网许可撤销尚未保存，请先在设置中重试保存撤销。");
+      setError("请先在设置中重试撤销许可");
       return false;
     }
     const epoch = permissionEpoch.current;
@@ -182,11 +184,7 @@ export function useAppSettings({
     try {
       if (enabled) {
         if (!remoteRef.current || revokePending || artworkRevokePending) return;
-        const accepted = await confirm(
-          "显示频道台标？",
-          "将加载节目单提供的 HTTPS 台标，图片服务器会看到你的访问 IP，可能消耗移动数据。仅用于显示台标，不提供节目封面；缺图或失败时显示频道首字。原生图片请求可能跟随服务端重定向，无法保证后续连接仍是 HTTPS。可随时在设置中关闭。",
-          "允许显示",
-        );
+        const accepted = (await askConsent(ARTWORK_CONSENT)) === "allow";
         if (
           !accepted ||
           epoch !== permissionEpoch.current ||
@@ -207,9 +205,7 @@ export function useAppSettings({
     } catch {
       if (mounted.current)
         setError(
-          enabled
-            ? "台标许可未能保存，请重试"
-            : "台标已关闭，但设置未能保存，重启前请重试关闭",
+          enabled ? "台标许可未能保存，请重试" : "台标关闭未保存，请重试",
         );
     } finally {
       artworkMutation.current = false;
@@ -235,11 +231,7 @@ export function useAppSettings({
   const changeBackgroundPlayback = async (enabled: boolean) => {
     if (!repo || backgroundSaving || enabled === backgroundPlayback) return;
     if (enabled) {
-      const accepted = await confirm(
-        "允许后台播放？",
-        "切换应用或锁屏后仍会继续联网播放，并显示系统媒体控制；这会持续耗电和使用流量。仅在你明确需要时开启。",
-        "允许后台播放",
-      );
+      const accepted = (await askConsent(BACKGROUND_CONSENT)) === "allow";
       if (!accepted || !mounted.current) return;
     }
     setBackgroundSaving(true);

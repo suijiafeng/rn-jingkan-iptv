@@ -2,6 +2,7 @@ import {
   DEFAULT_COUNTRY_PREFERENCE,
   effectiveCountry,
   parseCountryPreference,
+  regionBasis,
   resolveRegion,
   timeZoneCountry,
 } from "../policy";
@@ -133,4 +134,23 @@ test("automatic selection requires source metadata; manual all and unmarked alwa
       ["CN"],
     ),
   ).toBe("US");
+});
+
+test("the region basis says what the country rests on, in one short line", () => {
+  const auto = DEFAULT_COUNTRY_PREFERENCE;
+  const device = resolveRegion(china);
+  expect(regionBasis(auto, device, "CN")).toBe("依据：手机地区与时区设置");
+  expect(regionBasis(auto, device, null)).toBe(
+    "识别为中国大陆，来源中无此标注",
+  );
+  expect(regionBasis({ ...auto, mode: "manual" }, device, "US")).toBe(
+    "手动选择",
+  );
+  for (const result of [
+    device,
+    resolveRegion(china, "US"),
+    resolveRegion(china, "CN", "CN"),
+    resolveRegion({ region: null, language: null, timeZone: null }),
+  ])
+    expect(result.message.length).toBeLessThanOrEqual(16);
 });

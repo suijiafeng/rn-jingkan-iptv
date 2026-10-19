@@ -119,7 +119,3 @@ export function advanceRound(
 /** Status line while an automatic switch connects; never names the address. */
 export const switchingTitle = (position: { index: number; total: number }) =>
   `来源 ${position.index}/${position.total} 连接中`;
-
-/** Extra body line once a round has tried every address without a picture. */
-export const exhaustedBody = (total: number) =>
-  total > 1 ? `${total} 个来源都试过了` : "";

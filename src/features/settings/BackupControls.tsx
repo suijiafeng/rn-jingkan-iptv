@@ -28,9 +28,7 @@ export function BackupControls({
       await task();
     } catch (error) {
       setMessage(
-        error instanceof BackupError
-          ? error.message
-          : "操作未完成，请检查文件权限和存储空间后重试。",
+        error instanceof BackupError ? error.message : "操作未完成，请重试",
       );
     } finally {
       running.current = false;
@@ -42,7 +40,7 @@ export function BackupControls({
       if (
         !(await confirm(
           "导出本机备份？",
-          "备份是未加密的 JSON，包含节目源完整地址、令牌、本地节目单、收藏和播放偏好。请保存在自己的安全目录，不要公开分享。观看记录和所有联网许可不导出。",
+          "备份未加密，含节目源完整地址与令牌、本地节目单、收藏和播放偏好，请勿分享。观看记录与各项许可不导出。",
           "选择保存目录",
         ))
       )
@@ -66,7 +64,7 @@ export function BackupControls({
         }
         throw error;
       }
-      setMessage("备份已保存。请妥善保管此文件。");
+      setMessage("备份已保存");
     });
   const restoreFile = () =>
     run(async () => {
@@ -80,7 +78,7 @@ export function BackupControls({
         file = new File(asset.uri);
       try {
         if (!file.exists || file.size > MAX_BACKUP_BYTES)
-          throw new BackupError("文件不可访问或超过 32 MiB 上限。");
+          throw new BackupError("文件无法读取或超过 32 MiB");
         const text = new TextDecoder("utf-8", { fatal: true }).decode(
           await file.bytes(),
         );
@@ -88,13 +86,13 @@ export function BackupControls({
         if (
           !(await confirm(
             "用备份替换本机资料？",
-            `备份包含 ${backup.sources.length} 份节目单、${backup.channels.length} 条播放地址、${backup.favorites.length} 个收藏。当前节目单、收藏、观看记录和设置将被替换。建议先导出当前资料；恢复后需重新允许联网、台标及地区识别。`,
+            `将用 ${backup.sources.length} 份节目单、${backup.favorites.length} 个收藏替换本机全部资料（含观看记录与设置），建议先导出。恢复后需重新允许联网、台标与地区识别。`,
             "替换并恢复",
           ))
         )
           return;
         await onRestore(text);
-        setMessage("恢复完成。联网许可已重置，可先离线查看资料。");
+        setMessage("已恢复，联网许可已重置");
       } finally {
         try {
           if (file.exists) file.delete();

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, AppState } from "react-native";
+import { AppState } from "react-native";
+import { askConsent } from "../common/ConsentDialog";
+import { IP_CONSENT, LOCATION_CONSENT } from "../common/consents";
 import type { Repository } from "../../data/repository";
 import { isCountryCode } from "../../domain/channelFacets";
 import { detectRegion, readDeviceEvidence } from "./native";
@@ -12,26 +14,9 @@ import {
   type RegionResult,
 } from "./policy";
 
-export { effectiveCountry } from "./policy";
+export { effectiveCountry, regionBasis } from "./policy";
 export type { CountryPreference, RegionResult } from "./policy";
 export const COUNTRY_PREFERENCE_KEY = "countryPreference";
-
-type ConsentChoice = "allow" | "skip" | "cancel";
-
-function consent(title: string, message: string): Promise<ConsentChoice> {
-  return new Promise((resolve) =>
-    Alert.alert(
-      title,
-      message,
-      [
-        { text: "取消", style: "cancel", onPress: () => resolve("cancel") },
-        { text: "跳过", onPress: () => resolve("skip") },
-        { text: "允许", onPress: () => resolve("allow") },
-      ],
-      { cancelable: true, onDismiss: () => resolve("cancel") },
-    ),
-  );
-}
 
 export function useRegionPreference(
   repo: Repository | null,
@@ -111,9 +96,7 @@ export function useRegionPreference(
         setResult(detected);
       } catch {
         if (generation.current === operation && !request.signal.aborted)
-          onErrorRef.current(
-            "国家/地区识别或保存未完成，当前选择保持不变，请稍后重试。",
-          );
+          onErrorRef.current("地区识别未完成，请重试");
       } finally {
         if (generation.current === operation) setBusy(false);
         if (controller.current === request) controller.current = null;
@@ -168,7 +151,7 @@ export function useRegionPreference(
           if (initialization.current !== initializationId) return;
           setReady(true);
           readyRef.current = true;
-          onErrorRef.current("无法读取国家/地区偏好，请重试；当前显示全部。");
+          onErrorRef.current("地区偏好读取失败，显示全部");
         }
       }
     })();
@@ -192,7 +175,7 @@ export function useRegionPreference(
       cancel();
       if (!ready || !repo) return;
       if (value !== null && value !== "" && !isCountryCode(value)) {
-        onErrorRef.current("无效的国家/地区选择。");
+        onErrorRef.current("无效的地区选择");
         return;
       }
       const operation = generation.current;
@@ -221,9 +204,7 @@ export function useRegionPreference(
               ? resolveRegion(readDeviceEvidence())
               : { ...NO_REGION },
           );
-          onErrorRef.current(
-            "国家/地区选择未能保存，当前选择保持不变，请重试。",
-          );
+          onErrorRef.current("地区选择未保存，请重试");
         }
       }
     },
@@ -233,7 +214,7 @@ export function useRegionPreference(
   const detectWithConsent = useCallback(async () => {
     if (!ready || !repo || AppState.currentState !== "active") return;
     if (revokePendingRef.current) {
-      onErrorRef.current("请先重试保存国家/地区识别授权的撤销。");
+      onErrorRef.current("请先重试撤销识别授权");
       return;
     }
     cancel();
@@ -245,17 +226,11 @@ export function useRegionPreference(
       const previous = preferenceRef.current;
       const ipChoice = previous.ipAllowed
         ? "allow"
-        : await consent(
-            "使用访问 IP 辅助识别？",
-            "应用将访问 ipapi.co 的 HTTPS 国家/地区查询接口。该服务商会看到本次访问 IP，并用它返回国家/地区；应用不保存 IP。此许可只用于国家/地区识别，与节目来源联网许可独立。可跳过并使用手机设置或可选定位。",
-          );
+        : await askConsent(IP_CONSENT);
       if (!isCurrent() || ipChoice === "cancel") return;
       const locationChoice = previous.locationAllowed
         ? "allow"
-        : await consent(
-            "使用手机位置辅助识别？",
-            "仅在前台获取一次大致位置，并使用手机系统的反向地理编码服务查询国家/地区；系统服务可能联网处理位置。坐标不会发给 IP 查询服务，也不会保存。接下来可在系统提示中选择大致位置或拒绝。不启用后台定位，可跳过。",
-          );
+        : await askConsent(LOCATION_CONSENT);
       if (!isCurrent() || locationChoice === "cancel") return;
       const next: CountryPreference = {
         mode: "auto",
@@ -269,8 +244,7 @@ export function useRegionPreference(
       setResult(resolveRegion(readDeviceEvidence()));
       await runDetection(next, operation, locationChoice === "allow");
     } catch {
-      if (isCurrent())
-        onErrorRef.current("识别授权未能保存，未开始新的识别，请重试。");
+      if (isCurrent()) onErrorRef.current("识别授权未保存，请重试");
     } finally {
       if (generation.current === operation) setBusy(false);
     }
@@ -302,7 +276,7 @@ export function useRegionPreference(
       }
     } catch {
       if (generation.current === operation)
-        onErrorRef.current("本次识别已停止，但撤销授权未能保存，请重试。");
+        onErrorRef.current("识别已停止，撤销未保存");
     }
   }, [assignPreference, cancel, ready, repo, save]);
 

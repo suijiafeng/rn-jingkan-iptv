@@ -23,7 +23,7 @@ export interface FacetFiltersProps {
   options: ChannelFacetOptions;
   selected: ChannelFacetSelection;
   onChange: (selection: ChannelFacetSelection, kind?: FacetKind) => void;
-  /** Kept for callers; status text is no longer shown inside the menu. */
+  /** What the country rests on: one small line atop the country menu. */
   countryHint?: string;
   /** Content categories as one-tap tabs instead of a third menu. */
   contentAsTabs?: boolean;
@@ -45,6 +45,7 @@ export function FacetFilters({
   options,
   selected,
   onChange,
+  countryHint,
   contentAsTabs = false,
   tabsOnly = false,
   testID = "facet-filters",
@@ -175,6 +176,15 @@ export function FacetFilters({
                   showsVerticalScrollIndicator
                   contentContainerStyle={styles.menuContent}
                 >
+                  {open === "country" && !!countryHint && (
+                    <Text
+                      testID={`${testID}-country-hint`}
+                      numberOfLines={2}
+                      style={styles.hint}
+                    >
+                      {countryHint}
+                    </Text>
+                  )}
                   {[null, ...available].map((value, index) => {
                     const label = facetLabel(open, value);
                     const isSelected = selected[open] === value;
@@ -265,6 +275,12 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   menuContent: { padding: 8, gap: 4 },
+  hint: {
+    ...type.caption,
+    color: colors.muted,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
   option: {
     minHeight: sizes.button,
     paddingHorizontal: 12,

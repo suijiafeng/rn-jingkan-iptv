@@ -240,7 +240,7 @@ export function useChannelListData({
     void load()
       .catch(() => {
         if (!current()) return;
-        setListError("读取资料失败，你的频道与收藏仍保存在本机。");
+        setListError("读取失败，资料仍在本机");
         setLoadedRequest(loadRequest);
       })
       .then((rows) => {

@@ -123,9 +123,7 @@ export function useSourceImport({
       }
     } catch {
       if (task === generation.current)
-        setFormError(
-          `文件读取失败或超过 ${MAX_MIB} MiB，请选择 UTF-8 或 GBK 编码的 M3U、TXT 节目单。`,
-        );
+        setFormError(`文件无法读取或超过 ${MAX_MIB} MiB`);
     } finally {
       if (task === generation.current) {
         setBusy(false);
@@ -208,10 +206,7 @@ export function useSourceImport({
         try {
           await reconcilePlayingSources();
         } catch {
-          if (mounted.current)
-            setError(
-              "节目单已保存，但播放器来源列表更新失败，请重新打开频道。",
-            );
+          if (mounted.current) setError("已保存，请重新打开频道");
         }
       } else {
         const name =
@@ -235,7 +230,7 @@ export function useSourceImport({
       onImported();
       changed();
     } catch {
-      setFormError("保存失败，旧数据未改变。请重试；刷新冲突时请重新刷新。");
+      setFormError("保存失败，原数据未变");
     } finally {
       saving.current = false;
       setBusy(false);
@@ -263,7 +258,7 @@ export function useSourceImport({
       });
       setFormError("");
     } catch {
-      setError("这个来源正在刷新或已经被删除");
+      setError("来源正在刷新或已删除");
       if (openedFromManagement) {
         fromManagement.current = false;
         onReturnToManagement();
