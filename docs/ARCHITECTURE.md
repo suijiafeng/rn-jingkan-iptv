@@ -8,8 +8,8 @@ Expo Router 仅提供薄入口，src/App.tsx 只组合首页；状态与流程�
 - data/repository：SQLite 迁移，独占事务连接，显式启用 foreign_keys；保存文件源的文本到私有数据库；频道批量写入。可靠同频道在列表查询中折叠为一个有效的低清代表项，真实地址仍逐条保存并可供检测和播放切换。收藏与最近按 groupKey 存储，最近另记最后实际播放的 channelId；列表查询用 JOIN 读取组状态，不再为每行执行收藏／最近关联子查询。刷新 generation + revision 双重检查，删除不会被旧请求复活。
 - features/player/playbackController：纯 TS 播放意图与会话控制；网络检查、移动数据确认、初始超时、后台暂停、手动重试。
 - features/player/streamFormat：按后缀判定 hls/dash；后缀不明时在尝试内做一次 Range 0-1023、最多 1 KiB、8 秒的格式探测，失败回落 auto。
-- features/player/NativeAttempt：每次尝试新建空 expo-video 实例，订阅事件后才附加来源（先经 streamFormat 判定 contentType）。播放、暂停和时间轴使用 expo-video 原生控制；原生暂停保留当前实例，退出、换台、错误重试或后台暂停才释放，旧事件受 attempt guard 限制。
-- features/player/PlayerScreen：视频画面全宽无圆角，原生媒体控制位于画面内；应用层只叠加换台、收藏、频道列表和播放来源。频道面板、方向策略恢复和安全区仍由页面负责。
+- features/player/NativeAttempt：每次尝试新建空 expo-video 实例，订阅事件后才附加来源（先经 streamFormat 判定 contentType）。关闭 expo-video 原生控制（nativeControls=false），播放、暂停和时间轴由应用叠加控件驱动；手动暂停保留当前实例，退出、换台、错误重试或后台暂停才释放，旧事件受 attempt guard 限制。
+- features/player/PlayerScreen：视频画面全宽无圆角；ChannelSession / FullscreenBars 绘制唯一一层叠加控件（中央固定三键、竖屏角落按钮、全屏顶栏与底栏、来源弹出列表），布局见 DEV_SPEC“全屏与旋转”。频道面板、方向策略恢复和安全区仍由页面负责。
 - App：计费网络规则与播放共用 mightUseMobileData；一次确认保持到连回 Wi-Fi。收藏切换只局部更新列表；三个列表标签各自恢复滚动位置。
 
 ## 网络许可
