@@ -23,10 +23,6 @@ test("the sheet shows the page's result in its order; the visible playable rows 
     sheet: sheet([outside, first, inactive]),
   });
   const ui = await render(<PlayerScreen {...options} />);
-  expect(
-    ui.getByRole("button", { name: "下一台" }).props.accessibilityState
-      .disabled,
-  ).toBe(true);
   expect(ui.getByTestId("player-channel-list").props).toMatchObject({
     initialNumToRender: 12,
     maxToRenderPerBatch: 16,

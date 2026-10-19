@@ -1,17 +1,17 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors } from "../../theme";
-import { LiveBadge, MediaStatus, OverlayButton } from "./overlayWidgets";
+import { MediaStatus, OverlayButton } from "./overlayWidgets";
 import { ChevronLeftIcon, ExitFullscreenIcon, MenuIcon } from "./playerIcons";
 import type { SessionProps } from "./ChannelSession";
 import type { SessionView } from "./useChannelSession";
 
 /**
  * Fullscreen only. Top bar: back, title, then the source chip first in the
- * right-hand group (above the popover it opens) and favorite. Bottom
- * bar: the timeline for catch-up streams, the live badge, then volume first
- * in the right-hand group, leave landscape and the channel list. Zapping
- * lives in the centre cluster the session draws for both layouts.
+ * right-hand group (above the popover it opens) and favorite. Bottom bar:
+ * the timeline or live badge, then volume first in the right-hand group,
+ * audio only, leave landscape and the channel list. Play/pause sits in the
+ * middle of the picture; zapping is the vertical swipe.
  */
 export function FullscreenBars({
   view,
@@ -23,12 +23,9 @@ export function FullscreenBars({
   const {
     insets,
     media,
-    mediaInfo,
     setScrubbing,
     controlsVisible,
-    index,
     title,
-    description,
     sourceButton,
     favoriteButton,
   } = view;
@@ -60,16 +57,6 @@ export function FullscreenBars({
           <Text style={styles.title} numberOfLines={1}>
             {title}
           </Text>
-          <Text style={styles.subtitle} numberOfLines={1}>
-            {[
-              index >= 0
-                ? `第 ${index + 1} / ${props.channels.length} 台`
-                : null,
-              description.title,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </Text>
         </View>
         {/* Source leads the right-hand group. */}
         {props.fullscreen && sourceButton}
@@ -87,12 +74,10 @@ export function FullscreenBars({
             },
           ]}
         >
-          {mediaInfo.seekable && (
-            <MediaStatus media={media} onScrubbingChange={setScrubbing} />
-          )}
           <View style={styles.row}>
-            {!mediaInfo.seekable && mediaInfo.isLive && <LiveBadge />}
-            <View style={styles.flex} />
+            <View style={styles.flex}>
+              <MediaStatus media={media} onScrubbingChange={setScrubbing} />
+            </View>
             {/* Volume leads the right-hand group. */}
             {view.muteButton}
             <OverlayButton
@@ -147,5 +132,4 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontWeight: "600",
   },
-  subtitle: { color: "#FFFFFFB3", fontSize: 11, lineHeight: 16 },
 });

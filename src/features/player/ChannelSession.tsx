@@ -10,13 +10,7 @@ import { qualityName } from "../../domain/channelSources";
 import { channelTitle, displayGroups } from "../../domain/channelLabels";
 import { NativeAttempt } from "./NativeAttempt";
 import { FullscreenBars } from "./FullscreenBars";
-import {
-  LoadingTitle,
-  MediaStatus,
-  OverlayButton,
-  Shade,
-  WaitProgress,
-} from "./overlayWidgets";
+import { MediaStatus, OverlayButton, Shade } from "./overlayWidgets";
 import { ChevronLeftIcon, FullscreenIcon } from "./playerIcons";
 import { SourceList } from "./SourceList";
 import {
@@ -71,32 +65,19 @@ export function ChannelSession(props: SessionProps) {
     setControlsShown,
     controlsVisible,
     waiting,
-    starting,
-    retained,
     primaryLabel,
     primaryAction,
     title,
     osd,
     zap,
     description,
-    pausedBody,
     primaryIcon,
     primaryDisabled,
-    zapCluster,
+    centerStatus,
+    retained,
     sourceButton,
     favoriteButton,
   } = view;
-  // Title, then one line of description: the state's body plus any hint.
-  const failed = state.phase === "timeout" || state.phase === "error";
-  const noticeLine = [
-    state.phase === "paused" ? pausedBody : description.body,
-    failed ? props.failover.failedBody : "",
-    failed && props.channel.checkStatus === "unreachable"
-      ? "上次检测也打不开"
-      : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
   return (
     <View
       style={
@@ -147,12 +128,6 @@ export function ChannelSession(props: SessionProps) {
             testID="audio-stage"
           >
             <Text style={sessionStyles.audioSymbol}>♫</Text>
-            {!props.mini && (
-              <Text style={sessionStyles.infoSubtitle}>
-                听音频 ·{" "}
-                {state.phase === "playing" ? "正在收听" : description.title}
-              </Text>
-            )}
           </View>
         )}
         {/* The whole picture: tap toggles the overlay; in fullscreen a
@@ -215,11 +190,19 @@ export function ChannelSession(props: SessionProps) {
           />
         )}
         {props.fullscreen && !controlsVisible && state.phase === "playing" && (
+          // A quiet up/down cue in place of the words "上下滑动换台".
           <View
             style={[sessionStyles.swipeHint, { right: insets.right + 14 }]}
             pointerEvents="none"
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
           >
-            <Text style={sessionStyles.swipeHintText}>上下滑动换台</Text>
+            <View style={sessionStyles.swipeUp}>
+              <ChevronLeftIcon size={18} />
+            </View>
+            <View style={sessionStyles.swipeDown}>
+              <ChevronLeftIcon size={18} />
+            </View>
           </View>
         )}
         {props.fullscreen && osd && !props.sheetOpen && (
@@ -243,58 +226,29 @@ export function ChannelSession(props: SessionProps) {
         {!props.mini &&
           state.phase !== "playing" &&
           !(state.phase === "paused" && state.attemptId !== null) && (
-            // box-none: swipes on the dimmed area still reach the gesture layer.
+            // The picture dims and shows only the dots or the one action;
+            // the reason is a global toast. box-none: swipes on the dimmed
+            // area still reach the gesture layer.
             <View
               style={[
                 sessionStyles.videoNotice,
                 waiting && sessionStyles.videoNoticeSoft,
               ]}
               pointerEvents="box-none"
-              accessibilityLiveRegion="polite"
             >
-              {/* Text sits above the centred cluster and grows upwards, so the
-                  buttons stay put whatever the message says. */}
-              <View pointerEvents="none" style={sessionStyles.noticeText}>
-                {waiting ? (
-                  <LoadingTitle
-                    title={description.title}
-                    style={sessionStyles.noticeTitle}
-                  />
-                ) : (
-                  !(state.phase === "paused" && !pausedBody) && (
-                    <Text style={sessionStyles.noticeTitle}>
-                      {description.title}
-                    </Text>
-                  )
-                )}
-                {waiting ? (
-                  <WaitProgress key={state.attemptId ?? "checking"} />
-                ) : (
-                  !!noticeLine && (
-                    <Text style={sessionStyles.noticeBody} numberOfLines={1}>
-                      {noticeLine}
-                    </Text>
-                  )
-                )}
-              </View>
-              {(state.attemptId === null || starting) && zapCluster(true)}
-              {state.phase === "cellular" && (
-                <Pressable
-                  style={[sessionStyles.quietLink, sessionStyles.belowCluster]}
-                  accessibilityRole="button"
-                  accessibilityLabel="暂不播放"
-                  onPress={() => controller.pause("cellular-declined")}
-                >
-                  <Text style={sessionStyles.quietLinkText}>暂不播放</Text>
-                </Pressable>
-              )}
+              {centerStatus}
             </View>
           )}
+        {/* Playing (or paused in place): play/pause in the middle of the
+            picture, shown and hidden with the rest of the controls. */}
         {!props.mini &&
           controlsVisible &&
           !props.sheetOpen &&
-          (state.phase === "playing" || retained) &&
-          zapCluster(true)}
+          (state.phase === "playing" || retained) && (
+            <View style={sessionStyles.centerLayer} pointerEvents="box-none">
+              {centerStatus}
+            </View>
+          )}
         {props.mini && (
           <Pressable
             style={StyleSheet.absoluteFill}
@@ -305,20 +259,12 @@ export function ChannelSession(props: SessionProps) {
         )}
         {!props.fullscreen && !props.mini && controlsVisible && (
           <>
-            <View style={sessionStyles.portraitMedia} pointerEvents="box-none">
-              <MediaStatus media={media} onScrubbingChange={setScrubbing} />
-            </View>
-            <View style={sessionStyles.portraitTopLeft}>
-              <OverlayButton
-                label="关闭播放器"
-                icon={<ChevronLeftIcon size={20} />}
-                variant="quiet"
-                accessibilityLabel="停止播放并关闭播放器"
-                onPress={props.onClose}
-              />
-            </View>
-            <View style={sessionStyles.portraitBottomRight}>
-              {/* Volume leads the right-hand group. */}
+            {/* One bottom row: live or catch-up status, then volume and
+                fullscreen. Play/pause sits in the middle of the picture. */}
+            <View style={sessionStyles.portraitBottom} pointerEvents="box-none">
+              <View style={sessionStyles.flex} pointerEvents="box-none">
+                <MediaStatus media={media} onScrubbingChange={setScrubbing} />
+              </View>
               {view.muteButton}
               {!props.audioOnly && (
                 <OverlayButton
@@ -329,6 +275,15 @@ export function ChannelSession(props: SessionProps) {
                   onPress={props.onToggleFullscreen}
                 />
               )}
+            </View>
+            <View style={sessionStyles.portraitTopLeft}>
+              <OverlayButton
+                label="关闭播放器"
+                icon={<ChevronLeftIcon size={20} />}
+                variant="quiet"
+                accessibilityLabel="停止播放并关闭播放器"
+                onPress={props.onClose}
+              />
             </View>
             <View style={sessionStyles.portraitTopRight}>
               {!props.audioOnly && view.pictureInPictureButton}

@@ -4,6 +4,7 @@
  */
 import React from "react";
 import { AppState } from "react-native";
+import { hideToast } from "../../../../components/Toast";
 import type { ChannelSheetProps, PlayerScreenProps } from "../../PlayerScreen";
 import type { HeaderProps } from "../../../channel/ChannelListParts";
 import type { Channel } from "../../../../domain/types";
@@ -163,6 +164,7 @@ export const props = (
 });
 beforeEach(() => {
   jest.clearAllMocks();
+  hideToast();
   Object.assign(mockNative, {
     isLive: true,
     duration: 30,

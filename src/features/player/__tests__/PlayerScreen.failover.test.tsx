@@ -9,6 +9,7 @@ import {
   props,
 } from "./support/playerTestKit";
 import { PlayerScreen } from "../PlayerScreen";
+import { currentToast } from "../../../components/Toast";
 import type { Channel } from "../../../domain/types";
 
 describe("automatic source failover", () => {
@@ -79,7 +80,7 @@ describe("automatic source failover", () => {
     expect(onSelectSource).toHaveBeenCalledWith(mid);
     expect(mockUnmounts).toHaveBeenCalledWith(low.streamUrl);
     expect(mockMounts).toHaveBeenLastCalledWith(mid.streamUrl);
-    expect(ui.getByText("来源 2/3 连接中")).toBeTruthy();
+    expect(currentToast()).toBe("来源 2/3 连接中");
     expect(ui.queryByText(/example\.test/)).toBeNull();
     await ui.unmount();
   });
@@ -100,19 +101,18 @@ describe("automatic source failover", () => {
     );
     await settle();
     expect(onSelectSource).toHaveBeenLastCalledWith(high);
-    expect(ui.getByText("来源 3/3 连接中")).toBeTruthy();
+    expect(currentToast()).toBe("来源 3/3 连接中");
     await seconds(30);
     await settle();
     expect(onSelectSource).toHaveBeenCalledTimes(2);
-    expect(ui.getByText("连接超时")).toBeTruthy();
-    expect(ui.getByText(/3 个来源都试过了/)).toBeTruthy();
+    expect(currentToast()).toBe("连接超时，3 个来源都试过了");
     expect(ui.getByRole("button", { name: "重试" })).toBeTruthy();
     const mountsBefore = mockMounts.mock.calls.length;
     await fireEvent.press(ui.getByRole("button", { name: "重试" }));
     await settle();
     expect(mockMounts.mock.calls.length).toBe(mountsBefore + 1);
     expect(mockMounts).toHaveBeenLastCalledWith(high.streamUrl);
-    expect(ui.getByText("正在连接")).toBeTruthy();
+    expect(ui.getByTestId("loading-dots")).toBeTruthy();
     // The retry opened a new round: the next failure walks on from here.
     await seconds(30);
     await settle();
@@ -132,8 +132,7 @@ describe("automatic source failover", () => {
     await settle();
     expect(onSelectSource).not.toHaveBeenCalled();
     expect(mockMounts).toHaveBeenCalledTimes(1);
-    expect(ui.getByText("暂时无法播放")).toBeTruthy();
-    expect(ui.queryByText(/个来源都试过了/)).toBeNull();
+    expect(currentToast()).toBe("暂时无法播放");
     expect(ui.getByRole("button", { name: "重试" })).toBeTruthy();
     await ui.unmount();
   });
@@ -156,19 +155,20 @@ describe("automatic source failover", () => {
     );
     await settle();
     expect(onSelectSource).toHaveBeenLastCalledWith(high);
-    // A manual choice is not an automatic switch: plain copy while connecting.
-    expect(ui.getByText("正在连接")).toBeTruthy();
+    // A manual choice is not an automatic switch: no source notice.
+    expect(ui.getByTestId("loading-dots")).toBeTruthy();
+    expect(currentToast()).toBeNull();
     await seconds(30);
     await settle();
     expect(onSelectSource).toHaveBeenLastCalledWith(low);
-    expect(ui.getByText("来源 1/3 连接中")).toBeTruthy();
+    expect(currentToast()).toBe("来源 1/3 连接中");
     await seconds(30);
     await settle();
     expect(onSelectSource).toHaveBeenLastCalledWith(mid);
     await seconds(30);
     await settle();
     expect(onSelectSource).toHaveBeenCalledTimes(3);
-    expect(ui.getByText("连接超时")).toBeTruthy();
+    expect(currentToast()).toBe("连接超时，3 个来源都试过了");
     await ui.unmount();
   });
   test("offline and a user pause never switch sources", async () => {
@@ -178,7 +178,10 @@ describe("automatic source failover", () => {
       <Harness start={low} onSelectSource={onSelectSource} />,
     );
     await settle();
-    await fireEvent.press(ui.getByRole("button", { name: "取消" }));
+    await act(() =>
+      mockAttempt?.controller.nativeStarted(mockAttempt.attemptId),
+    );
+    await fireEvent.press(ui.getByRole("button", { name: "暂停" }));
     await fireEvent.press(ui.getByRole("button", { name: "播放" }));
     await settle();
     await act(async () => {
@@ -186,7 +189,7 @@ describe("automatic source failover", () => {
         listener({ type: "NONE", isConnected: false }),
       );
     });
-    expect(ui.getByText("没有网络")).toBeTruthy();
+    expect(currentToast()).toBe("没有网络");
     expect(onSelectSource).not.toHaveBeenCalled();
     await ui.unmount();
   });

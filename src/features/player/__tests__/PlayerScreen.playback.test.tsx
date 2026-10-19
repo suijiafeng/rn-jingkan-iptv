@@ -13,6 +13,7 @@ import {
   second,
 } from "./support/playerTestKit";
 import { PlayerScreen } from "../PlayerScreen";
+import { currentToast } from "../../../components/Toast";
 import type { Channel } from "../../../domain/types";
 
 test("remote consent prevents all loading, including HTTPS, and revocation tears down", async () => {
@@ -76,7 +77,7 @@ test("the video is edge-to-edge and alternative sources can be selected", async 
   expect(ui.queryByTestId("source-sheet")).toBeNull();
 });
 
-test("mobile transition unmounts before confirmation and decline stays stopped", async () => {
+test("mobile transition unmounts before confirmation and never resumes on its own", async () => {
   const ui = await render(<PlayerScreen {...props()} />);
   expect(mockMounts).toHaveBeenCalledTimes(1);
   await act(() => {
@@ -86,14 +87,20 @@ test("mobile transition unmounts before confirmation and decline stays stopped",
   });
   expect(mockUnmounts).toHaveBeenCalledTimes(1);
   expect(ui.queryByTestId("mock-native-attempt")).toBeNull();
-  await fireEvent.press(ui.getByRole("button", { name: "暂不播放" }));
+  expect(currentToast()).toBe("正在用移动数据");
   await act(() => {
     mockNetworkListeners.forEach((listener) =>
       listener({ type: "WIFI", isConnected: true }),
     );
   });
   expect(mockMounts).toHaveBeenCalledTimes(1);
-  expect(ui.getByRole("button", { name: "播放" })).toBeTruthy();
+  await fireEvent.press(
+    ui.getByRole("button", { name: "使用移动数据继续播放" }),
+  );
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(mockMounts).toHaveBeenCalledTimes(2);
   await ui.unmount();
 });
 
@@ -169,22 +176,28 @@ test("fullscreen media stays edge-to-edge while controls and sheets respect disp
   await ui.unmount();
 });
 
-test("previous/next honor queue boundaries and switching releases prior channel", async () => {
+test("swiping honours queue boundaries and switching releases the prior channel", async () => {
   const options = props();
   const ui = await render(<PlayerScreen {...options} />);
-  expect(
-    ui.getByRole("button", { name: "上一台" }).props.accessibilityState
-      .disabled,
-  ).toBe(true);
-  await fireEvent.press(ui.getByRole("button", { name: "下一台" }));
+  await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
+  const swipe = async (dy: number) => {
+    const layer = ui.getByTestId("fullscreen-gesture-layer");
+    await act(() => {
+      layer.props.onResponderGrant({ nativeEvent: { pageX: 100, pageY: 300 } });
+      layer.props.onResponderRelease({
+        nativeEvent: { pageX: 100, pageY: 300 + dy },
+      });
+    });
+  };
+  await swipe(120);
+  expect(options.onSelect).not.toHaveBeenCalled();
+  await swipe(-120);
   expect(options.onSelect).toHaveBeenCalledWith(second);
   await ui.rerender(<PlayerScreen {...options} channel={second} />);
   expect(mockUnmounts).toHaveBeenCalledWith(first.streamUrl);
   expect(mockMounts).toHaveBeenLastCalledWith(second.streamUrl);
-  expect(
-    ui.getByRole("button", { name: "下一台" }).props.accessibilityState
-      .disabled,
-  ).toBe(true);
+  await swipe(-120);
+  expect(options.onSelect).toHaveBeenCalledTimes(1);
   await ui.unmount();
 });
 

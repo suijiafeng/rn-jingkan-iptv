@@ -1,7 +1,8 @@
 import React from "react";
-import { act, fireEvent, render, within } from "@testing-library/react-native";
+import { act, fireEvent, render } from "@testing-library/react-native";
 import { first, mockMounts, props, second } from "./support/playerTestKit";
 import { PlayerScreen, type PlayerScreenProps } from "../PlayerScreen";
+import { currentToast } from "../../../components/Toast";
 import type { Channel } from "../../../domain/types";
 
 describe("zapping", () => {
@@ -87,22 +88,30 @@ describe("zapping", () => {
     await ui.unmount();
   });
 
-  test("previous/next and swipes skip channels last checked unreachable when enabled", async () => {
+  test("swipes skip channels last checked unreachable when enabled", async () => {
     const dead = { ...second, checkStatus: "unreachable" as const };
     const options = props({
       channel: first,
       channels: [first, dead, third],
       skipUnreachable: true,
     });
-    const ui = await render(<PlayerScreen {...options} />);
-    await fireEvent.press(ui.getByRole("button", { name: "下一台" }));
+    const ui = await fullscreen(options);
+    await swipe(ui, -120);
     expect(options.onSelect).toHaveBeenLastCalledWith(third);
     await ui.unmount();
     const plain = props({ channel: first, channels: [first, dead, third] });
-    const ui2 = await render(<PlayerScreen {...plain} />);
-    await fireEvent.press(ui2.getByRole("button", { name: "下一台" }));
+    const ui2 = await fullscreen(plain);
+    await swipe(ui2, -120);
     expect(plain.onSelect).toHaveBeenLastCalledWith(dead);
     await ui2.unmount();
+  });
+
+  test("the picture has no previous/next buttons in either layout", async () => {
+    const ui = await render(<PlayerScreen {...props()} />);
+    expect(ui.queryByRole("button", { name: /上一台|下一台/ })).toBeNull();
+    await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
+    expect(ui.queryByRole("button", { name: /上一台|下一台/ })).toBeNull();
+    await ui.unmount();
   });
 });
 
@@ -117,32 +126,16 @@ describe("waiting and failure", () => {
       });
   };
 
-  test("connecting shows elapsed seconds; after 15 s a slow hint, with zapping right in the notice", async () => {
-    jest.useFakeTimers();
-    const options = props();
-    const ui = await render(<PlayerScreen {...options} />);
-    await seconds(3);
-    expect(ui.getByText(/已等 3 秒/)).toBeTruthy();
-    await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
-    expect(ui.queryByText(/比平时慢/)).toBeNull();
-    await seconds(12);
-    expect(ui.getByText(/比平时慢/)).toBeTruthy();
-    expect(ui.queryByRole("button", { name: "换下一台" })).toBeNull();
-    await fireEvent.press(
-      within(ui.getByTestId("zap-cluster")).getByRole("button", {
-        name: "下一台",
-      }),
-    );
-    expect(options.onSelect).toHaveBeenLastCalledWith(second);
-    await ui.unmount();
-  });
-  test("portrait loading never duplicates the visible next button", async () => {
+  test("connecting shows breathing dots; after 15 s they slow down and a toast says so", async () => {
     jest.useFakeTimers();
     const ui = await render(<PlayerScreen {...props()} />);
-    await seconds(16);
-    expect(ui.getByText(/比平时慢/)).toBeTruthy();
-    expect(ui.queryByRole("button", { name: "换下一台" })).toBeNull();
-    expect(ui.getByRole("button", { name: "下一台" })).toBeTruthy();
+    await seconds(3);
+    expect(ui.getByLabelText("正在加载")).toBeTruthy();
+    expect(ui.queryByText(/已等/)).toBeNull();
+    expect(currentToast()).toBeNull();
+    await seconds(12);
+    expect(ui.getByLabelText("正在加载，比平时慢")).toBeTruthy();
+    expect(currentToast()).toBe("加载较慢");
     await ui.unmount();
   });
 
@@ -151,7 +144,7 @@ describe("waiting and failure", () => {
     const options = props();
     const ui = await render(<PlayerScreen {...options} />);
     await seconds(30);
-    expect(ui.getByText("连接超时")).toBeTruthy();
+    expect(currentToast()).toBe("连接超时");
     const mountsBefore = mockMounts.mock.calls.length;
     await fireEvent.press(ui.getByRole("button", { name: "重试" }));
     await act(async () => {
@@ -159,9 +152,8 @@ describe("waiting and failure", () => {
     });
     expect(mockMounts.mock.calls.length).toBe(mountsBefore + 1);
     await seconds(30);
-    expect(ui.getByText("连接超时")).toBeTruthy();
-    await fireEvent.press(ui.getByRole("button", { name: "下一台" }));
-    expect(options.onSelect).toHaveBeenLastCalledWith(second);
+    expect(currentToast()).toBe("连接超时");
+    expect(ui.getByRole("button", { name: "重试" })).toBeTruthy();
     await ui.unmount();
   });
 });

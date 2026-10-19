@@ -10,7 +10,6 @@ import {
 } from "react-native";
 import { colors } from "../../theme";
 import { LIVE_EDGE_MARGIN_S, type MediaHandle } from "./mediaHandle";
-import { SLOW_START_SECONDS } from "./playerShared";
 
 /** Dots cycle "", ".", "..", "..." once per DOTS_CYCLE_MS. */
 const DOTS_CYCLE_MS = 1200;
@@ -78,6 +77,7 @@ export function OverlayButton({
   variant = "pill",
   compact = false,
   selected,
+  testID,
 }: {
   label: string;
   /** Drawn in place of the label text; the label still names the button. */
@@ -89,10 +89,12 @@ export function OverlayButton({
   /** Portrait picture: ring keys shrink from 44dp to 40dp. */
   compact?: boolean;
   selected?: boolean;
+  testID?: string;
 }) {
   const round = variant === "quiet" || variant === "ring";
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{
@@ -219,6 +221,25 @@ export function LiveBadge({ catchup = false }: { catchup?: boolean }) {
   );
 }
 
+/**
+ * Behind the live edge the "直播" label becomes this chip: the live dot
+ * turns grey until a tap jumps back to the edge.
+ */
+function BackToLive({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="回到直播"
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => [styles.backToLive, pressed && styles.pressed]}
+    >
+      <View style={[styles.liveDot, styles.liveDotBehind]} />
+      <Text style={styles.backToLiveText}>回到直播</Text>
+    </Pressable>
+  );
+}
+
 export function clock(seconds: number): string {
   const total = Math.max(0, Math.round(seconds));
   const hours = Math.floor(total / 3600);
@@ -265,7 +286,7 @@ export function MediaStatus({
   // Live at the edge says nothing; behind it, how far. On demand: position.
   const label = info.isLive
     ? behindLive
-      ? `落后 ${clock(behind)}`
+      ? `-${clock(behind)}`
       : ""
     : `${clock(shown)} / ${clock(duration)}`;
   const at = (offsetX: number) =>
@@ -318,40 +339,11 @@ export function MediaStatus({
       </View>
       {info.isLive &&
         (behindLive ? (
-          <OverlayButton label="回到直播" onPress={() => media.goLive()} />
+          <BackToLive onPress={() => media.goLive()} />
         ) : (
           <LiveBadge catchup />
         ))}
     </View>
-  );
-}
-
-/**
- * Seconds without a picture, so a dead stream is not a silent 30 s wait.
- * Own component (keyed per attempt) so the 1 s tick re-renders only itself.
- */
-export function WaitProgress() {
-  const [started] = useState(() => Date.now());
-  const [seconds, setSeconds] = useState(0);
-  useEffect(() => {
-    // Chained timeouts aligned to whole seconds since start (no setInterval).
-    const elapsed = Math.floor((Date.now() - started) / 1000);
-    const timer = setTimeout(
-      () => setSeconds(Math.floor((Date.now() - started) / 1000)),
-      (elapsed + 1) * 1000 - (Date.now() - started),
-    );
-    return () => clearTimeout(timer);
-  }, [started, seconds]);
-  const slow = seconds >= SLOW_START_SECONDS;
-  // One number: "已等 12 秒（最多 30 秒）", then "已等 16 秒 · 比平时慢".
-  if (seconds <= 0) return null;
-  const line = slow
-    ? `已等 ${seconds} 秒 · 比平时慢`
-    : `已等 ${seconds} 秒，最多 30 秒`;
-  return (
-    <Text style={styles.noticeBody} numberOfLines={1}>
-      {line}
-    </Text>
   );
 }
 
@@ -369,6 +361,22 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: "#FF6B5E",
   },
+  liveDotBehind: { backgroundColor: colors.muted },
+  backToLive: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    height: 28,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF24",
+  },
+  backToLiveText: {
+    color: colors.text,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "500",
+  },
   liveText: {
     color: colors.text,
     letterSpacing: 0.7,
@@ -376,13 +384,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: "600",
   },
-  noticeBody: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: "center",
-  },
-  noticeText: { gap: 8 },
   loadingTitle: { flexDirection: "row", justifyContent: "center" },
   loadingDots: { width: 22, textAlign: "left" },
   overlayButton: {

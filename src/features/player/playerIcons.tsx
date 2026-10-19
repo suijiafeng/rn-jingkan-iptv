@@ -269,6 +269,90 @@ export function MenuIcon({ size = 20, color = colors.text }: IconProps) {
   );
 }
 
+/** Play: a solid triangle, nudged right so it looks centred. */
+export function PlayIcon({ size = 22, color = colors.text }: IconProps) {
+  return (
+    <View
+      style={[styles.box, { width: size, height: size }]}
+      pointerEvents="none"
+    >
+      <View
+        style={{
+          marginLeft: size * 0.12,
+          borderLeftWidth: size * 0.6,
+          borderTopWidth: size * 0.35,
+          borderBottomWidth: size * 0.35,
+          borderLeftColor: color,
+          borderTopColor: "transparent",
+          borderBottomColor: "transparent",
+        }}
+      />
+    </View>
+  );
+}
+
+/** Pause: two upright bars. */
+export function PauseIcon({ size = 22, color = colors.text }: IconProps) {
+  const bar = {
+    width: size * 0.18,
+    height: size * 0.68,
+    borderRadius: 1.5,
+    backgroundColor: color,
+  };
+  return (
+    <View
+      style={[
+        styles.box,
+        { width: size, height: size, flexDirection: "row", gap: size * 0.18 },
+      ]}
+      pointerEvents="none"
+    >
+      <View style={bar} />
+      <View style={bar} />
+    </View>
+  );
+}
+
+/**
+ * Retry: an open ring (gap at the top right) whose end at twelve o'clock
+ * carries a small arrowhead pointing clockwise.
+ */
+export function RefreshIcon({ size = 16, color = colors.text }: IconProps) {
+  const ring = size * 0.78;
+  const head = size * 0.2;
+  return (
+    <View style={{ width: size, height: size }} pointerEvents="none">
+      <View
+        style={{
+          position: "absolute",
+          left: (size - ring) / 2,
+          top: (size - ring) / 2,
+          width: ring,
+          height: ring,
+          borderRadius: ring / 2,
+          borderWidth: 2,
+          borderColor: color,
+          borderTopColor: "transparent",
+          transform: [{ rotate: "45deg" }],
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          left: size / 2 - head * 0.2,
+          top: (size - ring) / 2 - head * 0.6 + 1,
+          borderLeftWidth: head,
+          borderTopWidth: head * 0.6,
+          borderBottomWidth: head * 0.6,
+          borderLeftColor: color,
+          borderTopColor: "transparent",
+          borderBottomColor: "transparent",
+        }}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   box: { alignItems: "center", justifyContent: "center" },
   corner: { position: "absolute" },

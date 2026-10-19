@@ -12,7 +12,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Network from "expo-network";
@@ -21,8 +20,21 @@ import type { Channel } from "../../domain/types";
 import { qualityName } from "../../domain/channelSources";
 import { channelTitle } from "../../domain/channelLabels";
 import { MediaHandle } from "./mediaHandle";
-import { PictureInPictureIcon, VolumeIcon } from "./playerIcons";
+import {
+  PauseIcon,
+  PictureInPictureIcon,
+  PlayIcon,
+  RefreshIcon,
+  VolumeIcon,
+} from "./playerIcons";
 import { OverlayButton, SourceChip } from "./overlayWidgets";
+import {
+  CenterChip,
+  LoadingDots,
+  playerNotice,
+  usePlayerNotices,
+  useSlowStart,
+} from "./playerStatus";
 import {
   adjacentPlayableIndex,
   PlaybackController,
@@ -258,57 +270,68 @@ export function useChannelSession(props: SessionProps) {
       : state.pauseReason === "interrupted"
         ? "被其他应用打断"
         : "";
-  // One round control for the primary action in every state, so cancel,
-  // retry, pause and resume all look alike: ■ while connecting, ↻ after a
-  // failure, ▶ when paused or stopped, ❚❚ while playing.
+  // Glyph of the primary key: ▶ when paused or stopped, ❚❚ while playing.
+  // It sits in the middle of the picture; loading shows the dots there, and
+  // failures and the mobile-data question put their one action there.
   const showsPlay = retained || !busy;
   const primaryIcon = starting ? "■" : canRetry ? "↻" : showsPlay ? "▶" : "❚❚";
   const primaryDisabled = !props.remoteAllowed;
-  // The one visual focus of the overlay: previous / play-pause / next in a
-  // row, the same in portrait (smaller) and fullscreen. Also shown inside the
-  // status notice, so stopped and paused states keep the same controls.
-  const compactCluster = !props.fullscreen;
-  const zapCluster = (absolute: boolean) => (
-    <View
-      testID="zap-cluster"
-      style={[styles.zapRow, absolute && styles.zapRowAbsolute]}
-      pointerEvents="box-none"
+  const playPauseButton = (
+    <Pressable
+      testID="primary-play-pause"
+      accessibilityRole="button"
+      accessibilityLabel={primaryLabel}
+      accessibilityState={{ disabled: primaryDisabled }}
+      disabled={primaryDisabled}
+      hitSlop={4}
+      onPress={primaryAction}
+      style={({ pressed }) => [
+        styles.centerButton,
+        !props.fullscreen && styles.centerButtonCompact,
+        pressed && styles.pressed,
+        primaryDisabled && styles.disabled,
+      ]}
     >
-      <OverlayButton
-        label="⏮"
-        accessibilityLabel="上一台"
-        variant="ring"
-        compact={compactCluster}
-        disabled={previous === null}
-        onPress={() => {
-          if (previous !== null) props.onSelect(props.channels[previous]);
-        }}
-      />
-      <Pressable
-        testID="center-play-pause"
-        style={({ pressed }) => [
-          styles.centerButton,
-          compactCluster && styles.centerButtonCompact,
-          pressed && styles.pressed,
-          primaryDisabled && styles.overlayButtonDisabled,
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel={primaryLabel}
-        accessibilityState={{ disabled: primaryDisabled }}
-        onPress={primaryAction}
-        disabled={primaryDisabled}
-      >
-        <Text style={styles.centerIcon}>{primaryIcon}</Text>
-      </Pressable>
-      <OverlayButton
-        label="⏭"
-        accessibilityLabel="下一台"
-        variant="ring"
-        compact={compactCluster}
-        disabled={next === null}
-        onPress={selectNext}
-      />
-    </View>
+      {showsPlay ? (
+        <PlayIcon size={props.fullscreen ? 28 : 24} />
+      ) : (
+        <PauseIcon size={props.fullscreen ? 28 : 24} />
+      )}
+    </Pressable>
+  );
+  // Notices (failures, slow start, mobile data...) go to the global toast;
+  // the picture itself only shows the dots or the one action.
+  const slow = useSlowStart(waiting, state.attemptId);
+  usePlayerNotices(
+    playerNotice({
+      phase: state.phase,
+      connectingTitle: props.failover.connectingTitle,
+      failedBody: props.failover.failedBody,
+      pausedBody,
+      unreachable: props.channel.checkStatus === "unreachable",
+      slow,
+    }),
+    state.attemptId,
+  );
+  const centerStatus = waiting ? (
+    <LoadingDots slow={slow} />
+  ) : canRetry ? (
+    <CenterChip
+      label="重试"
+      icon={<RefreshIcon size={15} />}
+      disabled={primaryDisabled}
+      onPress={primaryAction}
+    />
+  ) : state.phase === "cellular" ? (
+    <CenterChip
+      label="继续播放"
+      accessibilityLabel="使用移动数据继续播放"
+      icon={<PlayIcon size={13} />}
+      disabled={primaryDisabled}
+      onPress={primaryAction}
+    />
+  ) : state.phase === "blocked" ? null : (
+    playPauseButton
   );
   // Quality and source of the address that is actually playing; the chip opens
   // the alternatives (a popover in fullscreen, a bottom sheet in portrait).
@@ -403,7 +426,7 @@ export function useChannelSession(props: SessionProps) {
     showsPlay,
     primaryIcon,
     primaryDisabled,
-    zapCluster,
+    centerStatus,
     sourceButton,
     favoriteButton,
     pictureInPictureButton,
@@ -415,31 +438,18 @@ export type SessionView = ReturnType<typeof useChannelSession>;
 
 const styles = StyleSheet.create({
   centerButton: {
-    alignSelf: "center",
     width: 64,
     height: 64,
     borderRadius: 32,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#00000073",
+    backgroundColor: "#04080A73",
     borderWidth: 1,
-    borderColor: "#FFFFFF40",
+    borderColor: "#FFFFFF33",
   },
   centerButtonCompact: { width: 56, height: 56, borderRadius: 28 },
-  zapRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 22,
-  },
-  zapRowAbsolute: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-  },
-  centerIcon: { color: colors.text, fontSize: 24, lineHeight: 30 },
+  pressed: { opacity: 0.7 },
+  disabled: { opacity: 0.4 },
   favoriteHit: {
     width: 40,
     height: 40,
@@ -448,8 +458,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   favoriteSolid: { borderRadius: 12, backgroundColor: colors.raised },
-  overlayButtonDisabled: { opacity: 0.4 },
-  pressed: { opacity: 0.7 },
   star: { color: colors.muted, fontSize: 20, lineHeight: 24 },
   starOn: { color: colors.warn },
 });
