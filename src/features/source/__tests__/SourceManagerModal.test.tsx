@@ -1,7 +1,8 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { Source } from "../../../domain/types";
-import { RenameSourceModal, SourceManagerModal } from "../SourceManagerModal";
+import { RenameSourceModal } from "../RenameSourceModal";
+import { SourceManagerModal } from "../SourceManagerModal";
 
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: jest.requireActual("react-native").View,

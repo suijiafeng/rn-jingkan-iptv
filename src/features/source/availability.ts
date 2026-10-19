@@ -1,45 +1,27 @@
-import { fetch as expoFetch } from "expo/fetch";
+import { checkStream } from "./streamProbe";
 
-export const CHECK_TIMEOUT_MS = 8000;
 export const CHECK_CONCURRENCY = 4;
 
 export interface CheckTarget {
   id: string;
   streamUrl: string;
 }
+/** A running manual sweep, as the source manager shows it. */
+export interface CheckProgress {
+  sourceId: string;
+  done: number;
+  /** Null while the repository is loading the complete, ungrouped target set. */
+  total: number | null;
+}
+export interface CheckSummary {
+  ok: number;
+  unreachable: number;
+  stopped: boolean;
+}
 export interface CheckResult {
   channelId: string;
   streamUrl: string;
   ok: boolean;
-}
-
-/**
- * User-triggered only. One Range 0-1023 request per address: "ok" means the
- * server answered with a success status, not that the stream decodes or plays.
- */
-export async function checkStream(
-  url: string,
-  signal: AbortSignal,
-): Promise<boolean> {
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  signal.addEventListener("abort", abort);
-  if (signal.aborted) abort();
-  const timer = setTimeout(abort, CHECK_TIMEOUT_MS);
-  try {
-    const response = await expoFetch(url, {
-      signal: controller.signal,
-      headers: { Range: "bytes=0-1023" },
-    });
-    void response.body?.cancel().catch(() => {});
-    return response.ok;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
-    signal.removeEventListener("abort", abort);
-    controller.abort();
-  }
 }
 
 /** Bounded-concurrency sweep; stopping returns only the finished results. */

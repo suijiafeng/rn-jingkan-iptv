@@ -13,6 +13,7 @@ import { classifyPlayerError } from "./sourceFailover";
 import { resolveContentType } from "./streamFormat";
 
 interface Props {
+  audioOnly?: boolean;
   muted?: boolean;
   backgroundAllowed?: boolean;
   title?: string;
@@ -23,6 +24,19 @@ interface Props {
   media?: MediaHandle;
 }
 
+// A target, not a guaranteed reserve: live sources may have no future segments
+// beyond the playlist window, so the reachable reserve is often shorter.
+// Size takes precedence over duration, particularly for high bitrate TV streams.
+// expo-video applies minBufferForPlayback to both first start and resume after
+// a stall; 2.5 s avoids the stall/play/stall flapping that 1–2 s causes on
+// jittery networks while keeping channel zaps responsive.
+const playbackBuffer = (audioOnly: boolean) => ({
+  preferredForwardBufferDuration: audioOnly ? 60 : 50,
+  minBufferForPlayback: 2.5,
+  maxBufferBytes: (audioOnly ? 32 : 64) * 1024 * 1024,
+  prioritizeTimeOverSizeThreshold: false,
+});
+
 /** Owns exactly one player for one attempt; never replaces a previous channel. */
 export function NativeAttempt({
   uri,
@@ -32,11 +46,13 @@ export function NativeAttempt({
   backgroundAllowed = false,
   title = "静看",
   muted = false,
+  audioOnly = false,
 }: Props) {
   const [player, setPlayer] = useState<VideoPlayer | null>(null);
   const view = useRef<VideoView>(null);
   const backgroundPolicy = useRef(backgroundAllowed);
   const mutePolicy = useRef(muted);
+  const audioPolicy = useRef(audioOnly);
   const pipActive = useRef(false);
   const exitPictureInPicture = useRef<(() => void) | null>(null);
   const pendingPip = useRef<{
@@ -46,6 +62,17 @@ export function NativeAttempt({
   } | null>(null);
   const alive = useRef(false);
   const currentInstance = useRef<VideoPlayer | null>(null);
+  useEffect(() => {
+    audioPolicy.current = audioOnly;
+    const native = currentInstance.current;
+    if (!native) return;
+    try {
+      native.keepScreenOnWhilePlaying = !audioOnly;
+      native.bufferOptions = playbackBuffer(audioOnly);
+    } catch {
+      controller.nativeStatus(attemptId, "error");
+    }
+  }, [audioOnly, controller, attemptId]);
   useEffect(() => {
     mutePolicy.current = muted;
     if (!currentInstance.current) return;
@@ -57,13 +84,17 @@ export function NativeAttempt({
   }, [muted, controller, attemptId]);
   useEffect(() => {
     backgroundPolicy.current = backgroundAllowed;
-    if (currentInstance.current) {
+    if (!currentInstance.current) return;
+    try {
       currentInstance.current.staysActiveInBackground =
         backgroundAllowed || pipActive.current || !!pendingPip.current;
       currentInstance.current.showNowPlayingNotification =
         backgroundAllowed || pipActive.current || !!pendingPip.current;
+    } catch {
+      controller.nativeStatus(attemptId, "error");
     }
-  }, [backgroundAllowed]);
+  }, [backgroundAllowed, controller, attemptId]);
+
   useEffect(() => {
     alive.current = true;
     let live = true;
@@ -83,7 +114,8 @@ export function NativeAttempt({
       ownedPlayer.staysActiveInBackground = backgroundPolicy.current;
       ownedPlayer.showNowPlayingNotification = backgroundPolicy.current;
       ownedPlayer.allowsExternalPlayback = false;
-      ownedPlayer.keepScreenOnWhilePlaying = true;
+      ownedPlayer.keepScreenOnWhilePlaying = !audioPolicy.current;
+      ownedPlayer.bufferOptions = playbackBuffer(audioPolicy.current);
       ownedPlayer.loop = false;
       // One sample per second feeds the overlay timeline (catch-up streams only).
       ownedPlayer.timeUpdateEventInterval = 1;
@@ -238,7 +270,7 @@ export function NativeAttempt({
       ref={view}
       testID="native-video-view"
       player={player}
-      style={StyleSheet.absoluteFill}
+      style={[StyleSheet.absoluteFill, audioOnly && { opacity: 0 }]}
       contentFit="contain"
       surfaceType="textureView"
       // The app draws one overlay for both modes; native controls would add a

@@ -1,6 +1,7 @@
 import * as Localization from "expo-localization";
 import * as Location from "expo-location";
 import { isCountryCode } from "../../domain/channelFacets";
+import { linkedDeadline } from "../../lib/abort";
 import {
   resolveRegion,
   type DeviceEvidence,
@@ -41,29 +42,19 @@ function abortable<T>(task: Promise<T>, signal: AbortSignal): Promise<T> {
   });
 }
 
+/** A shared deadline plus this module's error vocabulary. */
 function deadline(parent: AbortSignal, milliseconds: number) {
-  const controller = new AbortController();
-  let timedOut = false;
-  const abort = () => controller.abort();
-  parent.addEventListener("abort", abort, { once: true });
-  if (parent.aborted) controller.abort();
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, milliseconds);
+  const limit = linkedDeadline(parent, milliseconds);
   return {
-    signal: controller.signal,
+    signal: limit.signal,
     error(error: unknown): Error {
       if (parent.aborted) return new RegionLookupError("cancelled");
-      if (timedOut) return new RegionLookupError("timeout");
+      if (limit.timedOut) return new RegionLookupError("timeout");
       return error instanceof RegionLookupError
         ? error
         : new RegionLookupError("unavailable");
     },
-    close() {
-      clearTimeout(timer);
-      parent.removeEventListener("abort", abort);
-    },
+    close: limit.close,
   };
 }
 

@@ -123,6 +123,22 @@ export function Notice({
     </Card>
   );
 }
+/** An error with an optional "关闭提示" action; renders nothing when empty. */
+export function ErrorNotice({
+  message,
+  onDismiss,
+}: {
+  message?: string;
+  onDismiss?: () => void;
+}) {
+  if (!message) return null;
+  return (
+    <>
+      <Notice title={message} error />
+      {onDismiss && <Button label="关闭提示" secondary onPress={onDismiss} />}
+    </>
+  );
+}
 const uiStyles = StyleSheet.create({
   button: {
     minHeight: sizes.button,

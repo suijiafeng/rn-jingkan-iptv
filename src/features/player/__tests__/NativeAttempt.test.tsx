@@ -117,6 +117,24 @@ test("background setting configures media controls without replacing the player"
   await ui.unmount();
 });
 
+test("video playback gets a long forward buffer before the source is set", async () => {
+  const { controller, id } = await readyController();
+  const ui = await render(
+    <NativeAttempt
+      uri="https://example.test/live.m3u8"
+      attemptId={id}
+      controller={controller}
+    />,
+  );
+  expect(mockPlayers[0]).toHaveProperty("bufferOptions", {
+    preferredForwardBufferDuration: 50,
+    minBufferForPlayback: 2.5,
+    maxBufferBytes: 64 * 1024 * 1024,
+    prioritizeTimeOverSizeThreshold: false,
+  });
+  await ui.unmount();
+});
+
 test("mute is applied before playback and toggles without reconnecting or changing volume", async () => {
   const { controller, id } = await readyController();
   const ui = await render(
@@ -463,4 +481,55 @@ test("a probe still pending at teardown is aborted and never loads a source", as
   await act(async () => finish("hls"));
   expect(mockPlayers[0].replaceAsync).not.toHaveBeenCalled();
   controller.dispose();
+});
+
+test("listening changes buffering and screen wake policy without replacing the player", async () => {
+  const { controller, id } = await readyController();
+  const options = {
+    uri: "https://example.test/live.m3u8",
+    attemptId: id,
+    controller,
+  };
+  const ui = await render(<NativeAttempt {...options} />);
+  await ui.rerender(<NativeAttempt {...options} audioOnly backgroundAllowed />);
+  expect(mockPlayers).toHaveLength(1);
+  expect(mockPlayers[0]).toHaveProperty("keepScreenOnWhilePlaying", false);
+  expect(mockPlayers[0]).toHaveProperty("bufferOptions", {
+    preferredForwardBufferDuration: 60,
+    minBufferForPlayback: 2.5,
+    maxBufferBytes: 32 * 1024 * 1024,
+    prioritizeTimeOverSizeThreshold: false,
+  });
+  expect(mockPlayers[0].staysActiveInBackground).toBe(true);
+  await ui.rerender(<NativeAttempt {...options} backgroundAllowed />);
+  expect(mockPlayers).toHaveLength(1);
+  expect(mockPlayers[0]).toHaveProperty("keepScreenOnWhilePlaying", true);
+  expect(mockPlayers[0].release).not.toHaveBeenCalled();
+  await ui.unmount();
+  expect(mockPlayers[0].release).toHaveBeenCalledTimes(1);
+});
+
+test("a native background-policy error is handled without marking the address unavailable", async () => {
+  const availability = jest.fn();
+  const { controller, id } = await readyController();
+  controller.setOnAvailability(availability);
+  const options = {
+    uri: "https://example.test/live.m3u8",
+    attemptId: id,
+    controller,
+  };
+  const ui = await render(<NativeAttempt {...options} />);
+  Object.defineProperty(mockPlayers[0], "showNowPlayingNotification", {
+    configurable: true,
+    set: () => {
+      throw new Error("native configuration failed");
+    },
+  });
+  await ui.rerender(<NativeAttempt {...options} backgroundAllowed />);
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: "error",
+    failure: "unknown",
+  });
+  expect(availability).not.toHaveBeenCalled();
+  await ui.unmount();
 });

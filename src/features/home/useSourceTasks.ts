@@ -15,7 +15,7 @@ import {
   checkAvailability,
 } from "../source/availabilityCoordinator";
 import { lookupIptvOrgLanguages } from "../source/iptvOrgLanguages";
-import type { CheckProgress, CheckSummary } from "../source/SourceManagerModal";
+import type { CheckProgress, CheckSummary } from "../source/availability";
 
 /**
  * User-started work on one source from source management: the availability

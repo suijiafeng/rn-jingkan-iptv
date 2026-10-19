@@ -108,6 +108,31 @@ export function useChannelActions({
       }
     });
 
+  /** Playback is stronger evidence than a separate HTTP availability probe. */
+  const recordAvailability = async (target: Channel, ok: boolean) => {
+    if (!repo) return;
+    try {
+      await repo.saveCheckResults([
+        { channelId: target.id, streamUrl: target.streamUrl, ok },
+      ]);
+      const [saved] = await repo.getCheckResults([target.streamUrl]);
+      if (!mounted.current || !saved) return;
+      const patch = (channel: Channel): Channel =>
+        channel.streamUrl === target.streamUrl
+          ? {
+              ...channel,
+              checkStatus: saved.checkStatus,
+              checkedAt: saved.checkedAt,
+            }
+          : channel;
+      playback.patchChannels(patch);
+      list.setChannels((items) => items.map(patch));
+      list.setRecent((items) => items.map(patch));
+    } catch {
+      if (mounted.current) setError("播放可用性结果未能保存，请稍后重试");
+    }
+  };
+
   /** The player reports a start; only the recent list needs re-reading. */
   const recordStarted = (channel: Channel) => {
     if (!repo) return;
@@ -127,6 +152,7 @@ export function useChannelActions({
     removeRecent,
     clearRecent,
     recordStarted,
+    recordAvailability,
     recentBusy,
     recentEditing,
     setRecentEditing,

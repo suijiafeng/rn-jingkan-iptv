@@ -1,6 +1,7 @@
 import { fetch as expoFetch } from "expo/fetch";
 import { File } from "expo-file-system";
 import { normalizeRemoteUrl } from "../domain/url";
+import { linkedDeadline } from "../lib/abort";
 import { M3U_LIMITS, MAX_MIB } from "../domain/m3u";
 import { decodePlaylistBytes, TextEncodingError } from "../domain/textEncoding";
 export const MAX_IMPORT_BYTES = M3U_LIMITS.maxBytes;
@@ -65,15 +66,11 @@ export async function downloadPlaylist(
 ): Promise<{ text: string; url: string }> {
   if (!allowed) throw new ImportIOError("尚未允许联网，请先阅读网络风险说明");
   const url = normalizeRemoteUrl(input);
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  signal.addEventListener("abort", abort);
-  if (signal.aborted) abort();
-  const total = setTimeout(abort, 60000);
-  const connect = setTimeout(abort, 10000);
+  const deadline = linkedDeadline(signal, 60000);
+  const connect = setTimeout(deadline.abort, 10000);
   try {
     const response = await expoFetch(url, {
-      signal: controller.signal,
+      signal: deadline.signal,
       headers: { Accept: "application/x-mpegURL, audio/x-mpegurl, text/plain" },
     });
     clearTimeout(connect);
@@ -90,7 +87,7 @@ export async function downloadPlaylist(
     if (!response.body) throw new ImportIOError("服务器没有返回节目单");
     const finalUrl = normalizeRemoteUrl(response.url || url);
     return {
-      text: await readBoundedStream(response.body, controller.signal),
+      text: await readBoundedStream(response.body, deadline.signal),
       url: finalUrl,
     };
   } catch (error) {
@@ -98,15 +95,13 @@ export async function downloadPlaylist(
     throw new ImportIOError(
       signal.aborted
         ? "导入已取消"
-        : controller.signal.aborted
+        : deadline.signal.aborted
           ? "连接或读取超时，请重试"
           : "无法读取节目单，请检查网络或来源地址",
     );
   } finally {
-    clearTimeout(total);
     clearTimeout(connect);
-    signal.removeEventListener("abort", abort);
-    controller.abort();
+    deadline.close();
   }
 }
 export async function readPickedFile(

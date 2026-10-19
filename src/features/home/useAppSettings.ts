@@ -27,6 +27,7 @@ export function useAppSettings({
     [revokePending, setRevokePending] = useState(false),
     [mobileWarning, setMobileWarning] = useState(true),
     [backgroundPlayback, setBackgroundPlayback] = useState(false),
+    [backgroundSaving, setBackgroundSaving] = useState(false),
     [swipeReverse, setSwipeReverse] = useState(false),
     [skipUnreachable, setSkipUnreachable] = useState(true),
     [artworkAllowed, setArtworkAllowed] = useState(false),
@@ -194,6 +195,30 @@ export function useAppSettings({
     });
   };
 
+  const changeBackgroundPlayback = async (enabled: boolean) => {
+    if (!repo || backgroundSaving || enabled === backgroundPlayback) return;
+    if (enabled) {
+      const accepted = await confirm(
+        "允许后台播放？",
+        "切换应用或锁屏后仍会继续联网播放，并显示系统媒体控制；这会持续耗电和使用流量。仅在你明确需要时开启。",
+        "允许后台播放",
+      );
+      if (!accepted || !mounted.current) return;
+    }
+    setBackgroundSaving(true);
+    setBackgroundPlayback(enabled);
+    try {
+      await repo.setSetting("backgroundPlayback", enabled);
+    } catch {
+      if (mounted.current) {
+        setBackgroundPlayback(!enabled);
+        setError("后台播放设置保存失败，请重试");
+      }
+    } finally {
+      if (mounted.current) setBackgroundSaving(false);
+    }
+  };
+
   /** Drops network permission in memory first, so nothing new goes online. */
   const withdrawRemote = () => {
     permissionEpoch.current++;
@@ -229,6 +254,7 @@ export function useAppSettings({
     setRevokePending,
     mobileWarning,
     backgroundPlayback,
+    backgroundSaving,
     mobileAccepted,
     setMobileAccepted,
     swipeReverse,
@@ -242,6 +268,7 @@ export function useAppSettings({
     checkNetwork,
     changeArtwork,
     saveToggle,
+    changeBackgroundPlayback,
     withdrawRemote,
     resetToDefaults,
   };

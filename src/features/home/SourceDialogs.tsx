@@ -2,10 +2,8 @@ import React, { useState } from "react";
 import type { Repository } from "../../data/repository";
 import type { Source } from "../../domain/types";
 import { SourceFormModal } from "../source/SourceFormModal";
-import {
-  RenameSourceModal,
-  SourceManagerModal,
-} from "../source/SourceManagerModal";
+import { RenameSourceModal } from "../source/RenameSourceModal";
+import { SourceManagerModal } from "../source/SourceManagerModal";
 import type { SourceImport } from "./useSourceImport";
 import type { useSourceTasks } from "./useSourceTasks";
 

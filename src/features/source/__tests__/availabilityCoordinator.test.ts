@@ -1,7 +1,8 @@
 import { checkChannels } from "../availability";
 import {
   checkAvailability,
-  CHECK_FRESH_MS,
+  OK_RESULT_TTL_MS,
+  UNREACHABLE_RESULT_TTL_MS,
   type CheckStore,
 } from "../availabilityCoordinator";
 import type { StoredCheck } from "../../../data/availability";
@@ -52,29 +53,57 @@ test("URLs, not rows or channel names, are deduplicated with a stable unique pro
   expect(progress).toHaveBeenCalledWith(0, 2);
 });
 
-test("a fresh failed result is shared too; only an explicit force or expiry probes again", async () => {
+test("fresh saved results are reused; expired ones and force probe again", async () => {
+  const now = 1_000_000_000_000;
+  const hour = 60 * 60 * 1000;
+  const at = { ...options(), now: () => now };
   const db = store([
     {
       streamUrl: alpha.streamUrl,
+      checkStatus: "ok",
+      checkedAt: now - 23 * hour,
+    },
+    {
+      streamUrl: beta.streamUrl,
       checkStatus: "unreachable",
-      checkedAt: Date.now(),
+      checkedAt: now - 5 * hour,
     },
   ]);
-  const cached = await checkAvailability(db, [alpha], options());
-  expect(cached).toMatchObject({ refreshed: false, results: [{ ok: false }] });
+  const cached = await checkAvailability(db, [alpha, beta], at);
+  expect(cached).toMatchObject({
+    refreshed: false,
+    results: [{ ok: true }, { ok: false }],
+  });
   expect(probe).not.toHaveBeenCalled();
   expect(db.saveCheckResults).not.toHaveBeenCalled();
-  await checkAvailability(db, [alpha], { ...options(), force: true });
-  expect(probe).toHaveBeenCalledTimes(1);
+  await checkAvailability(db, [alpha], { ...at, force: true });
+  expect(probe.mock.calls[0][0]).toEqual([alpha]);
+
+  probe.mockClear();
   const expired = store([
     {
       streamUrl: alpha.streamUrl,
       checkStatus: "ok",
-      checkedAt: Date.now() - CHECK_FRESH_MS,
+      checkedAt: now - OK_RESULT_TTL_MS,
+    },
+    {
+      streamUrl: beta.streamUrl,
+      checkStatus: "unreachable",
+      checkedAt: now - UNREACHABLE_RESULT_TTL_MS,
     },
   ]);
-  await checkAvailability(expired, [alpha], options());
-  expect(probe).toHaveBeenCalledTimes(2);
+  const refreshed = await checkAvailability(expired, [alpha, beta], at);
+  expect(probe.mock.calls[0][0]).toEqual([alpha, beta]);
+  expect(refreshed.refreshed).toBe(true);
+});
+
+test("a result dated in the future (clock moved back) is probed again", async () => {
+  const now = 1_000_000_000_000;
+  const db = store([
+    { streamUrl: alpha.streamUrl, checkStatus: "ok", checkedAt: now + 60_000 },
+  ]);
+  await checkAvailability(db, [alpha], { ...options(), now: () => now });
+  expect(probe.mock.calls[0][0]).toEqual([alpha]);
 });
 
 test("overlapping entry points wait for the shared save and never repeat the same request", async () => {

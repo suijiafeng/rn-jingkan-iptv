@@ -1,47 +1,6 @@
-import { CHECK_TIMEOUT_MS, checkChannels, checkStream } from "../availability";
+import { checkChannels } from "../availability";
 
-jest.mock("expo/fetch", () => ({ fetch: jest.fn() }));
-const { fetch: fetchMock } = jest.requireMock("expo/fetch");
 const signal = () => new AbortController().signal;
-
-beforeEach(() => fetchMock.mockReset());
-
-test("a success status counts as reachable; errors and failures do not", async () => {
-  const cancel = jest.fn(() => Promise.resolve());
-  fetchMock.mockResolvedValueOnce({ ok: true, status: 206, body: { cancel } });
-  await expect(checkStream("https://a.example.com/x", signal())).resolves.toBe(
-    true,
-  );
-  expect(fetchMock.mock.calls[0][1].headers).toEqual({ Range: "bytes=0-1023" });
-  expect(cancel).toHaveBeenCalled();
-  fetchMock.mockResolvedValueOnce({ ok: false, status: 403, body: null });
-  await expect(checkStream("https://a.example.com/x", signal())).resolves.toBe(
-    false,
-  );
-  fetchMock.mockRejectedValueOnce(new Error("offline"));
-  await expect(checkStream("https://a.example.com/x", signal())).resolves.toBe(
-    false,
-  );
-});
-
-test("a stalled server is reported unreachable after the timeout", async () => {
-  jest.useFakeTimers();
-  try {
-    fetchMock.mockImplementation(
-      (_url: string, init: { signal: AbortSignal }) =>
-        new Promise((_resolve, reject) =>
-          init.signal.addEventListener("abort", () =>
-            reject(new Error("aborted")),
-          ),
-        ),
-    );
-    const pending = checkStream("https://a.example.com/slow", signal());
-    jest.advanceTimersByTime(CHECK_TIMEOUT_MS);
-    await expect(pending).resolves.toBe(false);
-  } finally {
-    jest.useRealTimers();
-  }
-});
 
 test("sweeps with bounded concurrency and reports progress", async () => {
   let running = 0;

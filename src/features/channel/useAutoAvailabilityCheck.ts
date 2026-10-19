@@ -10,8 +10,6 @@ import {
 
 /** At most this many channels are checked per category switch. */
 export const AUTO_CHECK_MAX = 200;
-/** Channels checked more recently than this are not checked again. */
-export { CHECK_FRESH_MS } from "../source/availabilityCoordinator";
 
 export interface AutoCheckOptions {
   /** Identifies the current category; null = no category selected. */

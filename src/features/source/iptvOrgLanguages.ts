@@ -1,5 +1,6 @@
 import { fetch as expoFetch } from "expo/fetch";
 import { readBoundedStream } from "../../data/importIO";
+import { linkedDeadline } from "../../lib/abort";
 import { normalizeLanguages } from "../../domain/channelFacets";
 
 /** Public iptv-org database; fetched only when the user asks for it. */
@@ -45,14 +46,10 @@ export async function lookupIptvOrgLanguages(
   wanted: ReadonlySet<string>,
   signal: AbortSignal,
 ): Promise<Map<string, string[]>> {
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  signal.addEventListener("abort", abort);
-  if (signal.aborted) abort();
-  const timer = setTimeout(abort, FEEDS_TIMEOUT_MS);
+  const deadline = linkedDeadline(signal, FEEDS_TIMEOUT_MS);
   try {
     const response = await expoFetch(IPTV_ORG_FEEDS_URL, {
-      signal: controller.signal,
+      signal: deadline.signal,
       headers: { Accept: "application/json" },
     });
     if (!response.ok || !response.body)
@@ -61,7 +58,7 @@ export async function lookupIptvOrgLanguages(
       );
     const text = await readBoundedStream(
       response.body,
-      controller.signal,
+      deadline.signal,
       MAX_FEEDS_BYTES,
     );
     return languagesFromFeeds(JSON.parse(text), wanted);
@@ -70,13 +67,11 @@ export async function lookupIptvOrgLanguages(
     throw new LanguageLookupError(
       signal.aborted
         ? "已停止补全语言"
-        : controller.signal.aborted
+        : deadline.timedOut
           ? "下载 iptv-org 数据库超时，请检查网络后重试"
           : "无法读取 iptv-org 数据库，请检查网络后重试",
     );
   } finally {
-    clearTimeout(timer);
-    signal.removeEventListener("abort", abort);
-    controller.abort();
+    deadline.close();
   }
 }

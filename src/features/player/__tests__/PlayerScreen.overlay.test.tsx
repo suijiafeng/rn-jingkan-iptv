@@ -1,5 +1,5 @@
 import React from "react";
-import { BackHandler } from "react-native";
+import { Alert, BackHandler } from "react-native";
 import { act, fireEvent, render, within } from "@testing-library/react-native";
 import {
   first,
@@ -343,4 +343,74 @@ describe("one round primary control", () => {
     expect(ui.queryByRole("button", { name: "重试" })).toBeNull();
     await ui.unmount();
   });
+});
+
+test("listening survives docking and channel changes, and switching back retains playback", async () => {
+  const initial = props({ backgroundAllowed: true });
+  const ui = await render(<PlayerScreen {...initial} />);
+  await fireEvent.press(ui.getByRole("button", { name: "听音频" }));
+  expect(ui.getByTestId("audio-stage")).toBeTruthy();
+  expect(ui.queryByRole("button", { name: "横屏全屏" })).toBeNull();
+  expect(mockMounts).toHaveBeenCalledTimes(1);
+  await ui.rerender(<PlayerScreen {...initial} mini />);
+  expect(ui.getByTestId("audio-stage")).toBeTruthy();
+  expect(mockMounts).toHaveBeenCalledTimes(1);
+  await ui.rerender(
+    <PlayerScreen {...initial} channel={second} sources={[second]} />,
+  );
+  expect(ui.getByTestId("audio-stage")).toBeTruthy();
+  expect(mockMounts).toHaveBeenCalledTimes(2);
+  await fireEvent.press(ui.getByRole("button", { name: "看视频" }));
+  expect(ui.queryByTestId("audio-stage")).toBeNull();
+  expect(mockMounts).toHaveBeenCalledTimes(2);
+  await ui.unmount();
+});
+
+test("fullscreen and docked listening switches retain the native attempt", async () => {
+  const initial = props({ backgroundAllowed: true });
+  const ui = await render(<PlayerScreen {...initial} />);
+  await fireEvent.press(ui.getByRole("button", { name: "横屏全屏" }));
+  await fireEvent.press(ui.getByRole("button", { name: "听音频" }));
+  expect(ui.getByTestId("audio-stage")).toBeTruthy();
+  expect(ui.queryByTestId("fullscreen-bottom-controls")).toBeNull();
+  expect(mockMounts).toHaveBeenCalledTimes(1);
+  await ui.rerender(<PlayerScreen {...initial} mini />);
+  await fireEvent.press(ui.getByRole("button", { name: "看视频" }));
+  expect(ui.queryByTestId("audio-stage")).toBeNull();
+  await fireEvent.press(ui.getByRole("button", { name: "听音频" }));
+  expect(ui.getByTestId("audio-stage")).toBeTruthy();
+  expect(mockMounts).toHaveBeenCalledTimes(1);
+  await ui.unmount();
+});
+
+test("listening requires explicit confirmation for background permission and can stay foreground only", async () => {
+  const enable = jest.fn();
+  const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  try {
+    const ui = await render(
+      <PlayerScreen {...props({ onEnableBackgroundPlayback: enable })} />,
+    );
+    await fireEvent.press(ui.getByRole("button", { name: "听音频" }));
+    expect(enable).not.toHaveBeenCalled();
+    expect(ui.getByTestId("audio-stage")).toBeTruthy();
+    expect(ui.getByText(/后台播放未开启，锁屏会暂停/)).toBeTruthy();
+    const choices = alert.mock.calls[0][2]!;
+    expect(choices.find((item) => item.text === "仅前台收听")?.style).toBe(
+      "cancel",
+    );
+    await act(() =>
+      choices.find((item) => item.text === "仅前台收听")?.onPress?.(),
+    );
+    expect(enable).not.toHaveBeenCalled();
+    await fireEvent.press(ui.getByRole("button", { name: "开启锁屏收听" }));
+    await act(() =>
+      alert.mock.calls[1]
+        [2]!.find((item) => item.text === "开启后台播放")
+        ?.onPress?.(),
+    );
+    expect(enable).toHaveBeenCalledTimes(1);
+    await ui.unmount();
+  } finally {
+    alert.mockRestore();
+  }
 });

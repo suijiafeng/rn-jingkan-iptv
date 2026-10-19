@@ -1,5 +1,7 @@
 import { fetch as expoFetch } from "expo/fetch";
 import type { ContentType } from "expo-video";
+import { linkedDeadline } from "../../lib/abort";
+import { readStreamHead } from "../../lib/streamHead";
 
 export const SNIFF_BYTES = 1024;
 export const SNIFF_TIMEOUT_MS = 8000;
@@ -43,48 +45,21 @@ export async function resolveContentType(
 ): Promise<ContentType> {
   const known = contentTypeFromPath(uri);
   if (known) return known;
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  signal.addEventListener("abort", abort);
-  if (signal.aborted) abort();
-  const timer = setTimeout(abort, SNIFF_TIMEOUT_MS);
+  const deadline = linkedDeadline(signal, SNIFF_TIMEOUT_MS);
   try {
     const response = await expoFetch(uri, {
-      signal: controller.signal,
+      signal: deadline.signal,
       headers: { Range: `bytes=0-${SNIFF_BYTES - 1}` },
     });
     if (!response.ok || !response.body) return "auto";
     const mime = (response.headers.get("content-type") ?? "").toLowerCase();
     if (mime.includes("mpegurl")) return "hls";
     if (mime.includes("dash+xml")) return "dash";
-    const reader = response.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    try {
-      while (size < SNIFF_BYTES) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        size += value.byteLength;
-      }
-    } finally {
-      // Live streams may ignore Range and never end; stop after the head.
-      void reader.cancel().catch(() => {});
-    }
-    const bytes = new Uint8Array(Math.min(size, SNIFF_BYTES));
-    let offset = 0;
-    for (const chunk of chunks) {
-      if (offset >= bytes.length) break;
-      const part = chunk.subarray(0, bytes.length - offset);
-      bytes.set(part, offset);
-      offset += part.byteLength;
-    }
+    const { bytes } = await readStreamHead(response.body, SNIFF_BYTES);
     return contentTypeFromHead(new TextDecoder("utf-8").decode(bytes));
   } catch {
     return "auto";
   } finally {
-    clearTimeout(timer);
-    signal.removeEventListener("abort", abort);
-    controller.abort();
+    deadline.close();
   }
 }

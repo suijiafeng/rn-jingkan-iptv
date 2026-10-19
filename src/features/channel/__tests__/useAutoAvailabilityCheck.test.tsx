@@ -4,7 +4,6 @@ import type { Channel } from "../../../domain/types";
 import type { StoredCheck } from "../../../data/availability";
 import {
   AUTO_CHECK_MAX,
-  CHECK_FRESH_MS,
   useAutoAvailabilityCheck,
   type AutoCheckOptions,
 } from "../useAutoAvailabilityCheck";
@@ -125,10 +124,10 @@ test("no category, no consent, playback or an unconfirmed metered network: nothi
   await waitFor(() => expect(mockCheck).toHaveBeenCalledTimes(1));
 });
 
-test("recently checked channels are skipped and at most AUTO_CHECK_MAX run", async () => {
+test("fresh results are skipped, expired ones are probed again, and at most AUTO_CHECK_MAX addresses run", async () => {
   const fresh = channel("fresh", { checkedAt: Date.now() - 1000 });
   const stale = channel("stale", {
-    checkedAt: Date.now() - CHECK_FRESH_MS - 1,
+    checkedAt: Date.now() - 365 * 24 * 60 * 60 * 1000,
   });
   const many = Array.from({ length: AUTO_CHECK_MAX + 5 }, (_unused, index) =>
     channel(`c${index}`),
@@ -142,6 +141,7 @@ test("recently checked channels are skipped and at most AUTO_CHECK_MAX run", asy
   const ids = mockCheck.mock.calls[0][0].map((checked: Channel) => checked.id);
   expect(ids).not.toContain("fresh");
   expect(ids[0]).toBe("stale");
+  expect(ids[1]).toBe("c0");
   expect(ids).toHaveLength(AUTO_CHECK_MAX);
   await waitFor(() => expect(opts.onFinished).toHaveBeenCalledTimes(1));
   await act(async () => rerender({ ...opts, listComplete: false }));

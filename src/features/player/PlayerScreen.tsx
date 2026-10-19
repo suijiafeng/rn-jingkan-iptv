@@ -6,6 +6,7 @@ import React, {
   useState,
 } from "react";
 import {
+  Alert,
   BackHandler,
   Pressable,
   StyleSheet,
@@ -54,6 +55,33 @@ export function PlayerScreen(props: PlayerScreenProps) {
   const [controlsShown, setControlsShown] = useState(true);
   // Keep audio intent across per-channel and per-source native instances.
   const [muted, setMuted] = useState(false);
+  const [audioOnly, setAudioOnly] = useState(false);
+  const requestBackgroundPlayback = () => {
+    Alert.alert(
+      "锁屏继续收听",
+      "开启后台播放后，切换应用或锁屏仍会播放，并提供系统媒体控制。会持续联网并耗电；听音频仍可能下载视频，不是离线或省流模式。",
+      [
+        { text: "仅前台收听", style: "cancel" },
+        ...(props.onEnableBackgroundPlayback
+          ? [
+              {
+                text: "开启后台播放",
+                onPress: props.onEnableBackgroundPlayback,
+              },
+            ]
+          : []),
+      ],
+    );
+  };
+  const toggleAudioOnly = () => {
+    const next = !audioOnly;
+    setAudioOnly(next);
+    setControlsShown(true);
+    if (!next) return;
+    setFullscreen(false);
+    setMuted(false);
+    if (!props.backgroundAllowed) requestBackgroundPlayback();
+  };
   // Survives the panel being hidden (fullscreen, docked) and shown again.
   const savedListPosition = useRef<SavedListPosition | null>(null);
   const [listPositionStore] = useState<ListPositionStore>(() => ({
@@ -164,6 +192,9 @@ export function PlayerScreen(props: PlayerScreenProps) {
       <ChannelSession
         key={`${props.channel.id}:${props.channel.streamUrl}`}
         {...props}
+        audioOnly={audioOnly}
+        onToggleAudioOnly={toggleAudioOnly}
+        onRequestBackgroundPlayback={requestBackgroundPlayback}
         muted={muted}
         onMutedChange={setMuted}
         channels={activeChannels}

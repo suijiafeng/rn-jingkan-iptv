@@ -14,7 +14,13 @@ import {
   type ChannelFacetOptions,
   type FacetChannel,
 } from "../domain/channelFacets";
-import { RepositoryError, type SqlDatabase } from "./sql";
+import { RepositoryError, type SqlDatabase, type SqlExecutor } from "./sql";
+import {
+  clearRecent,
+  recordRecent,
+  removeRecent,
+  toggleFavorite,
+} from "./channelLibrary";
 import { migrateSchema } from "./schema";
 import { readChecks, writeChecks } from "./availability";
 import {
@@ -72,6 +78,17 @@ export class Repository {
   ) {
     this.now = options.now ?? Date.now;
     this.makeId = options.makeId ?? makeId;
+  }
+
+  /** One exclusive transaction, queued behind every earlier write. */
+  private transaction<T>(work: (tx: SqlExecutor) => Promise<T>): Promise<T> {
+    return this.serialize(async () => {
+      let result!: T;
+      await this.db.withExclusiveTransactionAsync(async (tx) => {
+        result = await work(tx);
+      });
+      return result;
+    });
   }
 
   private serialize<T>(task: () => Promise<T>): Promise<T> {
@@ -281,20 +298,16 @@ export class Repository {
     updates: { channelId: string; tvgId: string; languages: string[] }[],
   ): Promise<number> {
     let changed = 0;
-    await this.serialize(async () => {
-      await this.db.withExclusiveTransactionAsync(async (tx) => {
-        for (const update of updates) {
-          const value = normalizeLanguages(update.languages.join(";")).join(
-            ";",
-          );
-          if (!value) continue;
-          const result = await tx.runAsync(
-            "UPDATE channels SET lookupLanguages = ? WHERE id = ? AND tvgId = ?",
-            [value, update.channelId, update.tvgId],
-          );
-          changed += result.changes;
-        }
-      });
+    await this.transaction(async (tx) => {
+      for (const update of updates) {
+        const value = normalizeLanguages(update.languages.join(";")).join(";");
+        if (!value) continue;
+        const result = await tx.runAsync(
+          "UPDATE channels SET lookupLanguages = ? WHERE id = ? AND tvgId = ?",
+          [value, update.channelId, update.tvgId],
+        );
+        changed += result.changes;
+      }
     });
     return changed;
   }
@@ -307,10 +320,8 @@ export class Repository {
     results: { channelId: string; streamUrl: string; ok: boolean }[],
   ): Promise<void> {
     if (!results.length) return;
-    await this.serialize(async () => {
-      await this.db.withExclusiveTransactionAsync(async (tx) => {
-        await writeChecks(tx, results, this.now());
-      });
+    await this.transaction(async (tx) => {
+      await writeChecks(tx, results, this.now());
     });
   }
 
@@ -360,101 +371,27 @@ export class Repository {
 
   async deleteSource(sourceId: string): Promise<void> {
     this.cancelRefresh(sourceId);
-    await this.serialize(async () => {
-      await this.db.withExclusiveTransactionAsync(async (tx) => {
-        await tx.runAsync("DELETE FROM sources WHERE id = ?", [sourceId]);
-        await cleanUnreferenced(tx);
-      });
+    await this.transaction(async (tx) => {
+      await tx.runAsync("DELETE FROM sources WHERE id = ?", [sourceId]);
+      await cleanUnreferenced(tx);
     });
   }
 
-  async toggleFavorite(channelId: string): Promise<boolean> {
-    return this.serialize(async () => {
-      let favorite = false;
-      await this.db.withExclusiveTransactionAsync(async (tx) => {
-        const channel = await tx.getFirstAsync<{
-          id: string;
-          groupKey: string;
-        }>("SELECT id, groupKey FROM channels WHERE id = ?", [channelId]);
-        if (!channel) throw new RepositoryError("channel_missing");
-        const existing = await tx.getFirstAsync<{ groupKey: string }>(
-          "SELECT groupKey FROM favorite_groups WHERE groupKey = ?",
-          [channel.groupKey],
-        );
-        favorite = !existing;
-        if (favorite) {
-          const active = await tx.getFirstAsync<{ id: string }>(
-            `SELECT c.id FROM channels c JOIN sources s ON s.id = c.sourceId
-             WHERE c.groupKey = ? AND c.active = 1 AND s.enabled = 1 LIMIT 1`,
-            [channel.groupKey],
-          );
-          if (!active) throw new RepositoryError("channel_missing");
-          await tx.runAsync(
-            "INSERT INTO favorite_groups(groupKey,createdAt) VALUES(?,?)",
-            [channel.groupKey, this.now()],
-          );
-        } else
-          await tx.runAsync("DELETE FROM favorite_groups WHERE groupKey = ?", [
-            channel.groupKey,
-          ]);
-        await cleanUnreferenced(tx);
-      });
-      return favorite;
-    });
+  toggleFavorite(channelId: string): Promise<boolean> {
+    return this.transaction((tx) => toggleFavorite(tx, channelId, this.now()));
   }
 
   /** Call only after playback actually starts for the current session. */
-  async recordRecent(channelId: string): Promise<void> {
-    await this.serialize(async () => {
-      await this.db.withExclusiveTransactionAsync(async (tx) => {
-        const channel = await tx.getFirstAsync<{
-          id: string;
-          groupKey: string;
-        }>(
-          `SELECT c.id, c.groupKey FROM channels c JOIN sources s ON s.id = c.sourceId
-           WHERE c.id = ? AND c.active = 1 AND s.enabled = 1`,
-          [channelId],
-        );
-        if (!channel) return;
-        await tx.runAsync(
-          `INSERT INTO recent_groups(groupKey,preferredChannelId,lastPlayedAt)
-           VALUES(?,?,?) ON CONFLICT(groupKey) DO UPDATE SET
-           preferredChannelId=excluded.preferredChannelId,
-           lastPlayedAt=excluded.lastPlayedAt`,
-          [channel.groupKey, channel.id, this.now()],
-        );
-        await tx.runAsync(
-          `DELETE FROM recent_groups WHERE groupKey NOT IN (
-             SELECT groupKey FROM recent_groups
-             ORDER BY lastPlayedAt DESC, groupKey LIMIT 100
-           )`,
-        );
-        await cleanUnreferenced(tx);
-      });
-    });
+  recordRecent(channelId: string): Promise<void> {
+    return this.transaction((tx) => recordRecent(tx, channelId, this.now()));
   }
 
-  async removeRecent(channelId: string): Promise<void> {
-    await this.serialize(async () => {
-      await this.db.withExclusiveTransactionAsync(async (tx) => {
-        await tx.runAsync(
-          `DELETE FROM recent_groups WHERE groupKey = (
-             SELECT groupKey FROM channels WHERE id = ?
-           )`,
-          [channelId],
-        );
-        await cleanUnreferenced(tx);
-      });
-    });
+  removeRecent(channelId: string): Promise<void> {
+    return this.transaction((tx) => removeRecent(tx, channelId));
   }
 
-  async clearRecent(): Promise<void> {
-    await this.serialize(async () => {
-      await this.db.withExclusiveTransactionAsync(async (tx) => {
-        await tx.runAsync("DELETE FROM recent_groups");
-        await cleanUnreferenced(tx);
-      });
-    });
+  clearRecent(): Promise<void> {
+    return this.transaction(clearRecent);
   }
 
   async getSetting<T>(key: string, fallback: T): Promise<T> {

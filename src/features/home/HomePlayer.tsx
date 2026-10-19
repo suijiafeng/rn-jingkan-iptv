@@ -26,6 +26,7 @@ export function HomePlayer({
   onDismissError,
   onFavorite,
   onStarted,
+  onAvailability,
 }: {
   playing: Channel;
   playback: Playback;
@@ -38,6 +39,7 @@ export function HomePlayer({
   onDismissError: () => void;
   onFavorite: (channel: Channel) => void;
   onStarted: (channel: Channel) => void;
+  onAvailability: (channel: Channel, ok: boolean) => void;
 }) {
   const { playerMini, previousChannel } = playback;
   // Prefer a fresh row: a refresh may have changed the channel.
@@ -70,8 +72,12 @@ export function HomePlayer({
         onClose={playback.closePlayer}
         onFavorite={onFavorite}
         onStarted={onStarted}
+        onAvailability={onAvailability}
         remoteAllowed={settings.remoteAllowed}
         backgroundAllowed={settings.backgroundPlayback}
+        onEnableBackgroundPlayback={() =>
+          settings.saveToggle("backgroundPlayback", true)
+        }
         mobileWarning={settings.mobileWarning && !settings.mobileAccepted}
         onMobileAccepted={() => settings.setMobileAccepted(true)}
         swipeReverse={settings.swipeReverse}

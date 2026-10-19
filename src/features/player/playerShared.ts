@@ -28,9 +28,11 @@ export interface PlayerScreenProps {
   onClose: () => void;
   onFavorite: (channel: Channel) => void;
   onStarted: (channel: Channel) => void;
+  onAvailability?: (channel: Channel, ok: boolean) => void;
   remoteAllowed: boolean;
   mobileWarning: boolean;
   backgroundAllowed?: boolean;
+  onEnableBackgroundPlayback?: () => void;
   /** The user chose to continue on a possibly metered network. */
   onMobileAccepted?: () => void;
   /** Fullscreen swipe up = next channel; true flips it (我的电视 “换台反转”). */

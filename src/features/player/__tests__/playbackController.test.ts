@@ -535,3 +535,38 @@ describe("source failover", () => {
     });
   });
 });
+
+test("real playback updates availability but user actions and unknown errors do not", async () => {
+  jest.useFakeTimers();
+  const result = jest.fn();
+  const { controller } = setup({ onAvailability: result });
+  await controller.requestPlay();
+  const firstId = controller.getSnapshot().attemptId!;
+  controller.nativeStarted(firstId);
+  controller.nativeStarted(firstId);
+  expect(result.mock.calls).toEqual([[true]]);
+  controller.pause();
+  controller.nativeStatus(firstId, "error", "network");
+  expect(result).toHaveBeenCalledTimes(1);
+  await controller.requestPlay();
+  controller.nativeStatus(
+    controller.getSnapshot().attemptId!,
+    "error",
+    "unknown",
+  );
+  expect(result).toHaveBeenCalledTimes(1);
+  await controller.requestPlay();
+  controller.nativeStatus(
+    controller.getSnapshot().attemptId!,
+    "error",
+    "media",
+  );
+  expect(result.mock.calls).toEqual([[true], [false]]);
+  await controller.requestPlay();
+  jest.advanceTimersByTime(INITIAL_PLAY_TIMEOUT_MS);
+  expect(result.mock.calls).toEqual([[true], [false], [false]]);
+  await controller.requestPlay();
+  controller.networkChanged({ type: "NONE", isConnected: false });
+  expect(result).toHaveBeenCalledTimes(3);
+  controller.dispose();
+});

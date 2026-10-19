@@ -1,3 +1,5 @@
+import type { StoredCheck } from "../../data/availability";
+import { untilAborted } from "../../lib/abort";
 import type { Repository } from "../../data/repository";
 import {
   checkChannels,
@@ -5,7 +7,6 @@ import {
   type CheckTarget,
 } from "./availability";
 
-export const CHECK_FRESH_MS = 6 * 60 * 60 * 1000;
 export type CheckStore = Pick<
   Repository,
   "getCheckResults" | "saveCheckResults"
@@ -22,28 +23,29 @@ interface Options {
   force?: boolean;
   maxRequests?: number;
   onProgress?: (done: number, total: number) => void;
+  /** Clock for result freshness; tests inject a fixed time. */
+  now?: () => number;
+}
+
+/** A reachable address is trusted for a day before it is probed again. */
+export const OK_RESULT_TTL_MS = 24 * 60 * 60 * 1000;
+/**
+ * Failures are often transient (server restart, token rotation), and an
+ * unreachable mark sorts the channel last and skips it while zapping, so it
+ * expires sooner.
+ */
+export const UNREACHABLE_RESULT_TTL_MS = 6 * 60 * 60 * 1000;
+
+/** A clock that moved backwards makes the age unknown: probe again. */
+function isFresh(entry: StoredCheck, now: number): boolean {
+  const age = now - entry.checkedAt;
+  const ttl =
+    entry.checkStatus === "ok" ? OK_RESULT_TTL_MS : UNREACHABLE_RESULT_TTL_MS;
+  return age >= 0 && age < ttl;
 }
 
 /** One queue per open database, shared by every UI entry point. */
 const queues = new WeakMap<CheckStore, Promise<void>>();
-
-/** A system network lookup or a consent dialog must not hold a cancelled job. */
-async function cancellable<T>(
-  task: Promise<T>,
-  signal: AbortSignal,
-): Promise<T | undefined> {
-  let abort!: () => void;
-  const cancelled = new Promise<undefined>((resolve) => {
-    abort = () => resolve(undefined);
-    signal.addEventListener("abort", abort);
-    if (signal.aborted) abort();
-  });
-  try {
-    return await Promise.race([task, cancelled]);
-  } finally {
-    signal.removeEventListener("abort", abort);
-  }
-}
 
 export async function checkAvailability(
   store: CheckStore,
@@ -68,13 +70,12 @@ export async function checkAvailability(
     );
     if (options.signal.aborted || !options.isPermitted())
       return { results: [], refreshed: false };
-    const now = Date.now();
+    // Fresh persisted results are reused; expired ones and an explicit forced
+    // check probe again.
+    const now = (options.now ?? Date.now)();
     const cached = new Map(
       stored
-        .filter(
-          (entry) =>
-            entry.checkedAt <= now && now - entry.checkedAt < CHECK_FRESH_MS,
-        )
+        .filter((entry) => isFresh(entry, now))
         .map((entry) => [entry.streamUrl, entry]),
     );
     const reused: CheckResult[] = [];
@@ -94,7 +95,7 @@ export async function checkAvailability(
     options.onProgress?.(reused.length, total);
     if (
       selected.length &&
-      (!(await cancellable(
+      (!(await untilAborted(
         options.beforeRequests?.() ?? Promise.resolve(true),
         options.signal,
       )) ||

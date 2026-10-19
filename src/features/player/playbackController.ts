@@ -34,6 +34,7 @@ interface ControllerOptions {
   checkNetwork: () => Promise<ConnectionState>;
   isAppActive: () => boolean;
   onStarted: () => void;
+  onAvailability?: (ok: boolean) => void;
 }
 export const INITIAL_PLAY_TIMEOUT_MS = 30_000;
 const activePhases: PlaybackPhase[] = [
@@ -125,10 +126,15 @@ export class PlaybackController {
     });
   }
   private fail(failure: AttemptFailure) {
+    if (this.snapshot.attemptId !== null && failure !== "unknown")
+      this.options.onAvailability?.(false);
     this.pictureInPicture = false;
     ++this.generation;
     this.clearTimer();
     this.publish({ phase: "error", attemptId: null, failure });
+  }
+  setOnAvailability(onAvailability: ControllerOptions["onAvailability"]) {
+    this.options = { ...this.options, onAvailability };
   }
   setOnStarted(onStarted: () => void) {
     this.options = { ...this.options, onStarted };
@@ -202,8 +208,10 @@ export class PlaybackController {
     this.startedAttempt = null;
     this.publish({ phase: "connecting", attemptId: token });
     this.timeout = setTimeout(() => {
-      if (this.isCurrentAttempt(token) && this.startedAttempt !== token)
+      if (this.isCurrentAttempt(token) && this.startedAttempt !== token) {
+        this.options.onAvailability?.(false);
         this.stop("timeout");
+      }
     }, INITIAL_PLAY_TIMEOUT_MS);
   }
   pause(reason: PauseReason = "manual") {
@@ -249,6 +257,7 @@ export class PlaybackController {
     this.publish({ phase: "playing", attemptId: id });
     if (this.startedAttempt !== id) {
       this.startedAttempt = id;
+      this.options.onAvailability?.(true);
       this.options.onStarted();
     }
   }

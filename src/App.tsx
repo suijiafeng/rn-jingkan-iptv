@@ -13,7 +13,7 @@ import {
   effectiveCountry,
   useRegionPreference,
 } from "./features/region/useRegionPreference";
-import { Button, Heading, Notice } from "./components/ui";
+import { Button, ErrorNotice, Heading, Notice } from "./components/ui";
 import { colors, styles as theme } from "./theme";
 import { useAutoAvailabilityCheck } from "./features/channel/useAutoAvailabilityCheck";
 import { useChannelFilters } from "./features/channel/useChannelFilters";
@@ -336,8 +336,7 @@ export default function App() {
       >
         {!!error && !manage && !rename && !importer.form && (
           <View style={appStyles.errorBanner}>
-            <Notice title={error} error />
-            <Button secondary label="关闭提示" onPress={() => setError("")} />
+            <ErrorNotice message={error} onDismiss={() => setError("")} />
           </View>
         )}
         {tab === "settings" ? (
@@ -375,8 +374,9 @@ export default function App() {
             }
             skipUnreachable={settings.skipUnreachable}
             backgroundPlayback={settings.backgroundPlayback}
+            backgroundSaving={settings.backgroundSaving}
             onBackgroundPlaybackChange={(value) =>
-              settings.saveToggle("backgroundPlayback", value)
+              void settings.changeBackgroundPlayback(value)
             }
             onSkipUnreachableChange={(value) =>
               settings.saveToggle("skipUnreachable", value)
@@ -454,6 +454,9 @@ export default function App() {
           onDismissError={() => setError("")}
           onFavorite={(channel) => void actions.favorite(channel)}
           onStarted={actions.recordStarted}
+          onAvailability={(channel, ok) =>
+            void actions.recordAvailability(channel, ok)
+          }
           sheet={{
             filters: listHeaderProps,
             onTabChange: changeTab,

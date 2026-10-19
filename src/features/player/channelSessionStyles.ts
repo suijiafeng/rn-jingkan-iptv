@@ -4,6 +4,13 @@ import { colors } from "../../theme";
 /** ChannelSession's styles: portrait, fullscreen and docked-bar layouts. */
 export const sessionStyles = StyleSheet.create({
   flex: { flex: 1 },
+  audioStage: {
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    paddingTop: 12,
+    gap: 4,
+  },
+  audioSymbol: { color: colors.accent, fontSize: 32 },
   fullscreenSources: {
     position: "absolute",
     top: 82,
