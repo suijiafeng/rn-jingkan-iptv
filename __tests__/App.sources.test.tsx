@@ -123,7 +123,7 @@ test.each(["revocation", "background", "stop", "unmount"])(
           screen.getByRole("button", { name: "撤销联网许可" }),
         );
         await waitFor(() =>
-          expect(screen.getByText("阅读风险并允许")).toBeTruthy(),
+          expect(screen.getByText("了解说明并允许")).toBeTruthy(),
         );
       } else if (action === "background") {
         await act(async () => {

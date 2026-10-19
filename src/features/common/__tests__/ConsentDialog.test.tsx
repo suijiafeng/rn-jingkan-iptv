@@ -34,7 +34,7 @@ test("a newer question dismisses the unanswered one", async () => {
 });
 
 test("the folded texts keep what the native layer cannot promise", () => {
-  expect(ARTWORK_CONSENT.details).toContain("无法保证后续连接仍是 HTTPS");
+  expect(ARTWORK_CONSENT.details).toContain("无法保证全程加密");
   expect(LOCATION_CONSENT.details).toContain("不启用后台定位");
   for (const request of [
     ARTWORK_CONSENT,

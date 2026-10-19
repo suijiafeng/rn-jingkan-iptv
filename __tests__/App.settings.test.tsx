@@ -86,7 +86,7 @@ test("settings permission write failures are shown without granting access", asy
     expect(screen.getByText("从一份节目单开始")).toBeTruthy(),
   );
   await fireEvent.press(screen.getByText("设置"));
-  await fireEvent.press(screen.getByText("阅读风险并允许"));
+  await fireEvent.press(screen.getByText("了解说明并允许"));
   await fireEvent.press(await screen.findByRole("button", { name: "允许" }));
   await waitFor(() =>
     expect(screen.getByText("联网许可未保存，请重试")).toBeTruthy(),
@@ -116,10 +116,10 @@ test("failed revocation stays blocked and can persist a retry without another co
   await fireEvent.press(screen.getByRole("button", { name: "撤销联网许可" }));
   await waitFor(() => expect(screen.getByText("重试保存撤销")).toBeTruthy());
   expect(persistedAllowed).toBe(true);
-  expect(screen.queryByText("阅读风险并允许")).toBeNull();
-  expect(screen.getByText("撤销尚未保存，重启后可能恢复")).toBeTruthy();
+  expect(screen.queryByText("了解说明并允许")).toBeNull();
+  expect(screen.getByText("撤销尚未保存，保存前许可仍可能有效")).toBeTruthy();
   await fireEvent.press(screen.getByText("重试保存撤销"));
-  await waitFor(() => expect(screen.getByText("阅读风险并允许")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("了解说明并允许")).toBeTruthy());
   expect(alert).toHaveBeenCalledTimes(1);
   expect(persistedAllowed).toBe(false);
   expect(repo.setSetting.mock.calls).toEqual([
@@ -187,7 +187,7 @@ test("revoking networking removes previously authorized channel artwork", async 
   ).toBeGreaterThan(0);
   await fireEvent.press(screen.getByRole("tab", { name: "设置" }));
   await fireEvent.press(screen.getByRole("button", { name: "撤销联网许可" }));
-  await screen.findByRole("button", { name: "阅读风险并允许" });
+  await screen.findByRole("button", { name: "了解说明并允许" });
   await fireEvent.press(screen.getByRole("tab", { name: "频道" }));
   await screen.findByLabelText("中文新闻，播放");
   expect(
@@ -259,7 +259,7 @@ test.each(["revocation", "unmount"])(
       await fireEvent.press(
         screen.getByRole("button", { name: "撤销联网许可" }),
       );
-      await screen.findByRole("button", { name: "阅读风险并允许" });
+      await screen.findByRole("button", { name: "了解说明并允许" });
     } else await ui.unmount();
     await act(async () => answerConsent("allow"));
     expect(repo.setSetting).not.toHaveBeenCalledWith("artworkAllowed", true);

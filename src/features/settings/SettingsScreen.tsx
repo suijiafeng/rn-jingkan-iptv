@@ -70,7 +70,9 @@ export function SettingsScreen(props: Props) {
                 : { label: "未允许", tone: "muted" }
           }
           caption={
-            props.revokePending ? "撤销尚未保存，重启后可能恢复" : undefined
+            props.revokePending
+              ? "撤销尚未保存，保存前许可仍可能有效"
+              : undefined
           }
           warn
           trailing={
@@ -86,7 +88,7 @@ export function SettingsScreen(props: Props) {
             ) : (
               <Button
                 compact
-                label="阅读风险并允许"
+                label="了解说明并允许"
                 onPress={props.onAllowRemote}
               />
             )

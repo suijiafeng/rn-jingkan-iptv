@@ -26,7 +26,7 @@ export function NetworkConsentDialog({
         title: "允许联网读取节目来源？",
         points: [
           "来源服务器会看到你的 IP",
-          "HTTP 内容可能被窃听或篡改",
+          "未加密（HTTP）内容可能被查看或篡改",
           ...(cellular ? ["当前可能在用移动数据，会消耗流量"] : []),
           "随时可在设置里撤销",
         ],
