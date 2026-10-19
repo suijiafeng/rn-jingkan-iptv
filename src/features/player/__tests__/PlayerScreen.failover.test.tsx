@@ -105,7 +105,7 @@ describe("automatic source failover", () => {
     await seconds(30);
     await settle();
     expect(onSelectSource).toHaveBeenCalledTimes(2);
-    expect(currentToast()).toBe("连接超时");
+    expect(currentToast()).toBe("连接超时，可重试");
     expect(ui.getByRole("button", { name: "重试" })).toBeTruthy();
     const mountsBefore = mockMounts.mock.calls.length;
     await fireEvent.press(ui.getByRole("button", { name: "重试" }));
@@ -132,7 +132,7 @@ describe("automatic source failover", () => {
     await settle();
     expect(onSelectSource).not.toHaveBeenCalled();
     expect(mockMounts).toHaveBeenCalledTimes(1);
-    expect(currentToast()).toBe("无法播放");
+    expect(currentToast()).toBe("当前来源暂时无法播放");
     expect(ui.getByRole("button", { name: "重试" })).toBeTruthy();
     await ui.unmount();
   });
@@ -149,7 +149,7 @@ describe("automatic source failover", () => {
       mockAttempt?.controller.nativeStatus(mockAttempt.attemptId, "error"),
     );
     await settle();
-    expect(currentToast()).toBe("无法播放");
+    expect(currentToast()).toBe("当前来源暂时无法播放");
     expect(
       ui.getByRole("button", { name: "重试，上次检测不可达" }),
     ).toBeTruthy();
@@ -188,7 +188,7 @@ describe("automatic source failover", () => {
     await seconds(30);
     await settle();
     expect(onSelectSource).toHaveBeenCalledTimes(3);
-    expect(currentToast()).toBe("连接超时");
+    expect(currentToast()).toBe("连接超时，可重试");
     await ui.unmount();
   });
   test("offline and a user pause never switch sources", async () => {

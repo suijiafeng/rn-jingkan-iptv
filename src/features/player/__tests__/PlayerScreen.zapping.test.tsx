@@ -135,7 +135,7 @@ describe("waiting and failure", () => {
     expect(currentToast()).toBeNull();
     await seconds(12);
     expect(ui.getByLabelText("正在加载，比平时慢")).toBeTruthy();
-    expect(currentToast()).toBe("加载较慢");
+    expect(currentToast()).toBe("网络较慢，正在加载");
     await ui.unmount();
   });
 
@@ -144,7 +144,7 @@ describe("waiting and failure", () => {
     const options = props();
     const ui = await render(<PlayerScreen {...options} />);
     await seconds(30);
-    expect(currentToast()).toBe("连接超时");
+    expect(currentToast()).toBe("连接超时，可重试");
     const mountsBefore = mockMounts.mock.calls.length;
     await fireEvent.press(ui.getByRole("button", { name: "重试" }));
     await act(async () => {
@@ -152,7 +152,7 @@ describe("waiting and failure", () => {
     });
     expect(mockMounts.mock.calls.length).toBe(mountsBefore + 1);
     await seconds(30);
-    expect(currentToast()).toBe("连接超时");
+    expect(currentToast()).toBe("连接超时，可重试");
     expect(ui.getByRole("button", { name: "重试" })).toBeTruthy();
     await ui.unmount();
   });

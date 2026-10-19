@@ -59,7 +59,7 @@ export function PlayerScreen(props: PlayerScreenProps) {
   const requestBackgroundPlayback = () => {
     Alert.alert(
       "锁屏继续收听",
-      "开启后台播放后，切换应用或锁屏仍会播放，并提供系统媒体控制。会持续联网并耗电；听音频仍可能下载视频，不是离线或省流模式。",
+      "开启后台播放后，切换应用或锁屏仍会播放，并提供系统媒体控制。会持续联网并耗电；听音频时仍可能下载视频画面，流量不一定减少。",
       [
         { text: "仅前台收听", style: "cancel" },
         ...(props.onEnableBackgroundPlayback

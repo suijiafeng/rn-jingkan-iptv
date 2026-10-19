@@ -72,8 +72,8 @@ export const descriptions: Record<
   },
   blocked: { title: "还没允许联网", body: "去设置里允许后再播放" },
   offline: { title: "没有网络", body: "连上后再试" },
-  timeout: { title: "连接超时", body: "" },
-  error: { title: "无法播放", body: "" },
+  timeout: { title: "连接超时，可重试", body: "" },
+  error: { title: "当前来源暂时无法播放", body: "" },
   ended: { title: "直播已结束", body: "" },
 };
 

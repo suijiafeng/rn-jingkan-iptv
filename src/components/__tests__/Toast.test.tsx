@@ -30,10 +30,10 @@ afterEach(() => {
 test("a toast shows at the top under the status bar, is announced once, and goes after 3 s", async () => {
   await render(<ToastHost />);
   expect(screen.queryByTestId("global-toast", hidden)).toBeNull();
-  await act(async () => showToast("连接超时"));
-  expect(screen.getByText("连接超时", hidden)).toBeTruthy();
+  await act(async () => showToast("连接超时，可重试"));
+  expect(screen.getByText("连接超时，可重试", hidden)).toBeTruthy();
   expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledWith(
-    "连接超时",
+    "连接超时，可重试",
   );
   const host = screen.getByTestId("global-toast-host", hidden);
   expect(host.props.style).toEqual(
@@ -42,12 +42,12 @@ test("a toast shows at the top under the status bar, is announced once, and goes
   await act(async () => {
     jest.advanceTimersByTime(TOAST_MS - 1);
   });
-  expect(currentToast()).toBe("连接超时");
+  expect(currentToast()).toBe("连接超时，可重试");
   await act(async () => {
     jest.advanceTimersByTime(1);
   });
   expect(currentToast()).toBeNull();
-  expect(screen.queryByText("连接超时", hidden)).toBeNull();
+  expect(screen.queryByText("连接超时，可重试", hidden)).toBeNull();
 });
 
 test("a newer toast replaces the one showing and gets its own full time", async () => {
@@ -56,12 +56,12 @@ test("a newer toast replaces the one showing and gets its own full time", async 
   await act(async () => {
     jest.advanceTimersByTime(2000);
   });
-  await act(async () => showToast("加载较慢"));
+  await act(async () => showToast("网络较慢，正在加载"));
   expect(screen.queryByText("没有网络", hidden)).toBeNull();
   await act(async () => {
     jest.advanceTimersByTime(2000);
   });
-  expect(screen.getByText("加载较慢", hidden)).toBeTruthy();
+  expect(screen.getByText("网络较慢，正在加载", hidden)).toBeTruthy();
   await act(async () => hideToast());
   expect(currentToast()).toBeNull();
 });

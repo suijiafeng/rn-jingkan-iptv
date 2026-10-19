@@ -7,8 +7,10 @@ const quiet = {
 };
 
 test("failures say only what happened", () => {
-  expect(playerNotice({ ...quiet, phase: "timeout" })).toBe("连接超时");
-  expect(playerNotice({ ...quiet, phase: "error" })).toBe("无法播放");
+  expect(playerNotice({ ...quiet, phase: "timeout" })).toBe("连接超时，可重试");
+  expect(playerNotice({ ...quiet, phase: "error" })).toBe(
+    "当前来源暂时无法播放",
+  );
   expect(playerNotice({ ...quiet, phase: "offline" })).toBe("没有网络");
   expect(playerNotice({ ...quiet, phase: "ended" })).toBe("直播已结束");
 });
@@ -23,7 +25,7 @@ test("waiting is silent until a switch or a slow start", () => {
     }),
   ).toBe("来源 2/3 连接中");
   expect(playerNotice({ ...quiet, phase: "buffering", slow: true })).toBe(
-    "加载较慢",
+    "网络较慢，正在加载",
   );
   expect(playerNotice({ ...quiet, phase: "playing" })).toBeNull();
 });

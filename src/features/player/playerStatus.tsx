@@ -220,8 +220,7 @@ export function playerNotice({
   pausedBody: string;
   slow: boolean;
 }): string | null {
-  // What happened, nothing more: the retry chip is the one action, and a
-  // failed last check is a mark on that chip, not another sentence.
+  // What happened, nothing more: the retry chip is the one action.
   if (
     phase === "timeout" ||
     phase === "error" ||
@@ -231,7 +230,7 @@ export function playerNotice({
   )
     return descriptions[phase].title;
   if (phase === "paused") return pausedBody || null;
-  if (slow) return "加载较慢";
+  if (slow) return "网络较慢，正在加载";
   if (phase === "checking" || phase === "connecting") return connectingTitle;
   return null;
 }

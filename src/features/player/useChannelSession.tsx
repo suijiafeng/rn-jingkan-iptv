@@ -272,7 +272,7 @@ export function useChannelSession(props: SessionProps) {
     state.pauseReason === "background"
       ? "切到后台时暂停"
       : state.pauseReason === "interrupted"
-        ? "被其他应用打断"
+        ? "音频被其他应用占用，已暂停"
         : "";
   // Glyph of the primary key: ▶ when paused or stopped, ❚❚ while playing.
   // It sits in the middle of the picture; loading shows the dots there, and

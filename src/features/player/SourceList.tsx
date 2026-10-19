@@ -41,7 +41,7 @@ export function SourceList({
               {selected ? "●" : "○"} {qualityName(source)} · {source.sourceName}
             </Text>
             {source.checkStatus === "unreachable" && (
-              <Text style={styles.sourceWarning}>上次检测未响应</Text>
+              <Text style={styles.sourceWarning}>上次检测未连通</Text>
             )}
           </Pressable>
         );

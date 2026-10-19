@@ -323,8 +323,8 @@ describe("primary control", () => {
       await act(async () => {
         jest.advanceTimersByTime(1000);
       });
-    expect(currentToast()).toBe("连接超时");
-    expect(ui.queryByText("连接超时")).toBeNull();
+    expect(currentToast()).toBe("连接超时，可重试");
+    expect(ui.queryByText("连接超时，可重试")).toBeNull();
     expect(ui.queryByTestId("primary-play-pause")).toBeNull();
     await fireEvent.press(ui.getByRole("button", { name: "重试" }));
     await act(async () => {
