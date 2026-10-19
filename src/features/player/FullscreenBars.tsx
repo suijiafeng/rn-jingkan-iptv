@@ -2,15 +2,16 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors } from "../../theme";
 import { LiveBadge, MediaStatus, OverlayButton } from "./overlayWidgets";
-import { ChevronLeftIcon, MenuIcon } from "./playerIcons";
+import { ChevronLeftIcon, ExitFullscreenIcon, MenuIcon } from "./playerIcons";
 import type { SessionProps } from "./ChannelSession";
 import type { SessionView } from "./useChannelSession";
 
 /**
- * Fullscreen only. Top bar: back, title, favorite (what is playing). Bottom
- * bar: the timeline for catch-up streams, the live badge, then the source
- * chip and the channel list (ways to play something else). Zapping lives in
- * the centre cluster the session draws for both layouts.
+ * Fullscreen only. Top bar: back, title, then the source chip first in the
+ * right-hand group (above the popover it opens) and favorite. Bottom
+ * bar: the timeline for catch-up streams, the live badge, then volume first
+ * in the right-hand group, leave landscape and the channel list. Zapping
+ * lives in the centre cluster the session draws for both layouts.
  */
 export function FullscreenBars({
   view,
@@ -70,6 +71,8 @@ export function FullscreenBars({
               .join(" · ")}
           </Text>
         </View>
+        {/* Source leads the right-hand group. */}
+        {props.fullscreen && sourceButton}
         {props.fullscreen && favoriteButton}
       </View>
       {props.fullscreen && controlsVisible && (
@@ -90,9 +93,15 @@ export function FullscreenBars({
           <View style={styles.row}>
             {!mediaInfo.seekable && mediaInfo.isLive && <LiveBadge />}
             <View style={styles.flex} />
-            {sourceButton}
+            {/* Volume leads the right-hand group. */}
             {view.muteButton}
-            {view.pictureInPictureButton}
+            <OverlayButton
+              label="退出横屏"
+              icon={<ExitFullscreenIcon size={20} />}
+              accessibilityLabel="退出横屏"
+              variant="quiet"
+              onPress={props.onToggleFullscreen}
+            />
             <OverlayButton
               label="频道列表"
               icon={<MenuIcon />}

@@ -44,7 +44,18 @@ export const sessionStyles = StyleSheet.create({
     lineHeight: 18,
     textAlign: "center",
   },
-  noticeText: { gap: 8 },
+  // Anchored around the vertical centre, where the zap cluster (at most 64
+  // tall) is pinned: the text block ends just above it and the link starts
+  // just below it.
+  noticeText: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: "50%",
+    marginBottom: 48,
+    gap: 8,
+  },
+  belowCluster: { position: "absolute", top: "50%", marginTop: 44 },
   quietLink: { alignSelf: "center", paddingHorizontal: 12, paddingVertical: 6 },
   quietLinkText: {
     color: colors.muted,
@@ -93,7 +104,13 @@ export const sessionStyles = StyleSheet.create({
     lineHeight: 27,
     fontWeight: "600",
   },
-  portraitBottomRight: { position: "absolute", bottom: 6, right: 6 },
+  portraitBottomRight: {
+    position: "absolute",
+    bottom: 6,
+    right: 6,
+    flexDirection: "row",
+    gap: 6,
+  },
   portraitInfo: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -115,7 +132,7 @@ export const sessionStyles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 2,
   },
-  portraitMedia: { position: "absolute", left: 14, right: 56, bottom: 16 },
+  portraitMedia: { position: "absolute", left: 14, right: 102, bottom: 16 },
   portraitTopLeft: { position: "absolute", top: 6, left: 6 },
   portraitTopRight: {
     position: "absolute",

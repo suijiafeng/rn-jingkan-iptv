@@ -226,6 +226,8 @@ export function ChannelSession(props: SessionProps) {
               pointerEvents="box-none"
               accessibilityLiveRegion="polite"
             >
+              {/* Text sits above the centred cluster and grows upwards, so the
+                  buttons stay put whatever the message says. */}
               <View pointerEvents="none" style={sessionStyles.noticeText}>
                 {waiting ? (
                   <LoadingTitle
@@ -249,10 +251,10 @@ export function ChannelSession(props: SessionProps) {
                   )
                 )}
               </View>
-              {(state.attemptId === null || starting) && zapCluster(false)}
+              {(state.attemptId === null || starting) && zapCluster(true)}
               {state.phase === "cellular" && (
                 <Pressable
-                  style={sessionStyles.quietLink}
+                  style={[sessionStyles.quietLink, sessionStyles.belowCluster]}
                   accessibilityRole="button"
                   accessibilityLabel="暂不播放"
                   onPress={() => controller.pause("cellular-declined")}
@@ -296,6 +298,8 @@ export function ChannelSession(props: SessionProps) {
               />
             </View>
             <View style={sessionStyles.portraitBottomRight}>
+              {/* Volume leads the right-hand group. */}
+              {view.muteButton}
               <OverlayButton
                 label="横屏全屏"
                 icon={<FullscreenIcon size={20} />}
@@ -305,7 +309,6 @@ export function ChannelSession(props: SessionProps) {
               />
             </View>
             <View style={sessionStyles.portraitTopRight}>
-              {view.muteButton}
               {view.pictureInPictureButton}
             </View>
           </>
@@ -371,6 +374,16 @@ export function ChannelSession(props: SessionProps) {
         </View>
       )}
       <FullscreenBars view={view} session={props} />
+      {props.fullscreen && sourcesOpen && (
+        // A tap anywhere outside the list dismisses it, as the portrait sheet does.
+        <Pressable
+          testID="fullscreen-sources-backdrop"
+          style={StyleSheet.absoluteFill}
+          accessible={false}
+          importantForAccessibility="no"
+          onPress={() => setSourcesOpen(false)}
+        />
+      )}
       {props.fullscreen && sourcesOpen && (
         <View
           testID="fullscreen-sources"

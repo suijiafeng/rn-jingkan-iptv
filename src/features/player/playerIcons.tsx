@@ -130,50 +130,73 @@ export function ChevronLeftIcon({ size = 22, color = colors.text }: IconProps) {
   );
 }
 
-/** Enter fullscreen: four corner brackets (portrait bottom-right). */
-export function FullscreenIcon({ size = 22, color = colors.text }: IconProps) {
+/** Four corner brackets; inward ones turn each bracket to face the centre. */
+function CornerBrackets({
+  size,
+  color,
+  inward,
+}: Required<IconProps> & { inward: boolean }) {
   const corner = size * 0.32;
   const edge = { width: corner, height: corner, borderColor: color };
+  const corners = [
+    { vertical: "top", horizontal: "left" },
+    { vertical: "top", horizontal: "right" },
+    { vertical: "bottom", horizontal: "left" },
+    { vertical: "bottom", horizontal: "right" },
+  ] as const;
+  const opposite = {
+    top: "Bottom",
+    bottom: "Top",
+    left: "Right",
+    right: "Left",
+  } as const;
+  const capital = {
+    top: "Top",
+    bottom: "Bottom",
+    left: "Left",
+    right: "Right",
+  } as const;
   return (
     <View
       style={[styles.box, { width: size, height: size }]}
       pointerEvents="none"
     >
-      <View
-        style={[
-          styles.corner,
-          edge,
-          { top: 1, left: 1, borderTopWidth: 2.5, borderLeftWidth: 2.5 },
-        ]}
-      />
-      <View
-        style={[
-          styles.corner,
-          edge,
-          { top: 1, right: 1, borderTopWidth: 2.5, borderRightWidth: 2.5 },
-        ]}
-      />
-      <View
-        style={[
-          styles.corner,
-          edge,
-          { bottom: 1, left: 1, borderBottomWidth: 2.5, borderLeftWidth: 2.5 },
-        ]}
-      />
-      <View
-        style={[
-          styles.corner,
-          edge,
-          {
-            bottom: 1,
-            right: 1,
-            borderBottomWidth: 2.5,
-            borderRightWidth: 2.5,
-          },
-        ]}
-      />
+      {corners.map(({ vertical, horizontal }) => {
+        const borderVertical = inward ? opposite[vertical] : capital[vertical];
+        const borderHorizontal = inward
+          ? opposite[horizontal]
+          : capital[horizontal];
+        return (
+          <View
+            key={`${vertical}-${horizontal}`}
+            style={[
+              styles.corner,
+              edge,
+              {
+                [vertical]: 1,
+                [horizontal]: 1,
+                [`border${borderVertical}Width`]: 2.5,
+                [`border${borderHorizontal}Width`]: 2.5,
+              },
+            ]}
+          />
+        );
+      })}
     </View>
   );
+}
+
+/** Enter fullscreen: four corner brackets (portrait bottom-right). */
+export function FullscreenIcon({ size = 22, color = colors.text }: IconProps) {
+  return <CornerBrackets size={size} color={color} inward={false} />;
+}
+
+/** Leave fullscreen: the same brackets turned inward (fullscreen bottom bar). */
+export function ExitFullscreenIcon({
+  size = 22,
+  color = colors.text,
+}: IconProps) {
+  return <CornerBrackets size={size} color={color} inward />;
 }
 
 /** Close a panel: two crossed bars. */

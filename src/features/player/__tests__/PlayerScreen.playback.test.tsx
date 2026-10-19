@@ -158,6 +158,9 @@ test("fullscreen media stays edge-to-edge while controls and sheets respect disp
   expect(
     StyleSheet.flatten(ui.getByTestId("fullscreen-sources").props.style),
   ).toMatchObject({ top: 93, right: 37, bottom: 33 });
+  // Tapping outside the list closes it.
+  await fireEvent.press(ui.getByTestId("fullscreen-sources-backdrop"));
+  expect(ui.queryByTestId("fullscreen-sources")).toBeNull();
 
   await fireEvent.press(ui.getByRole("button", { name: "频道列表" }));
   expect(

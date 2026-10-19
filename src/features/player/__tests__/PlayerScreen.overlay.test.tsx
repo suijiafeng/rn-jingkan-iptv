@@ -60,14 +60,18 @@ describe("one overlay instead of native controls", () => {
     const bottom = within(ui.getByTestId("fullscreen-bottom-controls"));
     expect(bottom.getByLabelText("直播，不可回看")).toBeTruthy();
     expect(
-      bottom.getByRole("button", {
+      top.getByRole("button", {
         name: "来源：未知清晰度 · 我的节目单，共 2 个，点击切换",
       }),
     ).toBeTruthy();
     expect(bottom.getByRole("button", { name: "频道列表" })).toBeTruthy();
+    expect(bottom.queryByRole("button", { name: "进入画中画" })).toBeNull();
     expect(bottom.queryByRole("button", { name: /上一台|下一台/ })).toBeNull();
     expect(ui.queryByRole("button", { name: /回到上一个频道/ })).toBeNull();
     expect(ui.queryByTestId("media-timeline")).toBeNull();
+    await fireEvent.press(bottom.getByRole("button", { name: "退出横屏" }));
+    expect(ui.queryByTestId("fullscreen-bottom-controls")).toBeNull();
+    expect(ui.getByRole("button", { name: "横屏全屏" })).toBeTruthy();
     await ui.unmount();
   });
 
