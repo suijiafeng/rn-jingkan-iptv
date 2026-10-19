@@ -85,3 +85,46 @@ test("v7 migration reconciles conflicting rows using the latest URL result and c
     ["unreachable", 20],
   ]);
 });
+
+test("sources report their stored result per distinct address", async () => {
+  const text = content([
+    { name: "ok", url: "https://example.com/ok.m3u8", id: "ok" },
+    { name: "ok-copy", url: "https://example.com/ok.m3u8", id: "ok-copy" },
+    { name: "down", url: "https://example.com/down.m3u8", id: "down" },
+    { name: "new", url: "https://example.com/new.m3u8", id: "new" },
+  ]);
+  const checked = await repo.importSource({
+    name: "checked",
+    kind: "file",
+    location: "checked.m3u",
+    content: text,
+    preview: await parseM3U(text),
+  });
+  const untouched = await add("untouched", "https://example.com/elsewhere");
+  const rows = await repo.listChannels({
+    sourceId: checked.id,
+    includeVariants: true,
+  });
+  const id = (name: string) => rows.find((row) => row.name === name)!.id;
+  await repo.saveCheckResults([
+    { channelId: id("ok"), streamUrl: "https://example.com/ok.m3u8", ok: true },
+    {
+      channelId: id("down"),
+      streamUrl: "https://example.com/down.m3u8",
+      ok: false,
+    },
+  ]);
+  const sources = await repo.listSources();
+  expect(sources.find((source) => source.id === checked.id)).toMatchObject({
+    reachableCount: 1,
+    unreachableCount: 1,
+  });
+  expect(
+    sources.find((source) => source.id === checked.id)?.lastCheckedAt,
+  ).toEqual(expect.any(Number));
+  expect(sources.find((source) => source.id === untouched.id)).toMatchObject({
+    reachableCount: 0,
+    unreachableCount: 0,
+    lastCheckedAt: null,
+  });
+});

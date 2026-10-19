@@ -24,6 +24,9 @@ const source: Source = {
   revision: 1,
   channelCount: 2,
   favoriteCount: 1,
+  reachableCount: 0,
+  unreachableCount: 0,
+  lastCheckedAt: null,
 };
 function props() {
   return {

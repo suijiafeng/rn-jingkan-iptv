@@ -196,7 +196,9 @@ describe("portrait layout", () => {
       ui.getByRole("button", { name: "来源：未知清晰度 · 我的节目单" }).props
         .accessibilityState.disabled,
     ).toBe(true);
-    await fireEvent.press(ui.getByRole("button", { name: "收起播放器" }));
+    await fireEvent.press(
+      ui.getByRole("button", { name: "停止播放并关闭播放器" }),
+    );
     expect(options.onClose).toHaveBeenCalledTimes(1);
     await ui.unmount();
   });

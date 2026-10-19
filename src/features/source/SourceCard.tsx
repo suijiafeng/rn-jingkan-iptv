@@ -37,6 +37,7 @@ export function SourceCard({
   const running = check?.sourceId === source.id;
   const lookupRunning = languageLookup === source.id;
   const taskBusy = running || lookupRunning;
+  const resultText = checkResultText(source, summary);
   return (
     <View
       style={[
@@ -131,12 +132,9 @@ export function SourceCard({
           </View>
         </View>
       )}
-      {!running && summary && (
+      {!running && resultText && (
         <View style={cardStyles.resultLine}>
-          <Text style={styles.muted}>
-            {summary.stopped ? "已停止：" : ""}可访问 {summary.ok} 个，不可达{" "}
-            {summary.unreachable} 个
-          </Text>
+          <Text style={styles.muted}>{resultText}</Text>
         </View>
       )}
       {lookupRunning && (
@@ -226,6 +224,17 @@ export function SourceCard({
       </View>
     </View>
   );
+}
+
+/**
+ * This session's sweep when there is one; otherwise what SQLite holds, so
+ * the result survives leaving the manager and restarting the app.
+ */
+function checkResultText(source: Source, summary?: CheckSummary) {
+  if (summary)
+    return `${summary.stopped ? "已停止：" : ""}可访问 ${summary.ok} 个，不可达 ${summary.unreachable} 个`;
+  if (source.lastCheckedAt === null) return null;
+  return `上次检测 ${formatUpdateTime(source.lastCheckedAt)} · 可访问 ${source.reachableCount} 个，不可达 ${source.unreachableCount} 个`;
 }
 
 /** A stable, compact local timestamp without depending on locale data. */

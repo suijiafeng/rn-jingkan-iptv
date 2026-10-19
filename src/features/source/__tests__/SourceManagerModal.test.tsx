@@ -20,6 +20,9 @@ const source: Source = {
   revision: 1,
   channelCount: 1,
   favoriteCount: 0,
+  reachableCount: 0,
+  unreachableCount: 0,
+  lastCheckedAt: null,
 };
 
 function renderModal(
@@ -199,3 +202,33 @@ test.each(["manager", "rename"] as const)(
     expect(screen.queryByRole("button", { name: "关闭提示" })).toBeNull();
   },
 );
+
+test("a stored check result is shown without a check in this session", async () => {
+  const checkedAt = new Date(2026, 9, 19, 14, 38).getTime();
+  await render(
+    <SourceManagerModal
+      visible
+      sources={[
+        {
+          ...source,
+          reachableCount: 508,
+          unreachableCount: 10,
+          lastCheckedAt: checkedAt,
+        },
+      ]}
+      check={null}
+      summaries={{}}
+      onClose={() => {}}
+      onAdd={() => {}}
+      onRefresh={() => {}}
+      onRename={() => {}}
+      onRemove={() => {}}
+      onEnabledChange={() => {}}
+      onCheck={() => {}}
+      onStopCheck={() => {}}
+    />,
+  );
+  expect(
+    screen.getByText("上次检测 2026/10/19 14:38 · 可访问 508 个，不可达 10 个"),
+  ).toBeTruthy();
+});

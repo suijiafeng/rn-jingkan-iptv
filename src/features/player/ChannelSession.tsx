@@ -309,10 +309,10 @@ export function ChannelSession(props: SessionProps) {
             </View>
             <View style={sessionStyles.portraitTopLeft}>
               <OverlayButton
-                label="收起播放器"
+                label="关闭播放器"
                 icon={<ChevronLeftIcon size={20} />}
                 variant="quiet"
-                accessibilityLabel="收起播放器"
+                accessibilityLabel="停止播放并关闭播放器"
                 onPress={props.onClose}
               />
             </View>

@@ -37,6 +37,15 @@ interface ControllerOptions {
   onAvailability?: (ok: boolean) => void;
 }
 export const INITIAL_PLAY_TIMEOUT_MS = 30_000;
+/**
+ * A live stream that already played and then reports a source error has
+ * usually fallen behind its playlist window (BehindLiveWindowException) or
+ * met a playlist the server stopped updating. expo-video passes neither class
+ * name, so "started, then a media failure" is the signal. A fresh attempt
+ * joins at the live edge; this many per window, then the error stands.
+ */
+export const LIVE_RECONNECT_LIMIT = 3;
+export const LIVE_RECONNECT_WINDOW_MS = 120_000;
 const activePhases: PlaybackPhase[] = [
   "checking",
   "connecting",
@@ -67,6 +76,7 @@ export class PlaybackController {
   private startedAttempt: number | null = null;
   private disposed = false;
   private pictureInPicture = false;
+  private liveReconnects: number[] = [];
 
   canContinueOutsideApp = () =>
     !!this.options.backgroundAllowed || this.pictureInPicture;
@@ -125,8 +135,9 @@ export class PlaybackController {
       ...(pauseReason ? { pauseReason } : {}),
     });
   }
-  private fail(failure: AttemptFailure) {
-    if (this.snapshot.attemptId !== null && failure !== "unknown")
+  /** A stream that already played is reachable: its failure is not recorded. */
+  private fail(failure: AttemptFailure, played = false) {
+    if (this.snapshot.attemptId !== null && failure !== "unknown" && !played)
       this.options.onAvailability?.(false);
     this.pictureInPicture = false;
     ++this.generation;
@@ -268,13 +279,28 @@ export class PlaybackController {
     failure: Exclude<AttemptFailure, "timeout"> = "unknown",
   ) {
     if (!this.isCurrentAttempt(id)) return;
-    if (status === "error") this.fail(failure);
-    else if (status === "loading")
+    if (status === "error") {
+      const played = this.startedAttempt === id;
+      if (played && failure === "media" && this.takeLiveReconnect())
+        // The old attempt (and its native player) is dropped by requestPlay;
+        // the user already allowed this stream on the current network.
+        void this.requestPlay(true);
+      else this.fail(failure, played);
+    } else if (status === "loading")
       this.publish({
         phase: this.startedAttempt === id ? "buffering" : "connecting",
         attemptId: id,
       });
     // readyToPlay is not evidence that media actually played.
+  }
+  private takeLiveReconnect(): boolean {
+    const now = Date.now();
+    this.liveReconnects = this.liveReconnects.filter(
+      (at) => now - at < LIVE_RECONNECT_WINDOW_MS,
+    );
+    if (this.liveReconnects.length >= LIVE_RECONNECT_LIMIT) return false;
+    this.liveReconnects.push(now);
+    return true;
   }
   nativeStopped(id: number) {
     if (!this.isCurrentAttempt(id)) return;

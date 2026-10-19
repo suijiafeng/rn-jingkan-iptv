@@ -4,6 +4,8 @@ import {
   backDestination,
   INITIAL_PLAY_TIMEOUT_MS,
   isOffline,
+  LIVE_RECONNECT_LIMIT,
+  LIVE_RECONNECT_WINDOW_MS,
   PlaybackController,
 } from "../playbackController";
 import {
@@ -568,5 +570,72 @@ test("real playback updates availability but user actions and unknown errors do 
   await controller.requestPlay();
   controller.networkChanged({ type: "NONE", isConnected: false });
   expect(result).toHaveBeenCalledTimes(3);
+  controller.dispose();
+});
+
+test("a source error after playback started reconnects at the live edge without marking the address", async () => {
+  jest.useFakeTimers();
+  const availability = jest.fn();
+  const { controller, checkNetwork } = setup({ onAvailability: availability });
+  checkNetwork.mockResolvedValue(mobile);
+  await controller.requestPlay(true);
+  const first = controller.getSnapshot().attemptId!;
+  controller.nativeStarted(first);
+  controller.nativeStatus(first, "error", "media");
+  // The mobile confirmation given for this stream carries over.
+  await jest.advanceTimersByTimeAsync(0);
+  const second = controller.getSnapshot();
+  expect(second.phase).toBe("connecting");
+  expect(second.attemptId).not.toBe(first);
+  expect(controller.isCurrentAttempt(first)).toBe(false);
+  expect(availability.mock.calls).toEqual([[true]]);
+  controller.dispose();
+});
+
+test("live reconnects are bounded per window; then the error stands but is not recorded", async () => {
+  jest.useFakeTimers();
+  const availability = jest.fn();
+  const { controller } = setup({ onAvailability: availability });
+  await controller.requestPlay();
+  const failMidStream = async () => {
+    const id = controller.getSnapshot().attemptId!;
+    controller.nativeStarted(id);
+    controller.nativeStatus(id, "error", "media");
+    await jest.advanceTimersByTimeAsync(0);
+  };
+  for (let round = 0; round < LIVE_RECONNECT_LIMIT; round += 1)
+    await failMidStream();
+  expect(controller.getSnapshot().phase).toBe("connecting");
+  await failMidStream();
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: "error",
+    failure: "media",
+  });
+  expect(availability).not.toHaveBeenCalledWith(false);
+
+  jest.advanceTimersByTime(LIVE_RECONNECT_WINDOW_MS);
+  await controller.requestPlay();
+  await failMidStream();
+  expect(controller.getSnapshot().phase).toBe("connecting");
+  controller.dispose();
+});
+
+test("errors before the first frame, and network errors after it, do not reconnect", async () => {
+  const { controller } = setup();
+  await controller.requestPlay();
+  controller.nativeStatus(
+    controller.getSnapshot().attemptId!,
+    "error",
+    "media",
+  );
+  expect(controller.getSnapshot().phase).toBe("error");
+  await controller.requestPlay();
+  const id = controller.getSnapshot().attemptId!;
+  controller.nativeStarted(id);
+  controller.nativeStatus(id, "error", "network");
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: "error",
+    failure: "network",
+  });
   controller.dispose();
 });

@@ -41,7 +41,13 @@ export const SOURCE_SELECT = `SELECT s.id, s.name, s.kind, s.location, s.created
   s.lastErrorCategory, s.revision, s.enabled,
   (SELECT COUNT(*) FROM channels c WHERE c.sourceId = s.id AND c.active = 1) AS channelCount,
   (SELECT COUNT(DISTINCT c.groupKey) FROM channels c JOIN favorite_groups f ON f.groupKey = c.groupKey
-    WHERE c.sourceId = s.id AND c.active = 1) AS favoriteCount
+    WHERE c.sourceId = s.id AND c.active = 1) AS favoriteCount,
+  (SELECT COUNT(DISTINCT c.streamUrl) FROM channels c
+    WHERE c.sourceId = s.id AND c.active = 1 AND c.checkStatus = 'ok') AS reachableCount,
+  (SELECT COUNT(DISTINCT c.streamUrl) FROM channels c
+    WHERE c.sourceId = s.id AND c.active = 1 AND c.checkStatus = 'unreachable') AS unreachableCount,
+  (SELECT MAX(c.checkedAt) FROM channels c
+    WHERE c.sourceId = s.id AND c.active = 1) AS lastCheckedAt
   FROM sources s`;
 export const CHANNEL_SELECT = `SELECT c.*, s.name AS sourceName, s.createdAt AS sourceCreatedAt,
   s.enabled AS sourceEnabled,

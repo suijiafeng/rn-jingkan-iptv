@@ -15,6 +15,14 @@ export interface Source {
   revision: number;
   channelCount: number;
   favoriteCount: number;
+  /**
+   * Stored availability of this source's distinct addresses, from manual or
+   * automatic checks and from real playback; unchecked addresses count in
+   * neither.
+   */
+  reachableCount: number;
+  unreachableCount: number;
+  lastCheckedAt: number | null;
 }
 
 export interface ParsedChannel {
