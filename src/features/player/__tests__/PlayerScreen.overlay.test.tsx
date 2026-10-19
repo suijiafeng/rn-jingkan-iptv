@@ -228,6 +228,21 @@ describe("portrait layout", () => {
     await ui.unmount();
     spy.mockRestore();
   });
+
+  test("the source sheet closes from its × without touching playback", async () => {
+    const options = props({ sources: [first, second] });
+    const ui = await render(<PlayerScreen {...options} />);
+    await fireEvent.press(
+      ui.getByRole("button", {
+        name: "来源：未知清晰度 · 我的节目单，共 2 个，点击切换",
+      }),
+    );
+    expect(ui.queryByText("关闭")).toBeNull();
+    await fireEvent.press(ui.getByRole("button", { name: "关闭播放来源" }));
+    expect(ui.queryByTestId("source-sheet")).toBeNull();
+    expect(options.onClose).not.toHaveBeenCalled();
+    await ui.unmount();
+  });
 });
 
 describe("docked bar", () => {

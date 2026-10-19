@@ -28,6 +28,7 @@ import {
   type SavedListPosition,
 } from "./ChannelPanel";
 import { ChannelSession } from "./ChannelSession";
+import { CloseIcon } from "./playerIcons";
 import { SourceList } from "./SourceList";
 import { backDestination } from "./playbackController";
 import type { PlayerScreenProps } from "./playerShared";
@@ -243,7 +244,7 @@ export function PlayerScreen(props: PlayerScreenProps) {
                 accessibilityLabel="关闭播放来源"
                 onPress={() => setSourcesOpen(false)}
               >
-                <Text style={screenStyles.sheetActionText}>关闭</Text>
+                <CloseIcon />
               </Pressable>
             </View>
             <SourceList
@@ -340,5 +341,4 @@ const screenStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  sheetActionText: { color: colors.accent, fontSize: 13, lineHeight: 20 },
 });
