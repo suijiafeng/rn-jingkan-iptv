@@ -28,9 +28,9 @@ export class RepositoryError extends Error {
     super(
       {
         source_missing: "来源已删除。",
-        stale_refresh: "此刷新已过期，请重新刷新。",
+        stale_refresh: "本次刷新已被新的刷新取代，请重新刷新。",
         empty_import: "没有有效频道，原数据保持不变。",
-        invalid_input: "导入数据不完整。",
+        invalid_input: "导入内容不完整，请重新导入。",
         newer_schema: "本地数据由更新版本创建，请更新应用。",
         channel_missing: "频道已不可用。",
       }[code],

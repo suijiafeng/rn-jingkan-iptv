@@ -54,7 +54,7 @@ export async function lookupIptvOrgLanguages(
     });
     if (!response.ok || !response.body)
       throw new LanguageLookupError(
-        `iptv-org 数据库暂时无法访问（HTTP ${response.status}），请稍后重试`,
+        `语言数据库暂时无法访问（错误码 ${response.status}），请稍后再试`,
       );
     const text = await readBoundedStream(
       response.body,
@@ -68,8 +68,8 @@ export async function lookupIptvOrgLanguages(
       signal.aborted
         ? "已停止补全语言"
         : deadline.timedOut
-          ? "下载 iptv-org 数据库超时，请检查网络后重试"
-          : "无法读取 iptv-org 数据库，请检查网络后重试",
+          ? "语言数据库下载超时，请检查网络后重试"
+          : "语言数据库读取未完成，请检查网络后重试",
     );
   } finally {
     deadline.close();

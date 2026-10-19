@@ -255,7 +255,7 @@ test("a stored check result shows only the unreachable count", async () => {
       onStopCheck={() => {}}
     />,
   );
-  expect(screen.getByText(/1 个频道 · 10 个不可达/)).toBeTruthy();
+  expect(screen.getByText(/1 个频道 · 10 个暂时无法连接/)).toBeTruthy();
   expect(screen.getByRole("button", { name: "重新检测" })).toBeTruthy();
 });
 

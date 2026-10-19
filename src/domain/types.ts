@@ -71,8 +71,8 @@ export const IMPORT_ISSUE_LABELS: Record<ImportIssueReason, string> = {
   missing_extinf: "地址前缺少频道信息",
   invalid_extinf: "频道信息格式错误",
   invalid_url: "地址格式错误",
-  unsafe_url: "不支持的本机、私网或特殊地址",
-  unsupported_protocol: "不支持的地址协议",
+  unsafe_url: "不支持的本机、局域网或特殊地址",
+  unsupported_protocol: "不支持的地址类型",
   relative_without_base: "本地文件中无法解析的相对地址",
   duplicate: "重复频道",
 };

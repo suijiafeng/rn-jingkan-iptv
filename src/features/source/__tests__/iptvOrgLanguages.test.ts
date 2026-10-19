@@ -61,7 +61,7 @@ test("HTTP errors, broken JSON and cancellation become readable errors", async (
   fetchMock.mockResolvedValueOnce({ ok: false, status: 503, body: null });
   await expect(
     lookupIptvOrgLanguages(new Set(), new AbortController().signal),
-  ).rejects.toThrow(/HTTP 503/);
+  ).rejects.toThrow(/错误码 503/);
   fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body: body("{") });
   await expect(
     lookupIptvOrgLanguages(new Set(), new AbortController().signal),

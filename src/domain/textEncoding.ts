@@ -4,7 +4,7 @@ export type PlaylistEncoding = "utf-8" | "gbk";
 
 export class TextEncodingError extends Error {
   constructor() {
-    super("文件既不是 UTF-8 也不是 GBK 编码，请转换为 UTF-8 后重试");
+    super("无法识别文件编码，请另存为 UTF-8 后导入");
     this.name = "TextEncodingError";
   }
 }

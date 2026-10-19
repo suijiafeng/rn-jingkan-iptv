@@ -123,7 +123,7 @@ export function useSourceTasks({
         say(
           failure instanceof Error && failure.message
             ? failure.message
-            : "补全语言失败，请稍后重试",
+            : "语言补全未完成，请稍后重试",
         );
     } finally {
       if (languageController.current === abort) {
@@ -195,7 +195,7 @@ export function useSourceTasks({
             ? failure.message
             : failure instanceof ImportIOError
               ? failure.message
-              : "检测未完成，请重试",
+              : "检测未完成，可重新检测",
         );
     } finally {
       if (checkController.current === abort) {

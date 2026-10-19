@@ -66,7 +66,7 @@ test("a successfully read file clears the previous read error", async () => {
   pick("broken.m3u");
   (readPickedFile as jest.Mock).mockRejectedValueOnce(new Error("bad"));
   await act(async () => result.current.chooseFile());
-  expect(result.current.formError).toMatch("文件无法读取");
+  expect(result.current.formError).toMatch("文件无法打开");
   pick("good.m3u");
   (readPickedFile as jest.Mock).mockResolvedValueOnce("#EXTM3U");
   await act(async () => result.current.chooseFile());
@@ -113,6 +113,8 @@ test("a refresh that cannot start from management shows its error there", async 
   const { result, onReturnToManagement, setError } = await mount();
   repo.beginRefresh.mockRejectedValueOnce(new Error("busy"));
   await act(async () => result.current.refresh(source, true));
-  expect(setError).toHaveBeenLastCalledWith("来源正在刷新或已删除");
+  expect(setError).toHaveBeenLastCalledWith(
+    "该来源正在刷新或已删除，请稍后重试",
+  );
   expect(onReturnToManagement).toHaveBeenCalledTimes(1);
 });

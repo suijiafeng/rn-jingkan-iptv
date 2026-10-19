@@ -9,7 +9,8 @@ export class UrlValidationError extends Error {
     super(
       {
         invalid_url: "地址格式不正确。",
-        unsafe_url: "不支持包含登录信息、本机、私网或特殊用途的地址。",
+        unsafe_url:
+          "出于安全考虑，不支持包含账号密码、本机、局域网或其他特殊用途的地址。",
         unsupported_protocol: "只支持 HTTP 或 HTTPS 网络地址。",
         relative_without_base:
           "本地文件中的相对地址无法解析，请使用完整网络地址。",

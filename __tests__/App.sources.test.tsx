@@ -333,7 +333,7 @@ test("failed saving of finished results after a manual stop remains visible", as
   await waitFor(() => expect(checkChannels).toHaveBeenCalledTimes(1));
   await fireEvent.press(screen.getByText("停止检测"));
   await waitFor(() =>
-    expect(screen.getByText("检测结果未能保存，请重试")).toBeTruthy(),
+    expect(screen.getByText("检测结果未保存，可重新检测")).toBeTruthy(),
   );
   expect(screen.getByRole("header", { name: "节目来源" })).toBeTruthy();
 });

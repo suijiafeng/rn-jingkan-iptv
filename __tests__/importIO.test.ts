@@ -47,7 +47,7 @@ test("revoked remote consent prevents fetch even for HTTPS", async () => {
       new AbortController().signal,
       false,
     ),
-  ).rejects.toThrow("尚未允许");
+  ).rejects.toThrow("需要先允许联网");
   expect(fetchMock).not.toHaveBeenCalled();
 });
 test("cancellation does not return partial data", async () => {

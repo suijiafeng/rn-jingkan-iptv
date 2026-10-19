@@ -190,7 +190,7 @@ function ImportPreviewBody({
     <>
       {stats.http > 0 && (
         <Text style={formStyles.warnText}>
-          {stats.http} 个频道使用 HTTP 明文
+          {stats.http} 个频道未加密（HTTP）
         </Text>
       )}
       {skipped > 0 && (

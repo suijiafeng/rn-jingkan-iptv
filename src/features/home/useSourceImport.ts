@@ -123,7 +123,7 @@ export function useSourceImport({
       }
     } catch {
       if (task === generation.current)
-        setFormError(`文件无法读取或超过 ${MAX_MIB} MiB`);
+        setFormError(`文件无法打开或超过 ${MAX_MIB} MB`);
     } finally {
       if (task === generation.current) {
         setBusy(false);
@@ -165,7 +165,7 @@ export function useSourceImport({
         setFormError(
           failure instanceof Error
             ? failure.message
-            : "无法解析节目单，请检查后重试",
+            : "节目单解析未完成，请检查内容后重试",
         );
         if (snapshot.refresh && !abort.signal.aborted)
           void repo
@@ -258,7 +258,7 @@ export function useSourceImport({
       });
       setFormError("");
     } catch {
-      setError("来源正在刷新或已删除");
+      setError("该来源正在刷新或已删除，请稍后重试");
       if (openedFromManagement) {
         fromManagement.current = false;
         onReturnToManagement();

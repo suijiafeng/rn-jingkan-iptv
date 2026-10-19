@@ -26,7 +26,7 @@ export async function readBoundedStream(
         reader.read(),
         new Promise<never>((_unused, reject) => {
           timer = setTimeout(
-            () => reject(new ImportIOError("读取超时，请检查连接后重试")),
+            () => reject(new ImportIOError("读取超时，请检查网络后重试")),
             15000,
           );
         }),
@@ -35,7 +35,7 @@ export async function readBoundedStream(
       if (result.done) break;
       size += result.value.byteLength;
       if (size > maxBytes)
-        throw new ImportIOError(`节目单超过 ${MAX_MIB} MiB 上限，请拆分后导入`);
+        throw new ImportIOError(`节目单超过 ${MAX_MIB} MB，请拆分后导入`);
       chunks.push(result.value);
     }
     const bytes = new Uint8Array(size);
@@ -50,7 +50,7 @@ export async function readBoundedStream(
       throw new ImportIOError(
         error instanceof TextEncodingError
           ? error.message
-          : "文件编码无法识别，请转换为 UTF-8 后重试",
+          : "无法识别文件编码，请另存为 UTF-8 后导入",
       );
     }
   } finally {
@@ -64,7 +64,7 @@ export async function downloadPlaylist(
   signal: AbortSignal,
   allowed: boolean,
 ): Promise<{ text: string; url: string }> {
-  if (!allowed) throw new ImportIOError("尚未允许联网，请先阅读网络风险说明");
+  if (!allowed) throw new ImportIOError("需要先允许联网");
   const url = normalizeRemoteUrl(input);
   const deadline = linkedDeadline(signal, 60000);
   const connect = setTimeout(deadline.abort, 10000);
@@ -77,14 +77,14 @@ export async function downloadPlaylist(
     if (!response.ok)
       throw new ImportIOError(
         response.status === 401 || response.status === 403
-          ? "节目单访问被拒绝，请检查授权或有效期"
+          ? "节目单服务器拒绝访问，链接可能已过期，请向提供方确认"
           : response.status === 404 || response.status === 410
-            ? "节目单地址已失效，请检查链接"
-            : `节目单服务器返回 HTTP ${response.status}，请稍后重试`,
+            ? "节目单地址不存在，请检查链接"
+            : `节目单服务器暂时无响应（错误码 ${response.status}），请稍后再试`,
       );
     if (Number(response.headers.get("content-length")) > MAX_IMPORT_BYTES)
-      throw new ImportIOError(`节目单超过 ${MAX_MIB} MiB 上限`);
-    if (!response.body) throw new ImportIOError("服务器没有返回节目单");
+      throw new ImportIOError(`节目单超过 ${MAX_MIB} MB）`);
+    if (!response.body) throw new ImportIOError("服务器未返回内容，请检查链接");
     const finalUrl = normalizeRemoteUrl(response.url || url);
     return {
       text: await readBoundedStream(response.body, deadline.signal),
@@ -97,7 +97,7 @@ export async function downloadPlaylist(
         ? "导入已取消"
         : deadline.signal.aborted
           ? "连接或读取超时，请重试"
-          : "无法读取节目单，请检查网络或来源地址",
+          : "节目单读取未完成，请检查网络或链接",
     );
   } finally {
     clearTimeout(connect);
@@ -110,9 +110,9 @@ export async function readPickedFile(
 ): Promise<string> {
   const file = new File(uri);
   try {
-    if (!file.exists) throw new ImportIOError("所选文件已不可访问，请重新选择");
+    if (!file.exists) throw new ImportIOError("所选文件无法访问，请重新选择");
     if (file.size > MAX_IMPORT_BYTES)
-      throw new ImportIOError(`文件超过 ${MAX_MIB} MiB 上限`);
+      throw new ImportIOError(`文件超过 ${MAX_MIB} MB）`);
     return await readBoundedStream(file.readableStream(), signal);
   } finally {
     try {

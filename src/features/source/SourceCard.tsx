@@ -48,7 +48,7 @@ export function SourceCard({
   const unreachable = summary ? summary.unreachable : source.unreachableCount;
   const meta = [
     `${source.channelCount} 个频道`,
-    checked && unreachable > 0 ? `${unreachable} 个不可达` : "",
+    checked && unreachable > 0 ? `${unreachable} 个暂时无法连接` : "",
     summary?.stopped ? "检测已停止" : "",
     updatedAgo(source.lastSuccessAt, now),
   ]
