@@ -133,6 +133,13 @@ export function ChannelSession(props: SessionProps) {
             audioOnly={props.audioOnly}
           />
         )}
+        {/* Shade only the video; every label and control renders above it. */}
+        {!props.mini && controlsVisible && !props.sheetOpen && (
+          <>
+            <Shade edge="top" heightRatio={0.46} />
+            <Shade edge="bottom" heightRatio={0.52} />
+          </>
+        )}
         {props.audioOnly && (
           <View
             style={[StyleSheet.absoluteFill, sessionStyles.audioStage]}
@@ -283,12 +290,6 @@ export function ChannelSession(props: SessionProps) {
               )}
             </View>
           )}
-        {!props.mini && controlsVisible && !props.sheetOpen && (
-          <>
-            <Shade edge="top" heightRatio={0.46} />
-            <Shade edge="bottom" heightRatio={0.52} />
-          </>
-        )}
         {!props.mini &&
           controlsVisible &&
           !props.sheetOpen &&

@@ -185,11 +185,7 @@ export function SourceChip({
   );
 }
 
-/**
- * The prototype's gradient shade behind the overlay bars, built from stacked
- * translucent strips (no gradient module in the dependency set).
- */
-const SHADE_STEPS = 8;
+/** Native continuous gradient: dark at the controls, transparent at the centre. */
 export function Shade({
   edge,
   heightRatio,
@@ -206,21 +202,7 @@ export function Shade({
         edge === "top" ? styles.shadeTop : styles.shadeBottom,
         { height: `${Math.round(heightRatio * 100)}%` },
       ]}
-    >
-      {Array.from({ length: SHADE_STEPS }, (_unused, step) => {
-        // Strip nearest the edge is darkest; alpha fades toward the centre.
-        const alpha = 0.74 * (1 - step / SHADE_STEPS);
-        return (
-          <View
-            key={step}
-            style={[
-              styles.shadeStrip,
-              { backgroundColor: `rgba(4, 8, 10, ${alpha.toFixed(3)})` },
-            ]}
-          />
-        );
-      })}
-    </View>
+    />
   );
 }
 
@@ -449,9 +431,16 @@ const styles = StyleSheet.create({
   chipQuality: { color: colors.accent, fontWeight: "600" },
   chipQualityUnknown: { color: colors.muted },
   shade: { position: "absolute", left: 0, right: 0 },
-  shadeTop: { top: 0, flexDirection: "column" },
-  shadeBottom: { bottom: 0, flexDirection: "column-reverse" },
-  shadeStrip: { flex: 1 },
+  shadeTop: {
+    top: 0,
+    backgroundImage:
+      "linear-gradient(to bottom, rgba(4, 8, 10, 0.55), rgba(4, 8, 10, 0))",
+  },
+  shadeBottom: {
+    bottom: 0,
+    backgroundImage:
+      "linear-gradient(to top, rgba(4, 8, 10, 0.55), rgba(4, 8, 10, 0))",
+  },
   overlayButtonDisabled: { opacity: 0.4 },
   overlayButtonSolid: { backgroundColor: colors.raised },
   overlayButtonText: {
