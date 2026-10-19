@@ -119,7 +119,7 @@ export function SourceDialogs({
         onChooseFile={() => void importer.chooseFile()}
         onPreview={() => void importer.preview()}
         onSave={() => void importer.save()}
-        onClose={() => void importer.closeForm()}
+        onBack={() => void importer.backForm()}
       />
     </>
   );

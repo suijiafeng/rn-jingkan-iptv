@@ -63,6 +63,33 @@ test("preview requires an explicit save before writing valid channels", async ()
   await fireEvent.press(screen.getByRole("button", { name: "导入 1 个频道" }));
   await waitFor(() => expect(repo.importSource).toHaveBeenCalledTimes(1));
 });
+test("back from preview returns to editing; back again asks before discarding", async () => {
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" ? true : fallback,
+  );
+  (downloadPlaylist as jest.Mock).mockResolvedValue({
+    text: "#EXTM3U\n#EXTINF:-1,山野\nhttps://example.com/live.m3u8",
+    url: "https://example.com/list.m3u",
+  });
+  const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  await openForm();
+  await fireEvent.press(screen.getByText("预览"));
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "导入 1 个频道" })).toBeTruthy(),
+  );
+  await fireEvent.press(screen.getByRole("button", { name: "返回" }));
+  // One level only: the inputs are back, nothing was asked or discarded.
+  expect(screen.getByDisplayValue("https://example.com/list.m3u")).toBeTruthy();
+  expect(alert).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole("button", { name: "返回" }));
+  expect(alert).toHaveBeenCalledWith(
+    "放弃这次导入？",
+    expect.any(String),
+    expect.any(Array),
+    expect.anything(),
+  );
+  expect(repo.importSource).not.toHaveBeenCalled();
+});
 test("cancel aborts an in-flight import and a late result cannot save or reopen preview", async () => {
   repo.getSetting.mockImplementation(async (key, fallback) =>
     key === "remoteAllowed" ? true : fallback,
@@ -83,7 +110,7 @@ test("cancel aborts an in-flight import and a late result cannot save or reopen 
   await openForm();
   await fireEvent.press(screen.getByText("预览"));
   await waitFor(() => expect(downloadPlaylist).toHaveBeenCalledTimes(1));
-  await fireEvent.press(screen.getByText("关闭"));
+  await fireEvent.press(screen.getByRole("button", { name: "返回" }));
   await waitFor(() => expect(signal?.aborted).toBe(true));
   finish({
     text: "#EXTM3U\n#EXTINF:-1,晚到频道\nhttps://example.com/a.m3u8",

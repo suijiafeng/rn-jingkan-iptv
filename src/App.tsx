@@ -185,7 +185,7 @@ export default function App() {
           return true;
         }
         if (importer.form) {
-          void importer.closeForm();
+          void importer.backForm();
           return true;
         }
         if (manage) {

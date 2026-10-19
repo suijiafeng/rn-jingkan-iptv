@@ -266,6 +266,16 @@ export function useSourceImport({
     }
   };
 
+  /** Back one level: preview → editing; editing → leave (asks if unsaved). */
+  const backForm = async () => {
+    if (form?.preview) {
+      // Saving the previewed list: nothing to step back to until it lands.
+      if (!busy) updateForm({});
+      return;
+    }
+    await closeForm();
+  };
+
   return {
     form,
     busy,
@@ -273,6 +283,7 @@ export function useSourceImport({
     startForm,
     updateForm,
     closeForm,
+    backForm,
     chooseFile,
     preview,
     save,

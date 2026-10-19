@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Button, Card, Heading, Notice } from "../../components/ui";
+import { BackBar, Button, Card, Heading, Notice } from "../../components/ui";
 import { displayGroups } from "../../domain/channelLabels";
 import { IMPORT_ISSUE_LABELS, ImportIssueReason } from "../../domain/types";
 import { colors, sizes, styles, type } from "../../theme";
@@ -26,7 +26,8 @@ interface Props {
   onChooseFile: () => void;
   onPreview: () => void;
   onSave: () => void;
-  onClose: () => void;
+  /** One level back: preview → editing; editing → leave (asks if unsaved). */
+  onBack: () => void;
 }
 
 /** Add / refresh playlist form: input → preview → explicit save. */
@@ -38,11 +39,13 @@ export function SourceFormModal({
   onChooseFile,
   onPreview,
   onSave,
-  onClose,
+  onBack,
 }: Props) {
   return (
-    <Modal visible={!!form} animationType="slide" onRequestClose={onClose}>
+    <Modal visible={!!form} animationType="slide" onRequestClose={onBack}>
       <SafeAreaView style={styles.screen}>
+        {/* Preview steps back to editing; editing leaves the form. */}
+        {form && <BackBar onBack={onBack} />}
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -53,27 +56,15 @@ export function SourceFormModal({
           >
             {form && (
               <>
-                <View style={formStyles.header}>
-                  <View style={formStyles.headerText}>
-                    <Heading
-                      title={
-                        form.preview
-                          ? `${form.preview.stats.valid} 个频道`
-                          : form.refresh
-                            ? "刷新节目单"
-                            : "添加节目单"
-                      }
-                    />
-                  </View>
-                  <Button
-                    compact
-                    secondary
-                    // Not "取消": closing asks 放弃这次导入？ with its own 取消.
-                    label="关闭"
-                    disabled={busy && !!form.preview}
-                    onPress={onClose}
-                  />
-                </View>
+                <Heading
+                  title={
+                    form.preview
+                      ? `${form.preview.stats.valid} 个频道`
+                      : form.refresh
+                        ? "刷新节目单"
+                        : "添加节目单"
+                  }
+                />
                 {error && <Notice title={error} error />}
                 {!form.preview ? (
                   <>
@@ -231,8 +222,6 @@ function ImportPreviewBody({
 }
 
 const formStyles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  headerText: { flex: 1, minWidth: 0 },
   fileBox: {
     minHeight: 88,
     borderRadius: 16,
