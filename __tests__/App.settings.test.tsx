@@ -273,3 +273,38 @@ test.each(["revocation", "unmount"])(
     }
   },
 );
+
+test("a first run opens the guide, which can lead straight to adding a link", async () => {
+  repo.getSetting.mockImplementation(async (_key, fallback) => fallback);
+  await render(<App />);
+  await waitFor(() => expect(screen.getByText("欢迎使用静看 TV")).toBeTruthy());
+  for (let page = 0; page < 3; page++)
+    await fireEvent.press(screen.getByRole("button", { name: "下一步" }));
+  await fireEvent.press(screen.getByRole("button", { name: "添加节目单链接" }));
+  expect(repo.setSetting).toHaveBeenCalledWith("guideSeen", true);
+  await waitFor(() => expect(screen.queryByText("欢迎使用静看 TV")).toBeNull());
+  expect(screen.getByLabelText("节目单链接")).toBeTruthy();
+});
+
+test("a user with sources never sees the guide but can reopen it in settings", async () => {
+  repo.getSetting.mockImplementation(async (_key, fallback) => fallback);
+  (repo.listSources as jest.Mock).mockResolvedValue([
+    {
+      id: "s1",
+      name: "家里",
+      kind: "url",
+      location: "https://a.test/a.m3u",
+      enabled: true,
+    },
+  ]);
+  await render(<App />);
+  await waitFor(() =>
+    expect(screen.getByRole("tab", { name: "设置" })).toBeTruthy(),
+  );
+  expect(screen.queryByText("欢迎使用静看 TV")).toBeNull();
+  await fireEvent.press(screen.getByRole("tab", { name: "设置" }));
+  await fireEvent.press(screen.getByText("使用指引"));
+  expect(screen.getByText("欢迎使用静看 TV")).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "跳过使用指引" }));
+  await waitFor(() => expect(screen.queryByText("欢迎使用静看 TV")).toBeNull());
+});

@@ -146,7 +146,10 @@ function listChannelsForLookup(): Promise<unknown> {
 /** Per-test reset; every App test file registers it with beforeEach. */
 export function resetAppMocks() {
   jest.clearAllMocks();
-  repo.getSetting.mockImplementation(async (_key, fallback) => fallback);
+  // Only the first-run guide test sees the guide over the home screen.
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "guideSeen" ? true : fallback,
+  );
   repo.listChannels.mockImplementation(async () => []);
   repo.countChannels.mockImplementation(async () => 0);
   repo.listSources.mockImplementation(async () => []);

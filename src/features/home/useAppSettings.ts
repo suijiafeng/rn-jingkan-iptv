@@ -33,6 +33,7 @@ export function useAppSettings({
     [artworkAllowed, setArtworkAllowed] = useState(false),
     [artworkSaving, setArtworkSaving] = useState(false),
     [artworkRevokePending, setArtworkRevokePending] = useState(false),
+    [guideVisible, setGuideVisible] = useState(false),
     // One confirmation covers this metered connection until Wi-Fi returns.
     [mobileAccepted, setMobileAccepted] = useState(false);
   const mounted = useRef(true),
@@ -54,6 +55,7 @@ export function useAppSettings({
         const skipDead = await opened.getSetting("skipUnreachable", true);
         const artwork = await opened.getSetting("artworkAllowed", false);
         const favorites = await opened.listChannels({ mode: "favorites" });
+        const guideSeen = await opened.getSetting("guideSeen", false);
         if (active) {
           remoteRef.current = allowed;
           setRemoteAllowed(allowed);
@@ -62,6 +64,15 @@ export function useAppSettings({
           setSwipeReverse(reverse);
           setSkipUnreachable(skipDead);
           setArtworkAllowed(artwork);
+          // Only a true first run: people who already added sources skip
+          // it. The check does not hold up opening the home screen.
+          if (!guideSeen)
+            void opened
+              .listSources()
+              .then((saved) => {
+                if (active && !saved.length) setGuideVisible(true);
+              })
+              .catch(() => undefined);
           if (!preserveTabOnReload.current)
             setTab(favorites.length ? "favorites" : "all");
           preserveTabOnReload.current = false;
@@ -227,6 +238,15 @@ export function useAppSettings({
     setRevokePending(true);
   };
 
+  /**
+   * Closes the guide for good. A failed save only shows it again on the
+   * next launch, so it is not reported.
+   */
+  const finishGuide = () => {
+    setGuideVisible(false);
+    void repo?.setSetting("guideSeen", true).catch(() => undefined);
+  };
+
   /** After "清空全部": every setting is back to its first-run value. */
   const resetToDefaults = () => {
     setRevokePending(false);
@@ -271,6 +291,9 @@ export function useAppSettings({
     changeBackgroundPlayback,
     withdrawRemote,
     resetToDefaults,
+    guideVisible,
+    showGuide: () => setGuideVisible(true),
+    finishGuide,
   };
 }
 

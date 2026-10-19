@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   AppState,
   BackHandler,
   Keyboard,
@@ -13,8 +12,8 @@ import {
   effectiveCountry,
   useRegionPreference,
 } from "./features/region/useRegionPreference";
-import { Button, ErrorNotice, Heading, Notice } from "./components/ui";
-import { colors, styles as theme } from "./theme";
+import { ErrorNotice } from "./components/ui";
+import { styles as theme } from "./theme";
 import { useAutoAvailabilityCheck } from "./features/channel/useAutoAvailabilityCheck";
 import { useChannelFilters } from "./features/channel/useChannelFilters";
 import { SettingsScreen } from "./features/settings/SettingsScreen";
@@ -34,6 +33,8 @@ import { useDataControls } from "./features/home/useDataControls";
 import { ChannelListPage } from "./features/home/ChannelListPage";
 import { HomePlayer } from "./features/home/HomePlayer";
 import { SourceDialogs } from "./features/home/SourceDialogs";
+import { StartupScreen } from "./features/home/StartupScreen";
+import { FirstRunGuide } from "./features/guide/FirstRunGuide";
 
 /**
  * The home screen: bottom tabs over the channel list or settings, the source
@@ -240,25 +241,13 @@ export default function App() {
 
   if (!repo)
     return (
-      <SafeAreaView style={theme.screen}>
-        <View style={theme.content}>
-          <Heading title="静看 TV" subtitle="只留下你想看的频道" />
-          {error ? (
-            <>
-              <Notice title={error} error />
-              <Button
-                label="重新打开本地资料"
-                onPress={() => {
-                  setError("");
-                  settings.retryStartup();
-                }}
-              />
-            </>
-          ) : (
-            <ActivityIndicator color={colors.accent} />
-          )}
-        </View>
-      </SafeAreaView>
+      <StartupScreen
+        error={error}
+        onRetry={() => {
+          setError("");
+          settings.retryStartup();
+        }}
+      />
     );
 
   const listTab: ListTab = tab === "settings" ? "all" : tab;
@@ -383,6 +372,7 @@ export default function App() {
               settings.saveToggle("skipUnreachable", value)
             }
             onClearAll={() => void controls.clearAll()}
+            onShowGuide={settings.showGuide}
           />
         ) : (
           <ChannelListPage
@@ -447,6 +437,13 @@ export default function App() {
         onRemoveSource={(source) => void controls.removeSource(source)}
         onSetSourceEnabled={controls.setSourceEnabled}
         changed={changed}
+      />
+      <FirstRunGuide
+        visible={settings.guideVisible}
+        onFinish={(exit) => {
+          settings.finishGuide();
+          if (exit) importer.startForm(exit);
+        }}
       />
       {playing && (
         <HomePlayer

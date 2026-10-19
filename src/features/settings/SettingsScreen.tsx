@@ -36,6 +36,7 @@ interface Props {
   skipUnreachable: boolean;
   onSkipUnreachableChange: (value: boolean) => void;
   onClearAll: () => void;
+  onShowGuide?: () => void;
 }
 
 export function SettingsScreen(props: Props) {
@@ -221,6 +222,14 @@ export function SettingsScreen(props: Props) {
         />
       </SettingSection>
       <SettingSection label="应用信息">
+        {props.onShowGuide && (
+          <SettingRow
+            title="使用指引"
+            caption="重新查看首次使用说明"
+            trailing={<Chevron />}
+            onPress={props.onShowGuide}
+          />
+        )}
         <About />
       </SettingSection>
       <View style={screenStyles.footer}>
