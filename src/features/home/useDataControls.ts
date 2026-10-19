@@ -1,5 +1,6 @@
 import type { Repository } from "../../data/repository";
 import type { Source } from "../../domain/types";
+import { showToast } from "../../components/Toast";
 import { confirm } from "../common/confirm";
 import type { Tab } from "../channel/ChannelListParts";
 import type { useChannelFilters } from "../channel/useChannelFilters";
@@ -123,7 +124,9 @@ export function useDataControls({
     )
       return;
     setError("");
+    const wasPlaying = !!playback.playing;
     stopRemoteWork();
+    if (wasPlaying) showToast("已撤销联网许可，播放已停止");
     try {
       await repo.setSetting("remoteAllowed", false);
       settings.setRevokePending(false);

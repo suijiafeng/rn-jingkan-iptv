@@ -1,6 +1,12 @@
 import React from "react";
-import { repo, setupFacetCatalog, resetAppMocks } from "./support/appTestKit";
-import { Alert } from "react-native";
+import {
+  mockPlayerProps,
+  repo,
+  setupFacetCatalog,
+  resetAppMocks,
+} from "./support/appTestKit";
+import { AccessibilityInfo, Alert } from "react-native";
+import { hideToast } from "../src/components/Toast";
 import {
   fireEvent,
   act,
@@ -307,4 +313,39 @@ test("a user with sources never sees the guide but can reopen it in settings", a
   expect(screen.getByText("欢迎使用静看 TV")).toBeTruthy();
   await fireEvent.press(screen.getByRole("button", { name: "跳过使用指引" }));
   await waitFor(() => expect(screen.queryByText("欢迎使用静看 TV")).toBeNull());
+});
+
+test("revoking network access while playing stops the player and says so in a toast", async () => {
+  setupFacetCatalog();
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" ? true : key === "guideSeen" ? true : fallback,
+  );
+  jest
+    .spyOn(Alert, "alert")
+    .mockImplementation((_title, _message, buttons) =>
+      buttons?.[1]?.onPress?.(),
+    );
+  jest
+    .spyOn(AccessibilityInfo, "announceForAccessibility")
+    .mockImplementation(() => {});
+  await render(<App />);
+  await fireEvent.press(await screen.findByLabelText("中文新闻，播放"));
+  await waitFor(() => expect(mockPlayerProps).toHaveBeenCalled());
+  // Dock the player so the page (and its tabs) is reachable again.
+  await act(async () => mockPlayerProps.mock.calls.at(-1)![0].onMinimize());
+  await fireEvent.press(screen.getByRole("tab", { name: "设置" }));
+  // The toast is announced, not focusable, so it sits outside the a11y tree.
+  const hidden = { includeHiddenElements: true };
+  expect(screen.queryByText("已撤销联网许可，播放已停止", hidden)).toBeNull();
+  mockPlayerProps.mockClear();
+  await fireEvent.press(screen.getByRole("button", { name: "撤销联网许可" }));
+  expect(
+    await screen.findByText("已撤销联网许可，播放已停止", hidden),
+  ).toBeTruthy();
+  expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledWith(
+    "已撤销联网许可，播放已停止",
+  );
+  await act(async () => {});
+  expect(mockPlayerProps).not.toHaveBeenCalled();
+  hideToast();
 });
