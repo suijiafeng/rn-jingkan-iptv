@@ -13,6 +13,7 @@ import {
   useRegionPreference,
 } from "./features/region/useRegionPreference";
 import { ErrorNotice } from "./components/ui";
+import { ToastHost } from "./components/Toast";
 import { styles as theme } from "./theme";
 import { useAutoAvailabilityCheck } from "./features/channel/useAutoAvailabilityCheck";
 import { useChannelFilters } from "./features/channel/useChannelFilters";
@@ -485,6 +486,7 @@ export default function App() {
           }}
         />
       )}
+      <ToastHost />
     </SafeAreaView>
   );
 }

@@ -7,6 +7,7 @@
  * Each test file must call `beforeEach(resetAppMocks)`.
  */
 import React from "react";
+import { hideToast } from "../../src/components/Toast";
 import { AppState } from "react-native";
 import * as Network from "expo-network";
 import {
@@ -81,6 +82,7 @@ jest.mock("expo-network", () => ({
 }));
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: jest.requireActual("react-native").View,
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 /** Facet rows that yield exactly these content tabs. */
 export function rowsFor(options: ChannelFacetOptions): FacetChannel[] {
@@ -146,6 +148,7 @@ function listChannelsForLookup(): Promise<unknown> {
 /** Per-test reset; every App test file registers it with beforeEach. */
 export function resetAppMocks() {
   jest.clearAllMocks();
+  hideToast();
   // Only the first-run guide test sees the guide over the home screen.
   repo.getSetting.mockImplementation(async (key, fallback) =>
     key === "guideSeen" ? true : fallback,
