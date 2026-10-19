@@ -166,7 +166,9 @@ export function SettingsScreen(props: Props) {
           caption={
             props.backgroundSaving
               ? "正在保存设置…"
-              : "开启后切换应用或锁屏继续播放，可用系统媒体控件暂停；会持续联网并耗电。关闭后切到后台暂停，画中画除外。"
+              : props.backgroundPlayback
+                ? "锁屏或切走时继续播放，会持续耗流量和电量"
+                : "切到后台时暂停，画中画除外"
           }
           trailing={
             <Switch

@@ -315,6 +315,7 @@ export function useChannelSession(props: SessionProps) {
   const sourceButton = (
     <SourceChip
       quality={qualityName(props.channel)}
+      qualityKnown={!!props.channel.qualityLabel}
       sourceName={props.channel.sourceName}
       count={props.sources.length}
       accessibilityLabel={

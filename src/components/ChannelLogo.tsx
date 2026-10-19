@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { channelArtworkUrl } from "../domain/channelArtwork";
+import { channelMonogram } from "../domain/channelLabels";
 import { colors, sizes, styles } from "../theme";
 
 export interface ChannelLogoProps {
@@ -33,9 +34,16 @@ export function ChannelLogo({
 }
 
 function Monogram({ title }: { title: string }) {
+  const mark = channelMonogram(title);
   return (
-    <Text style={[styles.heading, { color: colors.accent }]}>
-      {Array.from(title.trim())[0] || "台"}
+    <Text
+      style={[
+        styles.heading,
+        logoStyles.monogram,
+        mark.length > 1 && logoStyles.monogramWide,
+      ]}
+    >
+      {mark}
     </Text>
   );
 }
@@ -66,6 +74,9 @@ function RemoteLogo({
 }
 
 const logoStyles = StyleSheet.create({
+  monogram: { color: colors.accent },
+  // "15", "5+", "CG": two or three glyphs must fit the 40dp badge.
+  monogramWide: { fontSize: 14, letterSpacing: -0.3 },
   badge: {
     borderRadius: 10,
     backgroundColor: colors.raised,

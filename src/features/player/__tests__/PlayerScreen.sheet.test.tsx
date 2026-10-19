@@ -202,6 +202,34 @@ test("sheet restores its offset until the range or current channel changes", asy
   offsetSpy.mockRestore();
 });
 
+test("the first layout places the current channel again, clear of the tabs", async () => {
+  const indexSpy = jest
+    .spyOn(FlatList.prototype, "scrollToIndex")
+    .mockImplementation(() => {});
+  const ui = await render(<PlayerScreen {...props({ channel: second })} />);
+  const list = ui.getByTestId("player-channel-list");
+  const callsBeforeLayout = indexSpy.mock.calls.length;
+  await fireEvent(list, "layout", {
+    nativeEvent: { layout: { x: 0, y: 0, width: 360, height: 400 } },
+  });
+  expect(indexSpy).toHaveBeenCalledTimes(callsBeforeLayout + 1);
+  expect(indexSpy).toHaveBeenLastCalledWith({
+    index: 1,
+    viewPosition: 0.35,
+    animated: false,
+  });
+  // A drag hands the list to the viewer: later layouts leave it alone.
+  await fireEvent(list, "scrollBeginDrag", {
+    nativeEvent: { contentOffset: { y: 0 } },
+  });
+  await fireEvent(list, "layout", {
+    nativeEvent: { layout: { x: 0, y: 0, width: 360, height: 300 } },
+  });
+  expect(indexSpy).toHaveBeenCalledTimes(callsBeforeLayout + 1);
+  await ui.unmount();
+  indexSpy.mockRestore();
+});
+
 test("sheet logos require both artwork permission and programme network permission", async () => {
   const channel = { ...first, logoUrl: "https://example.com/logo.png" };
   const initial = props({ channel, channels: [channel] });

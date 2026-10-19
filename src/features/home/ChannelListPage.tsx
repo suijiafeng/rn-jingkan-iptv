@@ -9,6 +9,7 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import type { Channel } from "../../domain/types";
+import { filteredGroup } from "../../domain/channelLabels";
 import {
   CHANNEL_ROW_GAP,
   ChannelRow,
@@ -95,6 +96,10 @@ export function ChannelListPage({
     [titleSpace, setTitleSpace] = useState(0);
   const listData: ChannelListItem[] = rows.length ? rows : [EMPTY_ROW];
   const listTop = headerHeight + LIST_TOP_GAP;
+  const hiddenGroup = filteredGroup(
+    headerProps.tab,
+    headerProps.facetSelection.content,
+  );
   const headerCollapse = scrollY.interpolate({
     inputRange: [0, Math.max(1, titleSpace)],
     outputRange: [0, -titleSpace],
@@ -139,7 +144,9 @@ export function ChannelListPage({
         removeClippedSubviews={false}
         contentContainerStyle={[
           theme.content,
-          { paddingTop: listTop },
+          // Rows are spaced by the separator alone, as getItemLayout assumes;
+          // the page's content gap would add 12dp per row unaccounted for.
+          { paddingTop: listTop, gap: 0 },
           reserveMiniBar && { paddingBottom: MINI_BAR_SPACE },
         ]}
         ItemSeparatorComponent={ListSeparator}
@@ -159,6 +166,7 @@ export function ChannelListPage({
               onFavorite={onFavorite}
               onRemoveRecent={onRemoveRecent}
               recentBusy={recentBusy}
+              hiddenGroup={hiddenGroup}
             />
           )
         }

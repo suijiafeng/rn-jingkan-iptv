@@ -132,9 +132,14 @@ export function OverlayButton({
   );
 }
 
-/** Quality in the accent colour, then the source; opens the alternatives. */
+/**
+ * Quality in the accent colour, then the source; opens the alternatives.
+ * An unknown quality says nothing useful, so it stays in the
+ * muted colour instead of drawing the eye.
+ */
 export function SourceChip({
   quality,
+  qualityKnown = true,
   sourceName,
   count,
   solid = false,
@@ -143,6 +148,7 @@ export function SourceChip({
   onPress,
 }: {
   quality: string;
+  qualityKnown?: boolean;
   sourceName: string;
   count: number;
   /** On the portrait info block (opaque surface) rather than over video. */
@@ -167,7 +173,11 @@ export function SourceChip({
       onPress={onPress}
     >
       <Text style={styles.chipText} numberOfLines={1}>
-        <Text style={styles.chipQuality}>{quality}</Text>
+        <Text
+          style={qualityKnown ? styles.chipQuality : styles.chipQualityUnknown}
+        >
+          {quality}
+        </Text>
         {` ${sourceName}`}
         {count > 1 ? ` · ${count} 个 ▾` : ""}
       </Text>
@@ -437,6 +447,7 @@ const styles = StyleSheet.create({
   chipDisabled: { opacity: 0.7 },
   chipText: { color: colors.text, fontSize: 12, lineHeight: 18 },
   chipQuality: { color: colors.accent, fontWeight: "600" },
+  chipQualityUnknown: { color: colors.muted },
   shade: { position: "absolute", left: 0, right: 0 },
   shadeTop: { top: 0, flexDirection: "column" },
   shadeBottom: { bottom: 0, flexDirection: "column-reverse" },

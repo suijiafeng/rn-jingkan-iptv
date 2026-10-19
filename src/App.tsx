@@ -19,11 +19,11 @@ import { useAutoAvailabilityCheck } from "./features/channel/useAutoAvailability
 import { useChannelFilters } from "./features/channel/useChannelFilters";
 import { SettingsScreen } from "./features/settings/SettingsScreen";
 import {
-  BottomTabs,
   type HeaderProps,
   type ListTab,
   type Tab,
 } from "./features/channel/ChannelListParts";
+import { BottomTabs } from "./features/channel/BottomTabs";
 import { useAppSettings } from "./features/home/useAppSettings";
 import { useChannelListData } from "./features/home/useChannelListData";
 import { usePlayback } from "./features/home/usePlayback";

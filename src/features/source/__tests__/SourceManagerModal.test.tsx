@@ -89,6 +89,39 @@ test("manager shows a private-by-default empty state and both add methods", asyn
   expect(add.mock.calls).toEqual([["url"], ["file"]]);
 });
 
+test("manager has one close action and folds the check rules into one line", async () => {
+  const close = jest.fn();
+  await render(
+    <SourceManagerModal
+      visible
+      sources={[source]}
+      check={null}
+      summaries={{}}
+      onClose={close}
+      onAdd={() => {}}
+      onRefresh={() => {}}
+      onRename={() => {}}
+      onRemove={() => {}}
+      onCheck={() => {}}
+      onStopCheck={() => {}}
+      onEnabledChange={() => {}}
+    />,
+  );
+
+  expect(screen.queryByRole("button", { name: "返回" })).toBeNull();
+  expect(screen.queryByText(/复用 24 小时/)).toBeNull();
+  await fireEvent.press(
+    screen.getByRole("button", { name: "展开可用性检测说明" }),
+  );
+  expect(screen.getByText(/复用 24 小时/)).toBeTruthy();
+  await fireEvent.press(
+    screen.getByRole("button", { name: "收起可用性检测说明" }),
+  );
+  expect(screen.queryByText(/复用 24 小时/)).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "完成" }));
+  expect(close).toHaveBeenCalledTimes(1);
+});
+
 test("manager separates source identity, status and actions", async () => {
   const refresh = jest.fn();
   const rename = jest.fn();

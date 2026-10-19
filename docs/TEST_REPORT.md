@@ -1,5 +1,19 @@
 # 验证记录
 
+## 2026-10-19 · 页面设计走查修复（分支 claude/sad-northcutt-c4fabf）
+
+- 来源管理：卡片内紧凑次要按钮加底色与描边，禁用时整体变淡可辨；来源停用后“启用”改为主按钮。长检测说明收成一行，点“说明”展开。去掉底部“返回”，只保留顶部“完成”（系统返回键仍可关闭）。
+- 播放页选台列表：首次挂载时列表尚未布局，`scrollToIndex` 按零高度计算，当前行被推到列表顶边之上、看起来被分类标签挡住。现于列表首次 `onLayout` 再定位一次（拖动后不再自动定位）。
+- 频道行：行高 72→56dp、台标 44→40dp；频道页列表内容区额外的 12dp `gap`（不在 getItemLayout 计算内）去掉，行距只剩 4dp 分隔。选中内容分类时副标题不再重复该分类，没有其他分类则只显示标题。首字头像对英文前缀频道显示台号或前缀后的首字（CCTV5→5、CCTV5+→5+、CCTV怀旧剧场→怀、CGTN→CG）。
+- 底部导航：新建 `features/channel/BottomTabs.tsx`，四个 tab 改为图标（纯 View 绘制：电视、星标、时钟、滑块）+ 小号文字，选中项为强调色并在图标后加圆角底。Android 上在已挂载视图后加背景色会丢失圆角，故选中底按状态重新挂载。`ChannelListParts.tsx` 里的旧 `BottomTabs` 未删：主工作区有他人未提交的改动紧挨着这段代码，留待那份改动合入后删除。
+- 设置：“撤销”改为与其他紧凑按钮同形的带底色按钮；后台播放说明按开关状态只显示一行。
+- 播放器来源标签：“未知清晰度”改为普通灰色、不加粗；已知清晰度仍为强调色。
+- 系统媒体通知的 ±10 秒按钮：未改。expo-video 58.0.11 的 `ExpoVideoPlaybackService.registerPlayer` 把快退/快进按钮硬编码进 `MediaSession.Builder().setCustomLayout(...)`，`VideoMediaSessionCallback.onConnect` 也固定放行 `COMMAND_SEEK_BACK/FORWARD` 和两个自定义命令；JS 侧 `VideoPlayer` 与 `showNowPlayingNotification` 均无开关。关掉只能改原生代码（patch node_modules 或自写服务），与“不手改原生、不独立改原生模块”的约定冲突，故保留。按源码，点按会对当前位置调用 `seekTo` ±10 秒，对直播的实际效果未实测。
+- typecheck、lint、Jest 50 套件 443 项通过（新增：底部导航、来源管理说明折叠与单一关闭、布局后重新定位、副标题隐藏所选分类、台号头像）。注：worktree 位于 `.claude/` 下，`jest.config.js` 的 `/.claude/` 忽略规则会匹配整条路径，故在 worktree 里用 `--testPathIgnorePatterns /node_modules/ /android/ "<rootDir>/.claude/"` 运行；主目录下 `npm test -- --runInBand` 不受影响。
+- `npm run build:bundle` 成功；`expo prebuild` 后 `./gradlew assembleRelease -PJINGKAN_UPLOAD_KEY_ALIAS=`（debug 签名）成功，覆盖安装到 emulator-5554（Android 16）。
+- 模拟器逐项截图核对：频道页一屏由约 6.5 行增至约 9.5 行，CCTV 系列头像为 5/15/16/17/怀；选中“地方频道”后各行无副标题；播放页当前行（CCTV17）位于列表约三分之一处、未被标签栏遮挡；“未知清晰度”为灰色；设置页“撤销”为圆角按钮、后台播放说明一行；来源管理按钮外形、停用来源的淡化按钮与主按钮“启用”、说明展开/收起；底部导航四个图标与选中圆角底（频道、设置两种选中态）。
+- 未验证：系统媒体通知（未改动，未截图）；三星真机；130% 字体下的新行高（只有单元测试）。
+
 ## 2026-10-19 · 播放器控件布局
 
 - 提交 `cf15516`：中央三键固定居中；静音与来源分别排在右侧按钮组第一个；横屏来源移至右上并可点外部收起；横屏底栏用“退出横屏”替换画中画（画中画只留竖屏）。

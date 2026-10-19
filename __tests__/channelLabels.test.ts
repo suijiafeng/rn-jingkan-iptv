@@ -1,6 +1,8 @@
 import {
+  channelMonogram,
   channelTitle,
   displayGroups,
+  filteredGroup,
   normalizeGroups,
   splitGroups,
   UNGROUPED,
@@ -38,4 +40,24 @@ test("separates trailing bracket markers from the channel title", () => {
     title: "CCTV-1 (720p)",
     tags: [],
   });
+});
+
+test("the row caption leaves out the group the list is filtered to", () => {
+  expect(displayGroups("央视;新闻")).toBe("央视、新闻");
+  expect(displayGroups("央视;新闻", "央视")).toBe("新闻");
+  expect(displayGroups("央视", "央视")).toBe("");
+  expect(filteredGroup("all", "央视")).toBe("央视");
+  expect(filteredGroup("all", "")).toBe(UNGROUPED);
+  expect(filteredGroup("all", null)).toBeNull();
+  expect(filteredGroup("favorites", "央视")).toBeNull();
+});
+
+test("monograms tell a channel family apart instead of repeating its prefix", () => {
+  expect(channelMonogram("CCTV5")).toBe("5");
+  expect(channelMonogram("CCTV5+")).toBe("5+");
+  expect(channelMonogram("CCTV-15")).toBe("15");
+  expect(channelMonogram("CCTV怀旧剧场")).toBe("怀");
+  expect(channelMonogram("CGTN")).toBe("CG");
+  expect(channelMonogram("湖南卫视")).toBe("湖");
+  expect(channelMonogram("  ")).toBe("台");
 });

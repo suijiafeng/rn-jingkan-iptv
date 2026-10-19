@@ -44,9 +44,9 @@ export const sizes = {
   /** Hit area of text-only actions (清除, 管理, 删除). */
   touch: 48,
   /** Channel logo or monogram in a list row. */
-  logo: 44,
-  /** A channel row (44dp logo with 14dp above and below). */
-  row: 72,
+  logo: 40,
+  /** A channel row (40dp logo with 8dp above and below). */
+  row: 56,
 };
 export const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },

@@ -18,13 +18,13 @@ export const CHANNEL_ROW_GAP = 4;
  * Every row has the same height, so lists can place rows by arithmetic
  * (getItemLayout) instead of rendering and measuring them first. Without
  * that, a fast fling outruns the measurements and shows blank space.
- * Content: 12dp padding top and bottom, a title line (tags sit beside it),
- * a 3dp gap and one caption line; text lines grow with the font scale.
+ * Content: 8dp padding top and bottom, a title line (tags sit beside it),
+ * a 2dp gap and one caption line; text lines grow with the font scale.
  */
 export function channelRowHeight(fontScale: number): number {
   const lines =
     (type.rowTitle.lineHeight + type.caption.lineHeight) * fontScale;
-  return Math.max(sizes.row, Math.ceil(24 + 3 + lines));
+  return Math.max(sizes.row, Math.ceil(16 + 2 + lines));
 }
 
 /** Offset of row `index` when rows are `rowHeight` apart by CHANNEL_ROW_GAP. */
@@ -51,6 +51,7 @@ export const ChannelRow = memo(function ChannelRow({
   onRemoveRecent,
   recentBusy = false,
   artworkEnabled = false,
+  hiddenGroup = null,
 }: {
   channel: Channel;
   onPlay: (channel: Channel) => void;
@@ -59,6 +60,8 @@ export const ChannelRow = memo(function ChannelRow({
   onRemoveRecent?: (channel: Channel) => void;
   recentBusy?: boolean;
   artworkEnabled?: boolean;
+  /** The group the list is filtered to; left out of the caption. */
+  hiddenGroup?: string | null;
 }) {
   const { title, tags } = useMemo(
     () => channelTitle(channel.name),
@@ -70,6 +73,9 @@ export const ChannelRow = memo(function ChannelRow({
   const rowHeight = channelRowHeight(fontScale);
   const editingRecent = !!onRemoveRecent;
   const playbackDisabled = !channel.active || editingRecent;
+  const caption = channel.active
+    ? displayGroups(channel.groupName, hiddenGroup)
+    : "节目单里已没有这个频道";
   return (
     <View style={[rowStyles.row, { height: rowHeight }]}>
       <Pressable
@@ -90,7 +96,7 @@ export const ChannelRow = memo(function ChannelRow({
           enabled={artworkEnabled}
           size={sizes.logo}
         />
-        <View style={{ flex: 1, gap: 3 }}>
+        <View style={rowStyles.text}>
           {/* One line: tags sit beside the title so every row has the
               same height (see channelRowHeight). */}
           <View style={rowStyles.titleLine}>
@@ -112,11 +118,11 @@ export const ChannelRow = memo(function ChannelRow({
           </View>
           {/* No source name: the row stands for a logical channel, and the
               source that actually plays is chosen at playback time. */}
-          <Text numberOfLines={1} style={styles.caption}>
-            {channel.active
-              ? displayGroups(channel.groupName)
-              : "节目单里已没有这个频道"}
-          </Text>
+          {!!caption && (
+            <Text numberOfLines={1} style={styles.caption}>
+              {caption}
+            </Text>
+          )}
         </View>
       </Pressable>
       {onRemoveRecent && (
@@ -164,6 +170,7 @@ const rowStyles = StyleSheet.create({
     paddingRight: 4,
     overflow: "hidden",
   },
+  text: { flex: 1, gap: 2 },
   titleLine: { flexDirection: "row", alignItems: "center", gap: 6 },
   title: { ...type.rowTitle, color: colors.text, flexShrink: 1 },
   currentTitle: { color: colors.accent, fontWeight: "600" },
@@ -172,7 +179,7 @@ const rowStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingVertical: 12,
+    paddingVertical: 8,
   },
   tag: {
     ...type.muted,

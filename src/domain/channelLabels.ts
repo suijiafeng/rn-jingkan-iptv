@@ -55,8 +55,50 @@ export function splitGroups(groupName: string): string[] {
   return parts.length ? parts : [UNGROUPED];
 }
 
-export function displayGroups(groupName: string): string {
-  return splitGroups(groupName).join("、");
+/**
+ * The row's group caption. `hidden` is the group the list is already
+ * filtered to: repeating it on every row says nothing, so only the
+ * channel's other groups remain (possibly none).
+ */
+export function displayGroups(
+  groupName: string,
+  hidden: string | null = null,
+): string {
+  return splitGroups(groupName)
+    .filter((group) => group !== hidden)
+    .join("、");
+}
+
+/**
+ * The group every listed row shares, if any: the content tab chosen on the
+ * "all" scope ("" selects ungrouped channels). Other scopes ignore it.
+ */
+export function filteredGroup(
+  scope: string,
+  content: string | null,
+): string | null {
+  if (scope !== "all" || content === null) return null;
+  return content || UNGROUPED;
+}
+
+/**
+ * Up to three characters that tell channels of one family apart in a list:
+ * "CCTV5+" → "5+", "CCTV怀旧剧场" → "怀", "CGTN" → "CG", "湖南卫视" → "湖".
+ * A shared Latin prefix (CCTV, BTV…) would otherwise give every row the same
+ * first letter.
+ */
+export function channelMonogram(title: string): string {
+  const name = title.trim();
+  const prefixed = name.match(/^[A-Za-z]{2,}[\s-]*(.*)$/);
+  if (prefixed) {
+    const rest = prefixed[1];
+    const number = rest.match(/^\d{1,2}\+?/);
+    if (number) return number[0];
+    const first = Array.from(rest)[0];
+    if (first && first.charCodeAt(0) > 0x7f) return first;
+    return name.slice(0, 2).toUpperCase();
+  }
+  return Array.from(name)[0] || "台";
 }
 
 const TAG_TRANSLATIONS: Record<string, string> = {

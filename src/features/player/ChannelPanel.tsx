@@ -18,6 +18,7 @@ import { ChannelFilterBar } from "../channel/ChannelListParts";
 import { Button, Notice } from "../../components/ui";
 import { colors } from "../../theme";
 import type { Channel } from "../../domain/types";
+import { filteredGroup } from "../../domain/channelLabels";
 import { sameChannel, type ChannelSheetProps } from "./playerShared";
 import { CloseIcon, LocateIcon } from "./playerIcons";
 import { LoadingTitle } from "./overlayWidgets";
@@ -63,11 +64,17 @@ export function ChannelPanel(props: ChannelPanelProps) {
   const rowHeight = channelRowHeight(useWindowDimensions().fontScale);
   const scrollRetry = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollTarget = useRef<{ index: number; retries: number } | null>(null);
+  // Height the list last laid out at; 0 until the first layout.
+  const listHeight = useRef(0);
   const [locateRequest, setLocateRequest] = useState(0);
   // One row of tabs only. The country/language choice is the page's and
   // stays folded here; a typed search is shown while active so it can be
   // cleared.
   const searchActive = !!sheet.filters.search;
+  const hiddenGroup = filteredGroup(
+    scope,
+    sheet.filters.facetSelection.content,
+  );
   const lastLocateRequest = useRef(0);
   const currentIndex = shownChannels.findIndex((row) =>
     sameChannel(row, channel),
@@ -215,6 +222,21 @@ export function ChannelPanel(props: ChannelPanelProps) {
         }}
         keyExtractor={(item) => item.id}
         getItemLayout={(_data, index) => channelRowLayout(rowHeight, index)}
+        onLayout={({ nativeEvent }) => {
+          const { height } = nativeEvent.layout;
+          if (height === listHeight.current) return;
+          listHeight.current = height;
+          // A scroll requested before the first layout placed the row as
+          // if the list had no height, partly above its top edge (behind
+          // the tabs). Place it again now that viewPosition can apply.
+          const target = scrollTarget.current;
+          if (target)
+            channelList.current?.scrollToIndex({
+              index: target.index,
+              viewPosition: 0.35,
+              animated: false,
+            });
+        }}
         style={styles.list}
         contentContainerStyle={styles.listContent}
         initialNumToRender={12}
@@ -249,6 +271,7 @@ export function ChannelPanel(props: ChannelPanelProps) {
             onPlay={selectRow}
             onFavorite={props.onFavorite}
             artworkEnabled={props.artworkEnabled}
+            hiddenGroup={hiddenGroup}
           />
         )}
       />

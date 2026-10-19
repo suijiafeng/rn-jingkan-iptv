@@ -153,6 +153,7 @@ export function SourceCard({
             source.kind === "file" ? "重新解析 / 更换文件" : "刷新并预览"
           }
           secondary
+          style={cardStyles.action}
           disabled={!source.enabled || saving || !!check || !!languageLookup}
           onPress={() => props.onRefresh(source)}
         />
@@ -161,6 +162,7 @@ export function SourceCard({
             compact
             label="停止检测"
             secondary
+            style={cardStyles.action}
             onPress={props.onStopCheck}
           />
         ) : (
@@ -168,6 +170,7 @@ export function SourceCard({
             compact
             label={summary ? "重新检测" : "检测可用性"}
             secondary
+            style={cardStyles.action}
             disabled={
               !source.enabled || saving || !!check || !source.channelCount
             }
@@ -182,6 +185,7 @@ export function SourceCard({
               compact
               label="停止补全语言"
               secondary
+              style={cardStyles.action}
               onPress={() => props.onStopLanguageLookup?.()}
             />
           ) : (
@@ -189,6 +193,7 @@ export function SourceCard({
               compact
               label="补全语言"
               secondary
+              style={cardStyles.action}
               disabled={
                 !!languageLookup ||
                 !!check ||
@@ -202,7 +207,9 @@ export function SourceCard({
         <Button
           compact
           label={saving ? "正在保存" : source.enabled ? "停用" : "启用"}
-          secondary
+          // Re-enabling is the one thing a stopped source asks for.
+          secondary={source.enabled}
+          style={source.enabled ? cardStyles.action : undefined}
           disabled={saving || taskBusy || (!!check && !running)}
           onPress={() => props.onEnabledChange(source, !source.enabled)}
         />
@@ -210,6 +217,7 @@ export function SourceCard({
           compact
           label="改名"
           secondary
+          style={cardStyles.action}
           disabled={saving}
           onPress={() => props.onRename(source)}
         />
@@ -217,6 +225,7 @@ export function SourceCard({
           compact
           label="删除"
           secondary
+          style={cardStyles.action}
           danger
           disabled={saving}
           onPress={() => props.onRemove(source)}
@@ -318,5 +327,12 @@ const cardStyles = StyleSheet.create({
     paddingVertical: 9,
     backgroundColor: colors.raised,
   },
-  quickActions: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  quickActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  // Compact secondary buttons are drawn on the page colour; on this card
+  // they need their own fill and outline to read as buttons.
+  action: {
+    backgroundColor: colors.raised,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
 });

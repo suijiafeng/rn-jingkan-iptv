@@ -86,7 +86,10 @@ export function SettingRow({
   );
 }
 
-/** A text-only action at the end of a row (撤销, 重试保存). */
+/**
+ * A secondary action at the end of a row (撤销): the same chip shape as the
+ * compact buttons beside it, filled so it reads as a button on the card.
+ */
 export function RowAction({
   label,
   onPress,
@@ -159,10 +162,13 @@ const rowStyles = StyleSheet.create({
   pill_warn: { color: colors.ink, backgroundColor: colors.warn },
   action: {
     minHeight: sizes.chip,
-    paddingHorizontal: 10,
+    paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 999,
     justifyContent: "center",
+    backgroundColor: colors.raised,
+    borderWidth: 1,
+    borderColor: colors.line,
   },
   actionText: { ...type.chip, color: colors.accent },
   chevron: { ...type.heading, color: colors.muted, paddingHorizontal: 4 },
