@@ -216,7 +216,7 @@ export default function App() {
         setError("");
         void actions
           .removeRecent(channel)
-          .catch(() => setError("删除观看记录失败，请重试"));
+          .catch(() => setError("观看记录未删除，请重试"));
       },
     };
   });
@@ -282,7 +282,7 @@ export default function App() {
       setError("");
       void actions
         .clearRecent()
-        .catch(() => setError("清空观看记录失败，请重试"));
+        .catch(() => setError("观看记录未清空，请重试"));
     },
     onSearchChange: (text) => {
       restartList();

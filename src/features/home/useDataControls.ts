@@ -108,7 +108,7 @@ export function useDataControls({
       }
       list.changed();
     } catch {
-      setError(enabled ? "启用来源失败，请重试" : "停用来源失败，请重试");
+      setError(enabled ? "来源未能启用，请重试" : "来源未能停用，请重试");
     }
   };
 
@@ -160,7 +160,7 @@ export function useDataControls({
       setRecentEditing(false);
       list.changed();
     } catch {
-      setError("清理未完成，请重试");
+      setError("清空未完成，请重试");
     }
   };
 

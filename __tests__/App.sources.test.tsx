@@ -242,7 +242,7 @@ test("source enable changes are persisted and failures stay visible in managemen
   await waitFor(() =>
     expect(repo.setSourceEnabled).toHaveBeenCalledWith(checkSource.id, false),
   );
-  expect(screen.getByText("停用来源失败，请重试")).toBeTruthy();
+  expect(screen.getByText("来源未能停用，请重试")).toBeTruthy();
   expect(screen.getByRole("header", { name: "节目来源" })).toBeTruthy();
 });
 
@@ -345,12 +345,14 @@ test("rename failure remains visible with the input and a working retry", async 
   await fireEvent.press(screen.getByText("改名", { exact: true }));
   await fireEvent.changeText(screen.getByLabelText("来源名称"), "新的名称");
   await fireEvent.press(screen.getByText("保存名称"));
-  await waitFor(() => expect(screen.getByText("改名失败")).toBeTruthy());
+  await waitFor(() =>
+    expect(screen.getByText("名称未保存，请重试")).toBeTruthy(),
+  );
   expect(screen.getByDisplayValue("新的名称")).toBeTruthy();
   await fireEvent.press(screen.getByText("保存名称"));
   await waitFor(() =>
     expect(screen.getByRole("header", { name: "节目来源" })).toBeTruthy(),
   );
-  expect(screen.queryByText("改名失败")).toBeNull();
+  expect(screen.queryByText("名称未保存，请重试")).toBeNull();
   expect(repo.renameSource).toHaveBeenCalledTimes(2);
 });

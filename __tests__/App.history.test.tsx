@@ -202,7 +202,7 @@ test("history deletion failures preserve the row and allow retry without changin
     await screen.findByLabelText("删除最新新闻台的观看记录"),
   );
   await waitFor(() =>
-    expect(screen.getByText("删除观看记录失败，请重试")).toBeTruthy(),
+    expect(screen.getByText("观看记录未删除，请重试")).toBeTruthy(),
   );
   expect(screen.getByLabelText("删除最新新闻台的观看记录")).toBeTruthy();
   await fireEvent.press(screen.getByLabelText("删除最新新闻台的观看记录"));
@@ -265,7 +265,7 @@ test("clearing recent supports cancellation and failure retry while preserving f
   repo.clearRecent.mockRejectedValueOnce(new Error("disk failure"));
   await fireEvent.press(screen.getByRole("button", { name: "清空最近观看" }));
   await waitFor(() =>
-    expect(screen.getByText("清空观看记录失败，请重试")).toBeTruthy(),
+    expect(screen.getByText("观看记录未清空，请重试")).toBeTruthy(),
   );
   expect(screen.getByLabelText("最新新闻台，观看记录")).toBeTruthy();
   await fireEvent.press(screen.getByRole("button", { name: "清空最近观看" }));

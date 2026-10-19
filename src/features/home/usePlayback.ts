@@ -101,7 +101,7 @@ export function usePlayback({
       // A pick from the page (or the bar's own list) opens the full player.
       setPlayerMini(false);
     } catch {
-      if (stillWanted()) setError("无法读取播放频道，请重试");
+      if (stillWanted()) setError("频道读取未完成，请重试");
     }
   };
 

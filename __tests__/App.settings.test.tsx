@@ -89,7 +89,7 @@ test("settings permission write failures are shown without granting access", asy
   await fireEvent.press(screen.getByText("阅读风险并允许"));
   await fireEvent.press(await screen.findByRole("button", { name: "允许" }));
   await waitFor(() =>
-    expect(screen.getByText("无法保存网络许可，请重试")).toBeTruthy(),
+    expect(screen.getByText("联网许可未保存，请重试")).toBeTruthy(),
   );
   expect(screen.getByText("未允许")).toBeTruthy();
   expect(downloadPlaylist).not.toHaveBeenCalled();
@@ -160,7 +160,7 @@ test("channel artwork stays absent by default and a failed consent save does not
   await fireEvent(screen.getByLabelText("显示频道台标"), "valueChange", true);
   await waitFor(() => expect(currentConsent()?.title).toBe("显示频道台标？"));
   await act(async () => answerConsent("allow"));
-  expect(await screen.findByText("台标许可未能保存，请重试")).toBeTruthy();
+  expect(await screen.findByText("台标开启未保存，请重试")).toBeTruthy();
   expect(screen.getByLabelText("显示频道台标").props.value).toBe(false);
   await fireEvent.press(screen.getByRole("tab", { name: "频道" }));
   await screen.findByLabelText("中文新闻，播放");

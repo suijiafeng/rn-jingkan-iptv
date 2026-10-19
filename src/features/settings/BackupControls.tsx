@@ -28,7 +28,7 @@ export function BackupControls({
       await task();
     } catch (error) {
       setMessage(
-        error instanceof BackupError ? error.message : "操作未完成，请重试",
+        error instanceof BackupError ? error.message : "备份操作未完成，请重试",
       );
     } finally {
       running.current = false;
@@ -40,7 +40,7 @@ export function BackupControls({
       if (
         !(await confirm(
           "导出本机备份？",
-          "备份未加密，含节目源完整地址与令牌、本地节目单、收藏和播放偏好，请勿分享。观看记录与各项许可不导出。",
+          "备份文件未加密，含节目源完整地址与令牌、本地节目单、收藏和播放偏好，请妥善保管，勿分享给他人。观看记录与各项许可不导出。",
           "选择保存目录",
         ))
       )
@@ -78,7 +78,7 @@ export function BackupControls({
         file = new File(asset.uri);
       try {
         if (!file.exists || file.size > MAX_BACKUP_BYTES)
-          throw new BackupError("文件无法读取或超过 32 MiB");
+          throw new BackupError("文件无法打开或超过 32 MB");
         const text = new TextDecoder("utf-8", { fatal: true }).decode(
           await file.bytes(),
         );

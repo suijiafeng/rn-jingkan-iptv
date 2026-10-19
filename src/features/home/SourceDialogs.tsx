@@ -107,7 +107,7 @@ export function SourceDialogs({
                 backToManagement();
                 changed();
               })
-              .catch(() => setError("改名失败"));
+              .catch(() => setError("名称未保存，请重试"));
         }}
         onCancel={backToManagement}
       />

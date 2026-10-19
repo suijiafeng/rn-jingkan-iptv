@@ -50,10 +50,10 @@ export function useChannelActions({
             if (mounted.current) list.setSources(sources);
           })
           .catch(() => {
-            if (mounted.current) setError("收藏已保存，统计未刷新");
+            if (mounted.current) setError("已收藏，数量稍后更新");
           });
     } catch {
-      setError("收藏未能保存，请重试");
+      setError("收藏未保存，请重试");
     }
   };
 
@@ -143,7 +143,7 @@ export function useChannelActions({
         if (list.tabRef.current === "recent") list.changed();
         else list.setRecent(await repo.listChannels({ mode: "recent" }));
       })
-      .catch(() => setError("观看记录未能保存"));
+      .catch(() => setError("本次观看未计入最近观看"));
   };
 
   return {

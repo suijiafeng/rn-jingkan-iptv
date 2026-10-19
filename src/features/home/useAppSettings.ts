@@ -114,7 +114,7 @@ export function useAppSettings({
     if (signal?.aborted) return false;
     if (remoteRef.current) return true;
     if (revokePending) {
-      setError("请先在设置中重试撤销许可");
+      setError("请先在设置中完成撤销联网许可");
       return false;
     }
     const epoch = permissionEpoch.current;
@@ -143,7 +143,7 @@ export function useAppSettings({
     try {
       await repo.setSetting("remoteAllowed", true);
     } catch {
-      setError("无法保存网络许可，请重试");
+      setError("联网许可未保存，请重试");
       return false;
     }
     if (epoch !== permissionEpoch.current || !mounted.current) return false;
@@ -204,9 +204,7 @@ export function useAppSettings({
       }
     } catch {
       if (mounted.current)
-        setError(
-          enabled ? "台标许可未能保存，请重试" : "台标关闭未保存，请重试",
-        );
+        setError(enabled ? "台标开启未保存，请重试" : "台标关闭未保存，请重试");
     } finally {
       artworkMutation.current = false;
       if (mounted.current) setArtworkSaving(false);
@@ -224,7 +222,7 @@ export function useAppSettings({
     setValue(value);
     void repo?.setSetting(key, value).catch(() => {
       setValue(!value);
-      setError("设置保存失败");
+      setError("设置未保存，请重试");
     });
   };
 
@@ -241,7 +239,7 @@ export function useAppSettings({
     } catch {
       if (mounted.current) {
         setBackgroundPlayback(!enabled);
-        setError("后台播放设置保存失败，请重试");
+        setError("后台播放设置未保存，请重试");
       }
     } finally {
       if (mounted.current) setBackgroundSaving(false);

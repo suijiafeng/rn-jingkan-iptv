@@ -51,7 +51,9 @@ export interface LocalBackup {
   preferences: Record<string, boolean>;
 }
 export class BackupError extends Error {
-  constructor(message = "备份格式无效或数据不完整，请选择静看 TV 导出的备份。") {
+  constructor(
+    message = "备份格式无效或数据不完整，请选择静看 TV 导出的备份。",
+  ) {
     super(message);
   }
 }
@@ -99,7 +101,7 @@ function select(
 /** Strictly bounded, versioned local data; no SQL or arbitrary settings from files. */
 export function parseBackup(text: string): LocalBackup {
   if (text.length > MAX_BACKUP_BYTES || utf8ByteLength(text) > MAX_BACKUP_BYTES)
-    throw new BackupError("备份超过 32 MiB 上限。");
+    throw new BackupError("备份文件超过 32 MB。");
   try {
     const data = object(JSON.parse(text));
     if (data.format !== "jingkan-backup" || data.version !== 1)

@@ -177,10 +177,10 @@ export function SettingsScreen(props: Props) {
           }
         />
         <SettingRow
-          title="跳过不可达频道"
+          title="换台时跳过无法连接的频道"
           trailing={
             <Switch
-              accessibilityLabel="跳过不可达频道"
+              accessibilityLabel="换台时跳过无法连接的频道"
               value={props.skipUnreachable}
               trackColor={{ true: colors.accent }}
               onValueChange={props.onSkipUnreachableChange}
