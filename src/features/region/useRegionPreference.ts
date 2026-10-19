@@ -96,7 +96,7 @@ export function useRegionPreference(
         setResult(detected);
       } catch {
         if (generation.current === operation && !request.signal.aborted)
-          onErrorRef.current("地区识别未完成，请重试");
+          onErrorRef.current("未能识别地区，可重试或手动选择");
       } finally {
         if (generation.current === operation) setBusy(false);
         if (controller.current === request) controller.current = null;
@@ -151,7 +151,7 @@ export function useRegionPreference(
           if (initialization.current !== initializationId) return;
           setReady(true);
           readyRef.current = true;
-          onErrorRef.current("地区偏好读取失败，显示全部");
+          onErrorRef.current("地区偏好读取未完成，暂显示全部");
         }
       }
     })();
@@ -175,7 +175,7 @@ export function useRegionPreference(
       cancel();
       if (!ready || !repo) return;
       if (value !== null && value !== "" && !isCountryCode(value)) {
-        onErrorRef.current("无效的地区选择");
+        onErrorRef.current("该地区不可选，请重新选择");
         return;
       }
       const operation = generation.current;
@@ -214,7 +214,7 @@ export function useRegionPreference(
   const detectWithConsent = useCallback(async () => {
     if (!ready || !repo || AppState.currentState !== "active") return;
     if (revokePendingRef.current) {
-      onErrorRef.current("请先重试撤销识别授权");
+      onErrorRef.current("请先在设置中完成撤销识别授权");
       return;
     }
     cancel();
@@ -276,7 +276,7 @@ export function useRegionPreference(
       }
     } catch {
       if (generation.current === operation)
-        onErrorRef.current("识别已停止，撤销未保存");
+        onErrorRef.current("识别已停止，撤销未保存，请重试");
     }
   }, [assignPreference, cancel, ready, repo, save]);
 

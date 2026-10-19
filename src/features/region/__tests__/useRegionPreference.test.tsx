@@ -295,7 +295,9 @@ test("failed revocation stops trusting consent and exposes a working persistence
     await result.current.detectWithConsent();
   });
   expect(detectRegion).not.toHaveBeenCalled();
-  expect(error).toHaveBeenLastCalledWith(expect.stringContaining("先重试"));
+  expect(error).toHaveBeenLastCalledWith(
+    expect.stringContaining("先在设置中完成撤销"),
+  );
   await act(async () => {
     await result.current.revokeConsent();
   });

@@ -141,7 +141,7 @@ test("the region basis says what the country rests on, in one short line", () =>
   const device = resolveRegion(china);
   expect(regionBasis(auto, device, "CN")).toBe("依据：手机地区与时区设置");
   expect(regionBasis(auto, device, null)).toBe(
-    "识别为中国大陆，来源中无此标注",
+    "识别为中国大陆，节目单中无该地区频道",
   );
   expect(regionBasis({ ...auto, mode: "manual" }, device, "US")).toBe(
     "手动选择",

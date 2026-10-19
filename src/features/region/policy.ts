@@ -30,7 +30,7 @@ export const DEFAULT_COUNTRY_PREFERENCE: CountryPreference = {
 export const NO_REGION: RegionResult = {
   countryCode: null,
   source: "none",
-  message: "地区信息不足",
+  message: "暂无法判断地区",
 };
 
 // Single-country zones from IANA zone1970.tab (2026-10-18), with backward aliases
@@ -136,7 +136,7 @@ export function resolveRegion(
     return {
       countryCode: null,
       source: "conflict",
-      message: "手机位置与访问 IP 不一致",
+      message: "手机位置与网络位置不一致",
     };
   if (location)
     return {
@@ -151,7 +151,7 @@ export function resolveRegion(
       return {
         countryCode: null,
         source: "conflict",
-        message: "IP 与手机地区或时区不一致",
+        message: "网络位置与手机地区或时区不一致",
       };
     if (region === ip || zone === ip)
       return {
@@ -161,7 +161,7 @@ export function resolveRegion(
       };
     return {
       ...NO_REGION,
-      message: "访问 IP 缺少手机设置印证",
+      message: "仅依据网络位置，结果可能不准确",
     };
   }
   if (region && zone === region)
@@ -201,6 +201,6 @@ export function regionBasis(
 ): string {
   if (preference.mode === "manual") return "手动选择";
   if (result.countryCode && shownCountry === null)
-    return `识别为${countryLabel(result.countryCode)}，来源中无此标注`;
+    return `识别为${countryLabel(result.countryCode)}，节目单中无该地区频道`;
   return result.message;
 }

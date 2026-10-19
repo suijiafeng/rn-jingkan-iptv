@@ -201,7 +201,7 @@ export async function detectRegion(
     location.status === "fulfilled" ? location.value : null,
   );
   const issues: string[] = [];
-  if (ip.status === "rejected") issues.push("IP 查询未完成");
+  if (ip.status === "rejected") issues.push("网络位置查询未完成");
   if (location.status === "rejected")
     issues.push(
       location.reason instanceof RegionLookupError &&

@@ -174,7 +174,7 @@ test("service errors are contained and retain the device-only fallback", async (
     signal: new AbortController().signal,
   });
   expect(result).toMatchObject({ countryCode: "CN", source: "device" });
-  expect(result.message).toContain("IP 查询未完成");
+  expect(result.message).toContain("网络位置查询未完成");
   expect(result.message).toContain("未获得手机定位权限");
   expect(result.message).not.toContain("private");
 });
