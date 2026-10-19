@@ -1,7 +1,7 @@
 import React from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Button } from "../../components/ui";
+import { BackBar, Button } from "../../components/ui";
 import type { SourceKind } from "../../domain/types";
 import { colors, sizes, styles, type } from "../../theme";
 
@@ -15,9 +15,12 @@ export type GuideExit = SourceKind | null;
  */
 export function FirstRunGuide({
   visible,
+  fromSettings = false,
   onFinish,
 }: {
   visible: boolean;
+  /** Reopened from 设置: a plain top-left back instead of "稍后再说". */
+  fromSettings?: boolean;
   onFinish: (exit: GuideExit) => void;
 }) {
   return (
@@ -30,19 +33,23 @@ export function FirstRunGuide({
         style={styles.screen}
         edges={["top", "bottom", "left", "right"]}
       >
-        <View style={guideStyles.topBar}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => onFinish(null)}
-            hitSlop={8}
-            style={({ pressed }) => [
-              guideStyles.textAction,
-              pressed && guideStyles.pressed,
-            ]}
-          >
-            <Text style={guideStyles.textActionLabel}>稍后再说</Text>
-          </Pressable>
-        </View>
+        {fromSettings ? (
+          <BackBar onBack={() => onFinish(null)} />
+        ) : (
+          <View style={guideStyles.topBar}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => onFinish(null)}
+              hitSlop={8}
+              style={({ pressed }) => [
+                guideStyles.textAction,
+                pressed && guideStyles.pressed,
+              ]}
+            >
+              <Text style={guideStyles.textActionLabel}>稍后再说</Text>
+            </Pressable>
+          </View>
+        )}
         <View style={guideStyles.page}>
           <Text accessibilityRole="header" style={guideStyles.title}>
             静看 TV

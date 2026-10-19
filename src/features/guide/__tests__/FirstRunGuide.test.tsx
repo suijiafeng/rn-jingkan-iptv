@@ -19,3 +19,11 @@ test("choosing later finishes without opening a form", async () => {
   await fireEvent.press(screen.getByRole("button", { name: "稍后再说" }));
   expect(onFinish).toHaveBeenLastCalledWith(null);
 });
+
+test("reopened from settings, the guide has a top-left back instead", async () => {
+  const onFinish = jest.fn();
+  await render(<FirstRunGuide visible fromSettings onFinish={onFinish} />);
+  expect(screen.queryByRole("button", { name: "稍后再说" })).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "返回" }));
+  expect(onFinish).toHaveBeenLastCalledWith(null);
+});

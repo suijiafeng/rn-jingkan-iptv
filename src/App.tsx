@@ -443,6 +443,7 @@ export default function App() {
       />
       <FirstRunGuide
         visible={settings.guideVisible}
+        fromSettings={settings.guideFromSettings}
         onFinish={(exit) => {
           settings.finishGuide();
           if (exit) importer.startForm(exit);

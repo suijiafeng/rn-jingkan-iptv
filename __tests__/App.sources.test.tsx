@@ -118,7 +118,7 @@ test.each(["revocation", "background", "stop", "unmount"])(
         expect(Network.getNetworkStateAsync).toHaveBeenCalledTimes(1),
       );
       if (action === "revocation") {
-        await fireEvent.press(screen.getByText("完成", { exact: true }));
+        await fireEvent.press(screen.getByRole("button", { name: "返回" }));
         await fireEvent.press(
           screen.getByRole("button", { name: "撤销联网许可" }),
         );

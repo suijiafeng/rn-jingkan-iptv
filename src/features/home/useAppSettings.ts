@@ -35,7 +35,9 @@ export function useAppSettings({
     [artworkAllowed, setArtworkAllowed] = useState(false),
     [artworkSaving, setArtworkSaving] = useState(false),
     [artworkRevokePending, setArtworkRevokePending] = useState(false),
-    [guideVisible, setGuideVisible] = useState(false),
+    [guideOrigin, setGuideOrigin] = useState<"firstRun" | "settings" | null>(
+      null,
+    ),
     // One confirmation covers this metered connection until Wi-Fi returns.
     [mobileAccepted, setMobileAcceptedState] = useState(false),
     // The network consent dialog: null while hidden, else whether it also
@@ -84,7 +86,7 @@ export function useAppSettings({
             void opened
               .listSources()
               .then((saved) => {
-                if (active && !saved.length) setGuideVisible(true);
+                if (active && !saved.length) setGuideOrigin("firstRun");
               })
               .catch(() => undefined);
           if (!preserveTabOnReload.current)
@@ -259,7 +261,7 @@ export function useAppSettings({
    * next launch, so it is not reported.
    */
   const finishGuide = () => {
-    setGuideVisible(false);
+    setGuideOrigin(null);
     void repo?.setSetting("guideSeen", true).catch(() => undefined);
   };
 
@@ -315,8 +317,10 @@ export function useAppSettings({
     changeBackgroundPlayback,
     withdrawRemote,
     resetToDefaults,
-    guideVisible,
-    showGuide: () => setGuideVisible(true),
+    guideVisible: guideOrigin !== null,
+    /** Opened from 设置 › 使用指引: the guide gets a top-left back. */
+    guideFromSettings: guideOrigin === "settings",
+    showGuide: () => setGuideOrigin("settings"),
     finishGuide,
   };
 }

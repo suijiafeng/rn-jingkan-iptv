@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Constants from "expo-constants";
-import { Button, Heading } from "../../components/ui";
+import { BackBar, Heading } from "../../components/ui";
 import { colors, sizes, styles } from "../../theme";
 import { RISK } from "../common/confirm";
 import { Chevron, SettingRow } from "./SettingRows";
@@ -125,6 +125,7 @@ export function About() {
           style={styles.screen}
           edges={["top", "bottom", "left", "right"]}
         >
+          <BackBar onBack={() => setOpen(false)} />
           <ScrollView contentContainerStyle={styles.content}>
             <Heading title="静看 TV" subtitle={versionLabel()} />
             <Text style={styles.body}>安静地看，资料自己保管。</Text>
@@ -132,9 +133,6 @@ export function About() {
               {SECTIONS.map((section) => (
                 <Section key={section.title} {...section} />
               ))}
-            </View>
-            <View>
-              <Button label="返回设置" onPress={() => setOpen(false)} />
             </View>
           </ScrollView>
         </SafeAreaView>

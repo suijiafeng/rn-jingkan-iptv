@@ -108,10 +108,11 @@ test("manager has one close action and no explanatory copy", async () => {
     />,
   );
 
-  expect(screen.queryByRole("button", { name: "返回" })).toBeNull();
   expect(screen.getByRole("header", { name: "节目来源" })).toBeTruthy();
   expect(screen.queryByText(/缓存|只在你操作时联网|已启用/)).toBeNull();
-  await fireEvent.press(screen.getByRole("button", { name: "完成" }));
+  // The way out is a pinned top-left back, not a "完成" to guess at.
+  expect(screen.queryByRole("button", { name: "完成" })).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "返回" }));
   expect(close).toHaveBeenCalledTimes(1);
 });
 

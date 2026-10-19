@@ -308,7 +308,9 @@ test("a user with sources never sees the guide but can reopen it in settings", a
   await fireEvent.press(screen.getByRole("tab", { name: "设置" }));
   await fireEvent.press(screen.getByText("使用指引"));
   expect(screen.getByText("播放你自己添加的节目单。")).toBeTruthy();
-  await fireEvent.press(screen.getByRole("button", { name: "稍后再说" }));
+  // Reopened from settings it is a sub-page: back, not "稍后再说".
+  expect(screen.queryByRole("button", { name: "稍后再说" })).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "返回" }));
   await waitFor(() =>
     expect(screen.queryByText("播放你自己添加的节目单。")).toBeNull(),
   );

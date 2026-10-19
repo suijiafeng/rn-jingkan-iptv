@@ -139,7 +139,40 @@ export function ErrorNotice({
     </>
   );
 }
+/** Pinned top-left "‹ 返回" of a secondary page; goes back one level. */
+export function BackBar({
+  onBack,
+  accessibilityLabel = "返回",
+}: {
+  onBack: () => void;
+  accessibilityLabel?: string;
+}) {
+  return (
+    <View style={uiStyles.backBar}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        hitSlop={8}
+        onPress={onBack}
+        style={({ pressed }) => [uiStyles.back, pressed && { opacity: 0.6 }]}
+      >
+        <Text style={uiStyles.backLabel}>‹ 返回</Text>
+      </Pressable>
+    </View>
+  );
+}
 const uiStyles = StyleSheet.create({
+  backBar: {
+    flexDirection: "row",
+    minHeight: sizes.touch,
+    paddingHorizontal: 8,
+  },
+  back: {
+    minHeight: sizes.touch,
+    paddingHorizontal: 8,
+    justifyContent: "center",
+  },
+  backLabel: { ...type.body, color: colors.text, fontWeight: "600" },
   button: {
     minHeight: sizes.button,
     borderRadius: 12,

@@ -1,7 +1,7 @@
 import React from "react";
 import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Button, ErrorNotice, Heading } from "../../components/ui";
+import { BackBar, Button, ErrorNotice, Heading } from "../../components/ui";
 import type { Source, SourceKind } from "../../domain/types";
 import { colors, styles, type } from "../../theme";
 import type { CheckProgress, CheckSummary } from "./availability";
@@ -39,15 +39,11 @@ export function SourceManagerModal(props: ManagerProps) {
       onRequestClose={props.onClose}
     >
       <SafeAreaView style={styles.screen}>
+        <BackBar onBack={props.onClose} />
         <ScrollView
           contentContainerStyle={[styles.content, managerStyles.content]}
         >
-          <View style={managerStyles.header}>
-            <View style={managerStyles.headerText}>
-              <Heading title="节目来源" />
-            </View>
-            <Button compact secondary label="完成" onPress={props.onClose} />
-          </View>
+          <Heading title="节目来源" />
           <ErrorNotice message={props.error} onDismiss={props.onDismissError} />
           <View style={managerStyles.addActions}>
             <Button
@@ -97,12 +93,6 @@ export function SourceManagerModal(props: ManagerProps) {
 
 const managerStyles = StyleSheet.create({
   content: { gap: 12 },
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-  },
-  headerText: { flex: 1, minWidth: 0 },
   addActions: { flexDirection: "row", gap: 10 },
   addButton: { flex: 1 },
   emptyCard: {
