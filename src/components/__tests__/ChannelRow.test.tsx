@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
 import { ChannelRow } from "../ChannelRow";
 import type { Channel } from "../../domain/types";
 
@@ -22,12 +22,15 @@ const channel: Channel = {
   favorite: false,
 };
 
-test("an unreachable channel is dimmed without a text tag, but still spoken", async () => {
+test("an unreachable channel shows a clear warning and remains playable", async () => {
+  const onPlay = jest.fn();
   await render(
-    <ChannelRow channel={channel} onPlay={jest.fn()} onFavorite={jest.fn()} />,
+    <ChannelRow channel={channel} onPlay={onPlay} onFavorite={jest.fn()} />,
   );
-  expect(screen.queryByText("不可用")).toBeNull();
-  expect(
-    screen.getByRole("button", { name: "山野纪实，不可用，播放" }),
-  ).toBeTruthy();
+  expect(screen.getByText("暂时无法连接")).toBeTruthy();
+  const play = screen.getByRole("button", {
+    name: "山野纪实，暂时无法连接，播放",
+  });
+  fireEvent.press(play);
+  expect(onPlay).toHaveBeenCalledWith(channel);
 });

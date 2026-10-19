@@ -136,7 +136,7 @@ describe("automatic source failover", () => {
     expect(ui.getByRole("button", { name: "重试" })).toBeTruthy();
     await ui.unmount();
   });
-  test("a failed last check is a mark on the retry chip, not a sentence", async () => {
+  test("a failed last check leaves the retry action without a badge", async () => {
     const onSelectSource = jest.fn();
     const ui = await render(
       <Harness
@@ -150,10 +150,8 @@ describe("automatic source failover", () => {
     );
     await settle();
     expect(currentToast()).toBe("当前来源暂时无法播放");
-    expect(
-      ui.getByRole("button", { name: "重试，上次检测不可达" }),
-    ).toBeTruthy();
-    expect(ui.getByTestId("chip-badge")).toBeTruthy();
+    expect(ui.getByRole("button", { name: "重试" })).toBeTruthy();
+    expect(ui.queryByTestId("chip-badge")).toBeNull();
     await ui.unmount();
   });
   test("a manually chosen source starts the round; the walk wraps to the first", async () => {

@@ -321,11 +321,6 @@ export function useChannelSession(props: SessionProps) {
     <CenterChip
       label="重试"
       icon={<RefreshIcon size={15} />}
-      badge={
-        props.channel.checkStatus === "unreachable"
-          ? "上次检测不可达"
-          : undefined
-      }
       disabled={primaryDisabled}
       onPress={primaryAction}
     />
