@@ -286,8 +286,8 @@ interface EmptyProps {
 export function ChannelListEmpty(props: EmptyProps) {
   if (props.loading)
     return (
-      <View style={{ gap: 12 }}>
-        <ActivityIndicator color={colors.accent} />
+      <View style={partStyles.loadingState}>
+        <ChannelListSkeleton />
         <Text style={styles.muted} accessibilityLiveRegion="polite">
           正在读取频道…
         </Text>
@@ -338,43 +338,22 @@ export function ChannelListEmpty(props: EmptyProps) {
   );
 }
 
-const TABS = [
-  ["all", "频道"],
-  ["favorites", "收藏"],
-  ["recent", "最近"],
-  ["settings", "设置"],
-] as const;
-
-export function BottomTabs({
-  tab,
-  onChange,
-}: {
-  tab: Tab;
-  onChange: (tab: Tab) => void;
-}) {
+function ChannelListSkeleton() {
   return (
     <View
-      style={{
-        flexDirection: "row",
-        gap: 6,
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        borderTopWidth: 1,
-        borderColor: colors.line,
-      }}
+      accessibilityLabel="正在加载频道列表"
+      accessibilityRole="progressbar"
+      style={partStyles.skeletonList}
     >
-      {TABS.map(([key, label]) => (
-        <Button
-          key={key}
-          label={label}
-          secondary={tab !== key}
-          selected={tab === key}
-          accessibilityRole="tab"
-          onPress={() => {
-            if (key !== tab) onChange(key);
-          }}
-          style={{ flex: 1, paddingHorizontal: 4 }}
-        />
+      {Array.from({ length: 6 }, (_unused, rowIndex) => (
+        <View key={rowIndex} style={partStyles.skeletonRow}>
+          <View style={partStyles.skeletonLogo} />
+          <View style={partStyles.skeletonCopy}>
+            <View style={[partStyles.skeletonLine, partStyles.skeletonTitle]} />
+            <View style={[partStyles.skeletonLine, partStyles.skeletonMeta]} />
+          </View>
+          <View style={partStyles.skeletonAction} />
+        </View>
       ))}
     </View>
   );
@@ -382,6 +361,33 @@ export function BottomTabs({
 
 const partStyles = StyleSheet.create({
   header: { gap: 10, marginBottom: 12 },
+  loadingState: { gap: 12 },
+  skeletonList: { gap: 10 },
+  skeletonRow: {
+    minHeight: 68,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: colors.raised,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  skeletonLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: colors.line,
+  },
+  skeletonCopy: { flex: 1, gap: 8 },
+  skeletonLine: { height: 10, borderRadius: 5, backgroundColor: colors.line },
+  skeletonTitle: { width: "62%" },
+  skeletonMeta: { width: "38%", opacity: 0.7 },
+  skeletonAction: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.line,
+  },
   // Opaque so rows scrolling underneath never show through the pinned bar.
   filterBar: { gap: 10, paddingVertical: 8, backgroundColor: colors.bg },
   compactBar: { gap: 8, paddingVertical: 0, backgroundColor: "transparent" },

@@ -5,11 +5,7 @@ import {
   screen,
   within,
 } from "@testing-library/react-native";
-import {
-  BottomTabs,
-  ChannelListEmpty,
-  ChannelListHeader,
-} from "../ChannelListParts";
+import { ChannelListEmpty, ChannelListHeader } from "../ChannelListParts";
 import type { Source } from "../../../domain/types";
 
 const source: Source = {
@@ -264,16 +260,20 @@ test("empty history and an empty search have distinct next steps", async () => {
   expect(screen.getByText("试试清空搜索或筛选条件。")).toBeTruthy();
 });
 
-test("bottom navigation has one ordered entry per destination and repeated taps preserve it", async () => {
-  const change = jest.fn();
-  await render(<BottomTabs tab="favorites" onChange={change} />);
-  expect(
-    screen.getAllByRole("tab").map((tab) => tab.props.accessibilityLabel),
-  ).toEqual(["频道", "收藏", "最近", "设置"]);
-  const favorites = screen.getByRole("tab", { name: "收藏" });
-  expect(favorites.props.accessibilityState.selected).toBe(true);
-  await fireEvent.press(favorites);
-  expect(change).not.toHaveBeenCalled();
-  await fireEvent.press(screen.getByRole("tab", { name: "频道" }));
-  expect(change).toHaveBeenCalledWith("all");
+test("loading channels shows a skeleton and status", async () => {
+  await render(
+    <ChannelListEmpty
+      tab="all"
+      loading
+      error=""
+      hasSources
+      filtered={false}
+      onRetry={jest.fn()}
+      onAddUrl={jest.fn()}
+      onAddFile={jest.fn()}
+      onShowAll={jest.fn()}
+    />,
+  );
+  expect(screen.getByLabelText("正在加载频道列表")).toBeTruthy();
+  expect(screen.getByText("正在读取频道…")).toBeTruthy();
 });
