@@ -196,12 +196,12 @@ export function useChannelSession(props: SessionProps) {
       return;
     }
     const id = state.attemptId;
-    // Catch-up streams pause in place so the position survives. Plain live
-    // stops (releasing the decoder); resuming reconnects at the live edge.
+    // Pause in place so the last frame stays on screen; catch-up streams also
+    // keep their position. Live resumes on the same player, or reconnects at
+    // the live edge once the pause has gone stale (see below).
     if (
       id !== null &&
       (state.phase === "playing" || state.phase === "buffering") &&
-      mediaInfo.seekable &&
       media.pause()
     ) {
       if (!controller.userPaused(id)) controller.pause();

@@ -45,17 +45,6 @@ export const sessionStyles = StyleSheet.create({
     fontWeight: "600",
   },
   miniVideo: { width: 100, height: 64 },
-  // Two chevrons, one over the other, on the right edge of the picture.
-  swipeHint: {
-    position: "absolute",
-    top: "50%",
-    marginTop: -28,
-    height: 56,
-    justifyContent: "space-between",
-    opacity: 0.55,
-  },
-  swipeUp: { transform: [{ rotate: "90deg" }] },
-  swipeDown: { transform: [{ rotate: "-90deg" }] },
   osd: {
     position: "absolute",
     top: 24,

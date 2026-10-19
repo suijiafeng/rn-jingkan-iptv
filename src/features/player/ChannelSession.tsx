@@ -189,22 +189,6 @@ export function ChannelSession(props: SessionProps) {
             }}
           />
         )}
-        {props.fullscreen && !controlsVisible && state.phase === "playing" && (
-          // A quiet up/down cue in place of the words "上下滑动换台".
-          <View
-            style={[sessionStyles.swipeHint, { right: insets.right + 14 }]}
-            pointerEvents="none"
-            accessible={false}
-            importantForAccessibility="no-hide-descendants"
-          >
-            <View style={sessionStyles.swipeUp}>
-              <ChevronLeftIcon size={18} />
-            </View>
-            <View style={sessionStyles.swipeDown}>
-              <ChevronLeftIcon size={18} />
-            </View>
-          </View>
-        )}
         {props.fullscreen && osd && !props.sheetOpen && (
           <View
             style={[

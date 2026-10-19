@@ -76,15 +76,16 @@ describe("one overlay instead of native controls", () => {
     await ui.unmount();
   });
 
-  test("pausing plain live releases the attempt; playing again reconnects", async () => {
+  test("pausing plain live keeps the frame; a prompt resume reuses the player", async () => {
     const ui = await render(<PlayerScreen {...props()} />);
     await start();
     await fireEvent.press(ui.getByTestId("primary-play-pause"));
-    expect(mockNative.pause).not.toHaveBeenCalled();
-    expect(mockUnmounts).toHaveBeenCalledTimes(1);
-    expect(ui.queryByText("已暂停")).toBeNull(); // plain pause: dimmed picture and ▶ only
+    expect(mockNative.pause).toHaveBeenCalledTimes(1);
+    expect(mockUnmounts).not.toHaveBeenCalled();
+    expect(ui.queryByText("已暂停")).toBeNull(); // plain pause: frozen picture and ▶ only
     await fireEvent.press(ui.getByRole("button", { name: "播放" }));
-    expect(mockMounts).toHaveBeenCalledTimes(2);
+    expect(mockNative.play).toHaveBeenCalledTimes(1);
+    expect(mockMounts).toHaveBeenCalledTimes(1);
     await ui.unmount();
   });
 
@@ -288,11 +289,13 @@ describe("docked bar", () => {
     const ui = await render(<PlayerScreen {...options} />);
     await start();
     await fireEvent.press(ui.getByRole("button", { name: "暂停" }));
-    expect(mockUnmounts).toHaveBeenCalledTimes(1);
+    expect(mockNative.pause).toHaveBeenCalledTimes(1);
+    expect(mockUnmounts).not.toHaveBeenCalled();
     // The docked bar still names the state in its subtitle.
     expect(ui.getByText("已暂停")).toBeTruthy();
     await fireEvent.press(ui.getByRole("button", { name: "播放" }));
-    expect(mockMounts).toHaveBeenCalledTimes(2);
+    expect(mockNative.play).toHaveBeenCalledTimes(1);
+    expect(mockMounts).toHaveBeenCalledTimes(1);
     await ui.unmount();
   });
 
