@@ -43,6 +43,7 @@ export interface ChannelListEmptyActions {
   onAddUrl: () => void;
   onAddFile: () => void;
   onShowAll: () => void;
+  onManageSources: () => void;
 }
 
 /**

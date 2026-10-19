@@ -281,6 +281,7 @@ interface EmptyProps {
   onAddUrl: () => void;
   onAddFile: () => void;
   onShowAll: () => void;
+  onManageSources: () => void;
 }
 
 export function ChannelListEmpty(props: EmptyProps) {
@@ -331,6 +332,8 @@ export function ChannelListEmpty(props: EmptyProps) {
           <Button label="添加节目单" onPress={props.onAddUrl} />
           <Button label="从文件导入" secondary onPress={props.onAddFile} />
         </>
+      ) : !props.filtered && props.tab === "all" ? (
+        <Button label="管理节目来源" onPress={props.onManageSources} />
       ) : (
         <Button label="查看全部频道" onPress={props.onShowAll} />
       )}

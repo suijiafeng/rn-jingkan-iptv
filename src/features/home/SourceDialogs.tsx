@@ -9,7 +9,8 @@ import type { useSourceTasks } from "./useSourceTasks";
 
 /**
  * Source management and the dialogs it opens: rename, and the add/refresh
- * form. Renaming returns to management; the form replaces it.
+ * form. Renaming returns to management; the form replaces it, and a
+ * cancelled form returns to management too.
  */
 export function SourceDialogs({
   repo,
@@ -58,11 +59,11 @@ export function SourceDialogs({
         onClose={() => setManaging(false)}
         onAdd={(kind) => {
           setManaging(false);
-          importer.startForm(kind);
+          importer.startForm(kind, true);
         }}
         onRefresh={(source) => {
           setManaging(false);
-          void importer.refresh(source);
+          void importer.refresh(source, true);
         }}
         onRename={(source) => {
           setError("");

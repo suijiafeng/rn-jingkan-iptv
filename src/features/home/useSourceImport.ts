@@ -31,6 +31,7 @@ export function useSourceImport({
   reconcilePlayingSources,
   changed,
   onImported,
+  onReturnToManagement,
 }: {
   repo: Repository | null;
   setError: (message: string) => void;
@@ -42,13 +43,16 @@ export function useSourceImport({
   changed: () => void;
   /** A saved import or refresh shows the whole channel list again. */
   onImported: () => void;
+  /** A cancelled form opened from source management goes back there. */
+  onReturnToManagement: () => void;
 }) {
   const [form, setForm] = useState<SourceFormState | null>(null),
     [busy, setBusy] = useState(false),
     [formError, setFormError] = useState("");
   const controller = useRef<AbortController | null>(null),
     generation = useRef(0),
-    saving = useRef(false);
+    saving = useRef(false),
+    fromManagement = useRef(false);
 
   useEffect(() => () => controller.current?.abort(), []);
 
@@ -60,7 +64,8 @@ export function useSourceImport({
   }, []);
   const taskRunning = useCallback(() => controller.current !== null, []);
 
-  const startForm = (kind: SourceKind) => {
+  const startForm = (kind: SourceKind, openedFromManagement = false) => {
+    fromManagement.current = openedFromManagement;
     setError("");
     setForm(initialForm(kind));
     setFormError("");
@@ -86,6 +91,10 @@ export function useSourceImport({
     if (form?.refresh) repo?.cancelRefresh(form.refresh.sourceId);
     setForm(null);
     setFormError("");
+    if (fromManagement.current) {
+      fromManagement.current = false;
+      onReturnToManagement();
+    }
   };
 
   const chooseFile = async () => {
@@ -108,8 +117,10 @@ export function useSourceImport({
       controller.current = abort;
       setBusy(true);
       const content = await readPickedFile(asset.uri, abort.signal);
-      if (task === generation.current)
+      if (task === generation.current) {
         updateForm({ content, fileName: asset.name, kind: "file" });
+        setFormError("");
+      }
     } catch {
       if (task === generation.current)
         setFormError(
@@ -220,6 +231,7 @@ export function useSourceImport({
         });
       }
       setForm(null);
+      fromManagement.current = false;
       onImported();
       changed();
     } catch {
@@ -231,8 +243,9 @@ export function useSourceImport({
   };
 
   /** Opens the form pre-filled for a refresh, holding the source's token. */
-  const refresh = async (source: Source) => {
+  const refresh = async (source: Source, openedFromManagement = false) => {
     if (!repo || busy) return;
+    fromManagement.current = openedFromManagement;
     setError("");
     try {
       const token = await repo.beginRefresh(source.id);
@@ -251,6 +264,10 @@ export function useSourceImport({
       setFormError("");
     } catch {
       setError("这个来源正在刷新或已经被删除");
+      if (openedFromManagement) {
+        fromManagement.current = false;
+        onReturnToManagement();
+      }
     }
   };
 

@@ -251,6 +251,7 @@ test("empty history and an empty search have distinct next steps", async () => {
     onAddUrl: jest.fn(),
     onAddFile: jest.fn(),
     onShowAll: jest.fn(),
+    onManageSources: jest.fn(),
   };
   const ui = await render(<ChannelListEmpty {...callbacks} />);
   expect(screen.getByText("还没有观看记录")).toBeTruthy();
@@ -272,8 +273,35 @@ test("loading channels shows a skeleton and status", async () => {
       onAddUrl={jest.fn()}
       onAddFile={jest.fn()}
       onShowAll={jest.fn()}
+      onManageSources={jest.fn()}
     />,
   );
   expect(screen.getByLabelText("正在加载频道列表")).toBeTruthy();
   expect(screen.getByText("正在读取频道…")).toBeTruthy();
+});
+
+test("sources without usable channels lead to source management", async () => {
+  const onManageSources = jest.fn(),
+    onShowAll = jest.fn();
+  const props = {
+    tab: "all" as const,
+    loading: false,
+    error: "",
+    hasSources: true,
+    filtered: false,
+    onRetry: jest.fn(),
+    onAddUrl: jest.fn(),
+    onAddFile: jest.fn(),
+    onShowAll,
+    onManageSources,
+  };
+  const ui = await render(<ChannelListEmpty {...props} />);
+  expect(screen.getByText("没有可用频道")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "查看全部频道" })).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "管理节目来源" }));
+  expect(onManageSources).toHaveBeenCalledTimes(1);
+  await ui.rerender(<ChannelListEmpty {...props} tab="favorites" />);
+  expect(screen.queryByRole("button", { name: "管理节目来源" })).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "查看全部频道" }));
+  expect(onShowAll).toHaveBeenCalledTimes(1);
 });

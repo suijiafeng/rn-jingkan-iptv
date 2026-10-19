@@ -108,6 +108,7 @@ export default function App() {
       setRecentEditing(false);
       filters.reset();
     },
+    onReturnToManagement: () => setManage(true),
   });
   const sourceTasks = useSourceTasks({
     repo,
@@ -410,6 +411,10 @@ export default function App() {
                 setTab("all");
                 filters.reset();
                 void region.selectManualCountry(null);
+              },
+              onManageSources: () => {
+                setError("");
+                setManage(true);
               },
             }}
             artworkEnabled={settings.artworkEnabled}
