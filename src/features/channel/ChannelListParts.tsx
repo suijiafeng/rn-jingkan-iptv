@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  BackHandler,
   Pressable,
   ScrollView,
   Text,
@@ -132,6 +133,20 @@ export function ChannelFilterBar(
   // Country/language menus stay folded behind one icon until asked for.
   const [facetsOpen, setFacetsOpen] = useState(false);
   const facetMenus = tab === "all" && !props.foldTriggers;
+  // An expanded row is one level: the back key folds it before anything else.
+  const rowOpen = sourcesOpen || facetsOpen;
+  useEffect(() => {
+    if (!rowOpen) return;
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        setSourcesOpen(false);
+        setFacetsOpen(false);
+        return true;
+      },
+    );
+    return () => subscription.remove();
+  }, [rowOpen]);
   const selectedSource = props.sources.find(
     (source) => source.id === props.sourceId,
   );

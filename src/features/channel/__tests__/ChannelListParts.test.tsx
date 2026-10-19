@@ -1,5 +1,7 @@
 import React from "react";
+import { BackHandler } from "react-native";
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -353,4 +355,41 @@ test("a scope whose source is no longer listed can still be cleared", async () =
   );
   await fireEvent.press(screen.getByRole("button", { name: "清除来源筛选" }));
   expect(callbacks.onSourceChange).toHaveBeenCalledWith("");
+});
+
+test("the back key folds an expanded filter row before leaving the page", async () => {
+  const listeners: (() => boolean | null | undefined)[] = [];
+  const spy = jest
+    .spyOn(BackHandler, "addEventListener")
+    .mockImplementation((_event, listener) => {
+      const call = () =>
+        listener({ type: "hardwareBackPress" } as Parameters<
+          typeof listener
+        >[0]);
+      listeners.push(call);
+      return {
+        remove: () => listeners.splice(listeners.indexOf(call), 1),
+      };
+    });
+  await render(<ChannelListHeader {...props()} />);
+  // Folded: nothing claims the key, so the page keeps its own back.
+  expect(listeners).toHaveLength(0);
+  const toggle = screen.getByRole("button", { name: "按国家/地区或语言筛选" });
+  await fireEvent.press(toggle);
+  expect(screen.getByTestId("channel-facet-filters-country")).toBeTruthy();
+  let handled: boolean | null | undefined;
+  await act(() => {
+    handled = listeners.at(-1)?.();
+  });
+  expect(handled).toBe(true);
+  expect(screen.queryByTestId("channel-facet-filters-country")).toBeNull();
+  expect(listeners).toHaveLength(0);
+  // The source row folds the same way.
+  await fireEvent.press(screen.getByRole("button", { name: "展开来源筛选" }));
+  await act(() => {
+    handled = listeners.at(-1)?.();
+  });
+  expect(handled).toBe(true);
+  expect(screen.queryByRole("button", { name: "另一个来源" })).toBeNull();
+  spy.mockRestore();
 });
