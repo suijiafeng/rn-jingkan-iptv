@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { showToast } from "../../components/Toast";
+import { PlayIcon } from "./playerIcons";
 import { colors } from "../../theme";
 import type { PlaybackSnapshot } from "./playbackController";
 import { descriptions, SLOW_START_SECONDS } from "./playerShared";
@@ -138,6 +139,49 @@ export function CenterChip({
   );
 }
 
+/**
+ * The mobile-data question in the middle of the picture: what will happen,
+ * the one action, and a box to stop asking (it turns off 移动网络提醒).
+ */
+export function MobileDataPrompt({
+  stopReminding,
+  onStopRemindingChange,
+  disabled,
+  onContinue,
+}: {
+  stopReminding: boolean;
+  onStopRemindingChange: (checked: boolean) => void;
+  disabled: boolean;
+  onContinue: () => void;
+}) {
+  return (
+    <View style={statusStyles.prompt}>
+      <Text style={statusStyles.promptText}>播放将消耗流量，是否继续播放</Text>
+      <CenterChip
+        label="用流量播放"
+        icon={<PlayIcon size={13} />}
+        disabled={disabled}
+        onPress={onContinue}
+      />
+      <Pressable
+        accessibilityRole="checkbox"
+        accessibilityLabel="不再提醒"
+        accessibilityState={{ checked: stopReminding }}
+        hitSlop={8}
+        onPress={() => onStopRemindingChange(!stopReminding)}
+        style={statusStyles.checkRow}
+      >
+        <View
+          style={[statusStyles.checkBox, stopReminding && statusStyles.checked]}
+        >
+          {stopReminding && <View style={statusStyles.checkMark} />}
+        </View>
+        <Text style={statusStyles.checkText}>不再提醒</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 const NOT_SLOW = Symbol("not slow");
 
 /**
@@ -184,7 +228,6 @@ export function playerNotice({
       .join("，");
   if (phase === "offline" || phase === "ended" || phase === "blocked")
     return descriptions[phase].title;
-  if (phase === "cellular") return descriptions.cellular.title;
   if (phase === "paused") return pausedBody || null;
   if (slow) return "加载较慢";
   if (phase === "checking" || phase === "connecting") return connectingTitle;
@@ -224,4 +267,38 @@ const statusStyles = StyleSheet.create({
   chipText: { color: colors.text, fontSize: 13, lineHeight: 20 },
   pressed: { opacity: 0.7 },
   disabled: { opacity: 0.4 },
+  prompt: { alignItems: "center", gap: 14, paddingHorizontal: 16 },
+  promptText: {
+    color: colors.text,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
+  },
+  checkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 32,
+  },
+  checkBox: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: "#F1F5F5B3",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checked: { backgroundColor: colors.accent, borderColor: colors.accent },
+  // A tick: two borders of a small box, turned 45°.
+  checkMark: {
+    width: 5,
+    height: 9,
+    marginTop: -2,
+    borderRightWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: colors.ink,
+    transform: [{ rotate: "45deg" }],
+  },
+  checkText: { color: "#F1F5F5BF", fontSize: 12, lineHeight: 18 },
 });

@@ -80,6 +80,9 @@ export function HomePlayer({
         }
         mobileWarning={settings.mobileWarning && !settings.mobileAccepted}
         onMobileAccepted={() => settings.setMobileAccepted(true)}
+        onStopMobileReminders={() =>
+          settings.saveToggle("mobileWarning", false)
+        }
         swipeReverse={settings.swipeReverse}
         skipUnreachable={settings.skipUnreachable}
         previousChannel={shownPrevious}

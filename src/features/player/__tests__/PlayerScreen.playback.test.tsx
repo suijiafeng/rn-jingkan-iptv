@@ -87,16 +87,15 @@ test("mobile transition unmounts before confirmation and never resumes on its ow
   });
   expect(mockUnmounts).toHaveBeenCalledTimes(1);
   expect(ui.queryByTestId("mock-native-attempt")).toBeNull();
-  expect(currentToast()).toBe("正在用移动数据");
+  expect(ui.getByText("播放将消耗流量，是否继续播放")).toBeTruthy();
+  expect(currentToast()).toBeNull();
   await act(() => {
     mockNetworkListeners.forEach((listener) =>
       listener({ type: "WIFI", isConnected: true }),
     );
   });
   expect(mockMounts).toHaveBeenCalledTimes(1);
-  await fireEvent.press(
-    ui.getByRole("button", { name: "使用移动数据继续播放" }),
-  );
+  await fireEvent.press(ui.getByRole("button", { name: "用流量播放" }));
   await act(async () => {
     await Promise.resolve();
   });
@@ -256,5 +255,45 @@ test("fullscreen has one accessible favorite shortcut and toggling it preserves 
   expect(ui.getByRole("button", { name: "退出全屏" })).toBeTruthy();
   expect(mockMounts).toHaveBeenCalledTimes(1);
   expect(mockUnmounts).not.toHaveBeenCalled();
+  await ui.unmount();
+});
+
+test("ticking 不再提醒 before continuing turns the mobile-data reminder off", async () => {
+  const onStopMobileReminders = jest.fn();
+  const onMobileAccepted = jest.fn();
+  const ui = await render(
+    <PlayerScreen {...props({ onStopMobileReminders, onMobileAccepted })} />,
+  );
+  await act(() => {
+    mockNetworkListeners.forEach((listener) =>
+      listener({ type: "CELLULAR", isConnected: true }),
+    );
+  });
+  const box = ui.getByRole("checkbox", { name: "不再提醒" });
+  expect(box.props.accessibilityState.checked).toBe(false);
+  await fireEvent.press(box);
+  expect(
+    ui.getByRole("checkbox", { name: "不再提醒" }).props.accessibilityState
+      .checked,
+  ).toBe(true);
+  expect(onStopMobileReminders).not.toHaveBeenCalled();
+  await fireEvent.press(ui.getByRole("button", { name: "用流量播放" }));
+  expect(onStopMobileReminders).toHaveBeenCalledTimes(1);
+  expect(onMobileAccepted).toHaveBeenCalledTimes(1);
+  await ui.unmount();
+});
+
+test("continuing without the box keeps the reminder on", async () => {
+  const onStopMobileReminders = jest.fn();
+  const ui = await render(
+    <PlayerScreen {...props({ onStopMobileReminders })} />,
+  );
+  await act(() => {
+    mockNetworkListeners.forEach((listener) =>
+      listener({ type: "CELLULAR", isConnected: true }),
+    );
+  });
+  await fireEvent.press(ui.getByRole("button", { name: "用流量播放" }));
+  expect(onStopMobileReminders).not.toHaveBeenCalled();
   await ui.unmount();
 });

@@ -31,6 +31,7 @@ import { OverlayButton, SourceChip } from "./overlayWidgets";
 import {
   CenterChip,
   LoadingDots,
+  MobileDataPrompt,
   playerNotice,
   usePlayerNotices,
   useSlowStart,
@@ -87,6 +88,8 @@ export function useChannelSession(props: SessionProps) {
     media.getInfo,
   );
   const [scrubbing, setScrubbing] = useState(false);
+  // The mobile-data prompt's "不再提醒" box, applied when the user continues.
+  const [stopReminding, setStopReminding] = useState(false);
   useEffect(() => {
     const network = Network.addNetworkStateListener((next) =>
       controller.networkChanged(next),
@@ -175,7 +178,7 @@ export function useChannelSession(props: SessionProps) {
   }, [retained, state.attemptId]);
   const primaryLabel =
     state.phase === "cellular"
-      ? "继续播放"
+      ? "用流量播放"
       : starting
         ? "取消"
         : busy
@@ -186,6 +189,7 @@ export function useChannelSession(props: SessionProps) {
   const primaryAction = () => {
     // On a possibly metered network ▶ is the explicit "continue" answer.
     if (state.phase === "cellular") {
+      if (stopReminding) props.onStopMobileReminders?.();
       props.onMobileAccepted?.();
       onUserPlay();
       void controller.requestPlay(true);
@@ -323,12 +327,12 @@ export function useChannelSession(props: SessionProps) {
       onPress={primaryAction}
     />
   ) : state.phase === "cellular" ? (
-    <CenterChip
-      label="继续播放"
-      accessibilityLabel="使用移动数据继续播放"
-      icon={<PlayIcon size={13} />}
+    // A question that waits for an answer stays on the picture, not a toast.
+    <MobileDataPrompt
+      stopReminding={stopReminding}
+      onStopRemindingChange={setStopReminding}
       disabled={primaryDisabled}
-      onPress={primaryAction}
+      onContinue={primaryAction}
     />
   ) : state.phase === "blocked" ? null : (
     playPauseButton

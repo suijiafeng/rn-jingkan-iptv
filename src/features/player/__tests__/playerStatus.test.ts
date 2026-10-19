@@ -42,5 +42,6 @@ test("a pause speaks only when something else caused it", () => {
   expect(
     playerNotice({ ...quiet, phase: "paused", pausedBody: "切到后台时暂停" }),
   ).toBe("切到后台时暂停");
-  expect(playerNotice({ ...quiet, phase: "cellular" })).toBe("正在用移动数据");
+  // The mobile-data question stays on the picture until answered.
+  expect(playerNotice({ ...quiet, phase: "cellular" })).toBeNull();
 });

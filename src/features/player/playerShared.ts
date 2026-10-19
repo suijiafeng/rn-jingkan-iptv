@@ -35,6 +35,8 @@ export interface PlayerScreenProps {
   onEnableBackgroundPlayback?: () => void;
   /** The user chose to continue on a possibly metered network. */
   onMobileAccepted?: () => void;
+  /** "不再提醒" was ticked when continuing: turn off 移动网络提醒. */
+  onStopMobileReminders?: () => void;
   /** Fullscreen swipe up = next channel; true flips it (我的电视 “换台反转”). */
   swipeReverse?: boolean;
   /** Previous/next step over channels the last manual check found unreachable. */
