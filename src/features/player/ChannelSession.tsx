@@ -261,12 +261,16 @@ export function ChannelSession(props: SessionProps) {
               )}
             </View>
             <View style={sessionStyles.portraitTopLeft}>
+              {/* Same as the back key: back to the list, playback docks in
+                  the bar, whose ✕ is what stops it. */}
               <OverlayButton
-                label="关闭播放器"
+                label="返回频道列表"
                 icon={<ChevronLeftIcon size={20} />}
                 variant="quiet"
-                accessibilityLabel="停止播放并关闭播放器"
-                onPress={props.onClose}
+                accessibilityLabel={
+                  props.onMinimize ? "返回频道列表，继续小窗播放" : "关闭播放器"
+                }
+                onPress={props.onMinimize ?? props.onClose}
               />
             </View>
             <View style={sessionStyles.portraitTopRight}>

@@ -191,9 +191,8 @@ describe("portrait layout", () => {
     expect(ui.queryByRole("button", { name: /上一台|下一台/ })).toBeNull();
     // One source with no declared quality: the chip would say nothing.
     expect(ui.queryByRole("button", { name: /^来源：/ })).toBeNull();
-    await fireEvent.press(
-      ui.getByRole("button", { name: "停止播放并关闭播放器" }),
-    );
+    // Without a bar to dock into, the arrow closes the player.
+    await fireEvent.press(ui.getByRole("button", { name: "关闭播放器" }));
     expect(options.onClose).toHaveBeenCalledTimes(1);
     await ui.unmount();
   });
@@ -258,6 +257,12 @@ describe("docked bar", () => {
     await start();
     await press();
     expect(options.onMinimize).toHaveBeenCalledTimes(1);
+    expect(options.onClose).not.toHaveBeenCalled();
+    // The top-left arrow does the same as the back key.
+    await fireEvent.press(
+      ui.getByRole("button", { name: "返回频道列表，继续小窗播放" }),
+    );
+    expect(options.onMinimize).toHaveBeenCalledTimes(2);
     expect(options.onClose).not.toHaveBeenCalled();
     await ui.rerender(<PlayerScreen {...options} mini />);
     // Same session and stream: nothing was unmounted or reconnected.

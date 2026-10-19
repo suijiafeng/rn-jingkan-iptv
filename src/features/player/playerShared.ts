@@ -52,7 +52,7 @@ export interface PlayerScreenProps {
    * container's size; the session, its player and the stream stay mounted.
    */
   mini?: boolean;
-  /** Portrait back key: shrink to the bar instead of stopping. */
+  /** Portrait back (key and arrow): shrink to the bar instead of stopping. */
   onMinimize?: () => void;
   onExpand?: () => void;
 }
