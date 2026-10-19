@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   Text,
@@ -26,7 +25,6 @@ export interface HeaderProps {
   /** Background availability check after a category switch. */
   autoCheck?: { done: number; total: number } | null;
   sources: Source[];
-  channelCount: number;
   search: string;
   sourceId: string;
   facets: ChannelFacetOptions;
@@ -58,15 +56,6 @@ export function ChannelListTitle(props: HeaderProps) {
         <Heading
           title={
             tab === "all" ? "频道" : tab === "favorites" ? "收藏" : "最近观看"
-          }
-          subtitle={
-            tab === "favorites"
-              ? "随手打开，都是常看的"
-              : tab === "recent"
-                ? props.recentEditing
-                  ? "删除记录不会影响频道和收藏"
-                  : "按最近播放排序"
-                : `${props.sources.length} 份节目单 · 当前 ${props.channelCount} 个频道`
           }
         />
       </View>
@@ -172,21 +161,41 @@ export function ChannelFilterBar(
             </Pressable>
           )}
         </View>
-        {tab === "all" && props.sources.length > 1 && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={sourcesOpen ? "收起来源筛选" : "展开来源筛选"}
-            accessibilityState={{ expanded: sourcesOpen }}
-            onPress={() => setSourcesOpen((value) => !value)}
-            style={({ pressed }) => [
-              partStyles.sourceToggle,
-              pressed && { opacity: 0.7 },
-            ]}
-          >
-            <Text numberOfLines={1} style={partStyles.sourceText}>
-              {selectedSource?.name || "来源"} {sourcesOpen ? "▴" : "▾"}
-            </Text>
-          </Pressable>
+        {/* A stale scope (its source since disabled) keeps its × too. */}
+        {tab === "all" && (props.sources.length > 1 || !!props.sourceId) && (
+          <View style={partStyles.sourceGroup}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={sourcesOpen ? "收起来源筛选" : "展开来源筛选"}
+              accessibilityState={{ expanded: sourcesOpen }}
+              onPress={() => setSourcesOpen((value) => !value)}
+              style={({ pressed }) => [
+                partStyles.sourceToggle,
+                !!props.sourceId && partStyles.sourceToggleOn,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Text numberOfLines={1} style={partStyles.sourceText}>
+                {props.sourceId
+                  ? selectedSource?.name || "来源"
+                  : `来源 ${sourcesOpen ? "▴" : "▾"}`}
+              </Text>
+            </Pressable>
+            {/* The chip itself shows the scope; × beside it clears it. */}
+            {!!props.sourceId && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="清除来源筛选"
+                onPress={() => props.onSourceChange("")}
+                style={({ pressed }) => [
+                  partStyles.sourceClear,
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Text style={partStyles.sourceText}>×</Text>
+              </Pressable>
+            )}
+          </View>
         )}
       </View>
       {tab === "all" && sourcesOpen && props.sources.length > 1 && (
@@ -233,28 +242,28 @@ export function ChannelFilterBar(
         />
       )}
       {tab === "all" && props.autoCheck && (
-        <View style={partStyles.checkRow} accessibilityLiveRegion="polite">
-          <ActivityIndicator size="small" color={colors.muted} />
-          <Text style={styles.muted}>
-            检测可用性 {props.autoCheck.done}/{props.autoCheck.total}
-          </Text>
-        </View>
-      )}
-      {tab === "all" && !!props.sourceId && (
-        <View style={partStyles.scopeRow}>
-          <Text style={[styles.muted, { flex: 1 }]}>
-            范围：{selectedSource?.name || "所有来源"}
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="清除来源筛选"
-            style={partStyles.reset}
-            onPress={() => {
-              props.onSourceChange("");
-            }}
-          >
-            <Text style={partStyles.clearText}>所有来源</Text>
-          </Pressable>
+        <View
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel="正在检测可用性"
+          accessibilityValue={{
+            min: 0,
+            max: props.autoCheck.total,
+            now: props.autoCheck.done,
+          }}
+          style={partStyles.checkTrack}
+        >
+          <View
+            style={[
+              partStyles.checkFill,
+              {
+                width: `${Math.round(
+                  (props.autoCheck.done / Math.max(props.autoCheck.total, 1)) *
+                    100,
+                )}%`,
+              },
+            ]}
+          />
         </View>
       )}
     </View>
@@ -406,6 +415,21 @@ const partStyles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: colors.raised,
   },
+  sourceToggleOn: {
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+    backgroundColor: colors.accentSoft,
+  },
+  sourceGroup: { flexDirection: "row" },
+  sourceClear: {
+    minWidth: sizes.field,
+    minHeight: sizes.field,
+    alignItems: "center",
+    justifyContent: "center",
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+    backgroundColor: colors.accentSoft,
+  },
   sourceText: { ...type.body, color: colors.accent },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 4 },
   headerAction: {
@@ -440,12 +464,11 @@ const partStyles = StyleSheet.create({
     justifyContent: "center",
   },
   clearText: { ...type.muted, color: colors.accent },
-  checkRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  scopeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  reset: {
-    minHeight: sizes.touch,
-    minWidth: sizes.touch,
-    paddingHorizontal: 8,
-    justifyContent: "center",
+  checkTrack: {
+    height: 2,
+    borderRadius: 1,
+    overflow: "hidden",
+    backgroundColor: colors.raised,
   },
+  checkFill: { height: 2, backgroundColor: colors.accent },
 });

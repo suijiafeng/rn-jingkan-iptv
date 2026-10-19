@@ -135,14 +135,15 @@ export function OverlayButton({
 }
 
 /**
- * Quality in the accent colour, then the source; opens the alternatives.
+ * Quality in the accent colour, then which source of how many ("1/3");
+ * opens the alternatives. The source's name is in the list it opens.
  * An unknown quality says nothing useful, so it stays in the
  * muted colour instead of drawing the eye.
  */
 export function SourceChip({
   quality,
   qualityKnown = true,
-  sourceName,
+  position,
   count,
   solid = false,
   disabled = false,
@@ -151,7 +152,8 @@ export function SourceChip({
 }: {
   quality: string;
   qualityKnown?: boolean;
-  sourceName: string;
+  /** 1-based index of the playing source among `count`. */
+  position: number;
   count: number;
   /** On the portrait info block (opaque surface) rather than over video. */
   solid?: boolean;
@@ -180,8 +182,7 @@ export function SourceChip({
         >
           {quality}
         </Text>
-        {` ${sourceName}`}
-        {count > 1 ? ` · ${count} 个 ▾` : ""}
+        {count > 1 ? ` · ${position}/${count}` : ""}
       </Text>
     </Pressable>
   );

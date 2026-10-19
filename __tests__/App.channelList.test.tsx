@@ -153,8 +153,8 @@ test("a long list shows its first page at once and still queues every row", asyn
   );
   repo.countChannels.mockImplementation(async () => rows.length);
   await render(<App />);
-  // The header counts every match while only the first page is loaded.
-  await waitFor(() => expect(screen.getByText(/当前 45 个频道/)).toBeTruthy());
+  // The first page shows at once; every match is counted for the queue.
+  await waitFor(() => expect(screen.getByLabelText("台0，播放")).toBeTruthy());
   expect(repo.listChannels).toHaveBeenCalledWith(
     expect.objectContaining({ mode: "all", limit: 40, country: "CN" }),
   );
@@ -173,9 +173,6 @@ test("a long list shows its first page at once and still queues every row", asyn
   expect(props.channels.map((channel: { id: string }) => channel.id)).toEqual(
     rows.map((row) => row.id),
   );
-  expect(
-    screen.getByText(/当前 45 个频道/, { includeHiddenElements: true }),
-  ).toBeTruthy();
 });
 
 test("the title and filters live in an overlay above the list, not inside it", async () => {

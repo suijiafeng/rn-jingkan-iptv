@@ -350,25 +350,18 @@ export function ChannelSession(props: SessionProps) {
               selected={props.audioOnly}
               onPress={props.onToggleAudioOnly}
             />
+            {/* The risk is explained in the confirmation this opens. */}
+            {props.audioOnly &&
+              !props.backgroundAllowed &&
+              props.onEnableBackgroundPlayback && (
+                <OverlayButton
+                  label="锁屏继续听"
+                  onPress={props.onRequestBackgroundPlayback}
+                />
+              )}
             <View style={sessionStyles.flex} />
             {favoriteButton}
           </View>
-          {props.audioOnly && (
-            <Text style={sessionStyles.infoSubtitle}>
-              {props.backgroundAllowed
-                ? "锁屏可继续收听"
-                : "后台播放未开启，锁屏会暂停"}
-              {" · 尝试提前缓冲约 30 秒，取决于节目源；仍可能下载视频"}
-            </Text>
-          )}
-          {props.audioOnly &&
-            !props.backgroundAllowed &&
-            props.onEnableBackgroundPlayback && (
-              <OverlayButton
-                label="开启锁屏收听"
-                onPress={props.onRequestBackgroundPlayback}
-              />
-            )}
           {props.orientationError && (
             <Text accessibilityRole="alert" style={sessionStyles.warning}>
               设备未能切换屏幕方向，可以继续播放或退出全屏。

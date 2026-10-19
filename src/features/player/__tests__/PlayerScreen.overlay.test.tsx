@@ -181,12 +181,12 @@ describe("portrait layout", () => {
     expect(ui.queryByRole("header", { name: "频道列表" })).toBeNull();
     expect(ui.getByTestId("player-channel-list")).toBeTruthy();
     expect(ui.queryByRole("button", { name: "定位当前频道" })).toBeNull();
-    // The heading names the channel and its groups; the source appears only
-    // on the chip that opens the alternatives. Zapping is the list below.
+    // The heading names the channel and its groups; the source's name is
+    // only spoken by the chip and listed in the sheet it opens.
     const info = within(ui.getByTestId("portrait-info"));
     expect(info.getByText("山野纪实")).toBeTruthy();
     expect(info.getByText("纪录片")).toBeTruthy();
-    expect(info.getAllByText(/我的节目单/)).toHaveLength(1);
+    expect(info.queryByText(/我的节目单/)).toBeNull();
     expect(ui.queryByRole("button", { name: /上一台|下一台/ })).toBeNull();
     expect(
       ui.getByRole("button", { name: "来源：未知清晰度 · 我的节目单" }).props
@@ -389,7 +389,7 @@ test("listening requires explicit confirmation for background permission and can
     await fireEvent.press(ui.getByRole("button", { name: "听音频" }));
     expect(enable).not.toHaveBeenCalled();
     expect(ui.getByTestId("audio-stage")).toBeTruthy();
-    expect(ui.getByText(/后台播放未开启，锁屏会暂停/)).toBeTruthy();
+    expect(ui.queryByText(/后台播放未开启/)).toBeNull();
     const choices = alert.mock.calls[0][2]!;
     expect(choices.find((item) => item.text === "仅前台收听")?.style).toBe(
       "cancel",
@@ -398,7 +398,7 @@ test("listening requires explicit confirmation for background permission and can
       choices.find((item) => item.text === "仅前台收听")?.onPress?.(),
     );
     expect(enable).not.toHaveBeenCalled();
-    await fireEvent.press(ui.getByRole("button", { name: "开启锁屏收听" }));
+    await fireEvent.press(ui.getByRole("button", { name: "锁屏继续听" }));
     await act(() =>
       alert.mock.calls[1]
         [2]!.find((item) => item.text === "开启后台播放")

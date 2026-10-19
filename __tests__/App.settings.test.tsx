@@ -77,21 +77,17 @@ test("an obsolete list failure cannot replace the current tab results", async ()
 });
 test("settings permission write failures are shown without granting access", async () => {
   repo.setSetting.mockRejectedValueOnce(new Error("write failed"));
-  jest
-    .spyOn(Alert, "alert")
-    .mockImplementation((_title, _message, buttons) =>
-      buttons?.[1].onPress?.(),
-    );
   await render(<App />);
   await waitFor(() =>
     expect(screen.getByText("从一份节目单开始")).toBeTruthy(),
   );
   await fireEvent.press(screen.getByText("设置"));
   await fireEvent.press(screen.getByText("阅读风险并允许"));
+  await fireEvent.press(await screen.findByRole("button", { name: "允许" }));
   await waitFor(() =>
     expect(screen.getByText("无法保存网络许可，请重试")).toBeTruthy(),
   );
-  expect(screen.getByText("频道资料仍可离线查看")).toBeTruthy();
+  expect(screen.getByText("未允许")).toBeTruthy();
   expect(downloadPlaylist).not.toHaveBeenCalled();
 });
 test("failed revocation stays blocked and can persist a retry without another consent prompt", async () => {
@@ -117,11 +113,7 @@ test("failed revocation stays blocked and can persist a retry without another co
   await waitFor(() => expect(screen.getByText("重试保存撤销")).toBeTruthy());
   expect(persistedAllowed).toBe(true);
   expect(screen.queryByText("阅读风险并允许")).toBeNull();
-  expect(
-    screen.getByText(
-      "联网已停止，撤销尚未保存。请重试保存，避免重启后恢复旧许可。",
-    ),
-  ).toBeTruthy();
+  expect(screen.getByText("撤销尚未保存，重启后可能恢复")).toBeTruthy();
   await fireEvent.press(screen.getByText("重试保存撤销"));
   await waitFor(() => expect(screen.getByText("阅读风险并允许")).toBeTruthy());
   expect(alert).toHaveBeenCalledTimes(1);
@@ -139,7 +131,7 @@ test("failed revocation stays blocked and can persist a retry without another co
     expect(screen.getByText("从一份节目单开始")).toBeTruthy(),
   );
   await fireEvent.press(screen.getByText("设置"));
-  expect(screen.getByText("频道资料仍可离线查看")).toBeTruthy();
+  expect(screen.getByText("未允许")).toBeTruthy();
   expect(downloadPlaylist).not.toHaveBeenCalled();
 });
 test("channel artwork stays absent by default and a failed consent save does not mount images", async () => {
@@ -283,12 +275,14 @@ test.each(["revocation", "unmount"])(
 test("a first run opens the guide, which can lead straight to adding a link", async () => {
   repo.getSetting.mockImplementation(async (_key, fallback) => fallback);
   await render(<App />);
-  await waitFor(() => expect(screen.getByText("欢迎使用静看 TV")).toBeTruthy());
-  for (let page = 0; page < 3; page++)
-    await fireEvent.press(screen.getByRole("button", { name: "下一步" }));
+  await waitFor(() =>
+    expect(screen.getByText("播放你自己添加的节目单。")).toBeTruthy(),
+  );
   await fireEvent.press(screen.getByRole("button", { name: "添加节目单链接" }));
   expect(repo.setSetting).toHaveBeenCalledWith("guideSeen", true);
-  await waitFor(() => expect(screen.queryByText("欢迎使用静看 TV")).toBeNull());
+  await waitFor(() =>
+    expect(screen.queryByText("播放你自己添加的节目单。")).toBeNull(),
+  );
   expect(screen.getByLabelText("节目单链接")).toBeTruthy();
 });
 
@@ -307,12 +301,14 @@ test("a user with sources never sees the guide but can reopen it in settings", a
   await waitFor(() =>
     expect(screen.getByRole("tab", { name: "设置" })).toBeTruthy(),
   );
-  expect(screen.queryByText("欢迎使用静看 TV")).toBeNull();
+  expect(screen.queryByText("播放你自己添加的节目单。")).toBeNull();
   await fireEvent.press(screen.getByRole("tab", { name: "设置" }));
   await fireEvent.press(screen.getByText("使用指引"));
-  expect(screen.getByText("欢迎使用静看 TV")).toBeTruthy();
-  await fireEvent.press(screen.getByRole("button", { name: "跳过使用指引" }));
-  await waitFor(() => expect(screen.queryByText("欢迎使用静看 TV")).toBeNull());
+  expect(screen.getByText("播放你自己添加的节目单。")).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "稍后再说" }));
+  await waitFor(() =>
+    expect(screen.queryByText("播放你自己添加的节目单。")).toBeNull(),
+  );
 });
 
 test("revoking network access while playing stops the player and says so in a toast", async () => {

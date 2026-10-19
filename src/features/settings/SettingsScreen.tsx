@@ -1,12 +1,11 @@
 import React from "react";
-import { ScrollView, Switch, Text, View } from "react-native";
+import { ScrollView, Switch } from "react-native";
 import { Button, Heading } from "../../components/ui";
 import { colors, styles } from "../../theme";
-import { RISK } from "../common/confirm";
 import { Chevron, RowAction, SettingRow, SettingSection } from "./SettingRows";
 import type { Repository } from "../../data/repository";
 import { BackupControls } from "./BackupControls";
-import { About, versionLabel } from "./About";
+import { About } from "./About";
 
 interface Props {
   repo?: Repository | null;
@@ -47,14 +46,14 @@ export function SettingsScreen(props: Props) {
     (!props.remoteAllowed && !props.artworkAllowed);
   return (
     <ScrollView contentContainerStyle={[styles.content, screenStyles.content]}>
-      <Heading title="设置" subtitle="简单一点，安静地看" />
+      <Heading title="设置" />
       <SettingSection label="节目来源">
         <SettingRow
           title="管理节目来源"
-          caption={
+          value={
             props.sourceCount === undefined
-              ? "手动刷新，不自动联网"
-              : `${props.sourceCount} 份节目单 · 手动刷新，不自动联网`
+              ? undefined
+              : `${props.sourceCount} 份`
           }
           trailing={<Chevron />}
           onPress={props.onManageSources}
@@ -71,12 +70,9 @@ export function SettingsScreen(props: Props) {
                 : { label: "未允许", tone: "muted" }
           }
           caption={
-            props.revokePending
-              ? "联网已停止，撤销尚未保存。请重试保存，避免重启后恢复旧许可。"
-              : props.remoteAllowed
-                ? "含 HTTP 明文来源，服务器会收到 IP 与请求"
-                : "频道资料仍可离线查看"
+            props.revokePending ? "撤销尚未保存，重启后可能恢复" : undefined
           }
+          warn
           trailing={
             props.revokePending ? (
               <Button compact label="重试保存撤销" onPress={props.onRevoke} />
@@ -98,13 +94,8 @@ export function SettingsScreen(props: Props) {
         />
         <SettingRow
           title="频道台标"
-          caption={
-            props.remoteAllowed
-              ? "仅加载有效的 HTTPS 台标，缺图时显示首字"
-              : props.artworkAllowed
-                ? "台标许可已保留，联网关闭期间不加载"
-                : "先允许节目来源联网，再单独开启台标"
-          }
+          // Only says why the switch cannot be used right now.
+          caption={props.remoteAllowed ? undefined : "需先允许节目来源联网"}
           dimmed={artworkDisabled}
           trailing={
             <Switch
@@ -120,7 +111,6 @@ export function SettingsScreen(props: Props) {
           <SettingRow
             title="台标关闭尚未保存"
             status={{ label: "待重试", tone: "warn" }}
-            caption="重启后可能恢复加载台标"
             trailing={
               <Button
                 compact
@@ -133,7 +123,6 @@ export function SettingsScreen(props: Props) {
         )}
         <SettingRow
           title="移动网络提醒"
-          caption="使用流量播放或刷新前先确认"
           trailing={
             <Switch
               accessibilityLabel="移动网络提醒"
@@ -147,7 +136,6 @@ export function SettingsScreen(props: Props) {
           <SettingRow
             title="国家/地区识别"
             status={{ label: "已授权", tone: "muted" }}
-            caption="IP 服务与单次定位，不保存位置"
             trailing={
               <RowAction
                 label={props.regionBusy ? "停止并撤销" : "撤销"}
@@ -164,13 +152,7 @@ export function SettingsScreen(props: Props) {
       <SettingSection label="播放">
         <SettingRow
           title="后台播放"
-          caption={
-            props.backgroundSaving
-              ? "正在保存设置…"
-              : props.backgroundPlayback
-                ? "锁屏或切走时继续播放，会持续耗流量和电量"
-                : "切到后台时暂停，画中画除外"
-          }
+
           trailing={
             <Switch
               accessibilityLabel="后台播放"
@@ -183,11 +165,8 @@ export function SettingsScreen(props: Props) {
         />
         <SettingRow
           title="换台反转"
-          caption={
-            props.swipeReverse
-              ? "全屏时上滑换上一台，下滑换下一台"
-              : "全屏时上滑换下一台，下滑换上一台"
-          }
+          // The switch alone does not say which way is which.
+          caption={props.swipeReverse ? "上滑 = 上一台" : "上滑 = 下一台"}
           trailing={
             <Switch
               accessibilityLabel="换台反转"
@@ -199,7 +178,6 @@ export function SettingsScreen(props: Props) {
         />
         <SettingRow
           title="跳过不可达频道"
-          caption="换台时跳过检测为不可达的频道"
           trailing={
             <Switch
               accessibilityLabel="跳过不可达频道"
@@ -216,7 +194,6 @@ export function SettingsScreen(props: Props) {
         )}
         <SettingRow
           title="清空全部本地资料"
-          caption="节目单、收藏、最近观看和许可都会删除"
           danger
           onPress={props.onClearAll}
         />
@@ -225,25 +202,16 @@ export function SettingsScreen(props: Props) {
         {props.onShowGuide && (
           <SettingRow
             title="使用指引"
-            caption="重新查看首次使用说明"
             trailing={<Chevron />}
             onPress={props.onShowGuide}
           />
         )}
         <About />
       </SettingSection>
-      <View style={screenStyles.footer}>
-        <Text style={styles.muted}>{versionLabel()}</Text>
-        <Text style={styles.caption}>
-          无广告、无账号、无统计。资料只保存在本机。直播源本身可能含广告。只观看你有权访问的内容。
-        </Text>
-        <Text style={styles.caption}>{RISK}</Text>
-      </View>
     </ScrollView>
   );
 }
 
 const screenStyles = {
   content: { gap: 20 },
-  footer: { gap: 4, paddingHorizontal: 4 },
 } as const;

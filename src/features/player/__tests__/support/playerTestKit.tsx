@@ -124,7 +124,6 @@ export function sheet(
     filters: {
       tab,
       sources: [],
-      channelCount: channels.length,
       search: more.search ?? "",
       sourceId: "",
       facets: more.facets ?? { countries: [], languages: [], contents: [] },

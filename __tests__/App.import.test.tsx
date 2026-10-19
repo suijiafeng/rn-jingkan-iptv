@@ -10,6 +10,7 @@ import {
 import App from "../src/App";
 import * as DocumentPicker from "expo-document-picker";
 import { downloadPlaylist, readPickedFile } from "../src/data/importIO";
+import * as Network from "expo-network";
 
 beforeEach(resetAppMocks);
 
@@ -23,14 +24,10 @@ test("initial empty UI offers import without any remote access", async () => {
   expect(screen.getByText("节目来源联网")).toBeTruthy();
 });
 test("declining informed consent never downloads the playlist", async () => {
-  jest
-    .spyOn(Alert, "alert")
-    .mockImplementation((_title, _message, buttons) =>
-      buttons?.[0].onPress?.(),
-    );
   await openForm();
-  await fireEvent.press(screen.getByText("解析并预览"));
-  await waitFor(() => expect(screen.getByText("解析并预览")).toBeEnabled());
+  await fireEvent.press(screen.getByText("预览"));
+  await fireEvent.press(await screen.findByRole("button", { name: "不用了" }));
+  await waitFor(() => expect(screen.getByText("预览")).toBeEnabled());
   expect(downloadPlaylist).not.toHaveBeenCalled();
   expect(repo.setSetting).not.toHaveBeenCalled();
 });
@@ -43,10 +40,8 @@ test("invalid playlist preserves inputs and never writes the repository", async 
     url: "https://example.com/list.m3u",
   });
   await openForm();
-  await fireEvent.press(screen.getByText("解析并预览"));
-  await waitFor(() =>
-    expect(screen.getByText("你的输入已保留。没有提前修改频道。")).toBeTruthy(),
-  );
+  await fireEvent.press(screen.getByText("预览"));
+  await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
   expect(screen.getByDisplayValue("我的目录")).toBeTruthy();
   expect(screen.getByDisplayValue("https://example.com/list.m3u")).toBeTruthy();
   expect(repo.importSource).not.toHaveBeenCalled();
@@ -60,12 +55,12 @@ test("preview requires an explicit save before writing valid channels", async ()
     url: "https://example.com/list.m3u",
   });
   await openForm();
-  await fireEvent.press(screen.getByText("解析并预览"));
+  await fireEvent.press(screen.getByText("预览"));
   await waitFor(() =>
-    expect(screen.getByText("确认保存 1 个频道")).toBeTruthy(),
+    expect(screen.getByRole("button", { name: "导入 1 个频道" })).toBeTruthy(),
   );
   expect(repo.importSource).not.toHaveBeenCalled();
-  await fireEvent.press(screen.getByText("确认保存 1 个频道"));
+  await fireEvent.press(screen.getByRole("button", { name: "导入 1 个频道" }));
   await waitFor(() => expect(repo.importSource).toHaveBeenCalledTimes(1));
 });
 test("cancel aborts an in-flight import and a late result cannot save or reopen preview", async () => {
@@ -86,16 +81,16 @@ test("cancel aborts an in-flight import and a late result cannot save or reopen 
       buttons?.[1].onPress?.(),
     );
   await openForm();
-  await fireEvent.press(screen.getByText("解析并预览"));
+  await fireEvent.press(screen.getByText("预览"));
   await waitFor(() => expect(downloadPlaylist).toHaveBeenCalledTimes(1));
-  await fireEvent.press(screen.getByText("取消并返回"));
+  await fireEvent.press(screen.getByText("关闭"));
   await waitFor(() => expect(signal?.aborted).toBe(true));
   finish({
     text: "#EXTM3U\n#EXTINF:-1,晚到频道\nhttps://example.com/a.m3u8",
     url: "https://example.com/list.m3u",
   });
   await waitFor(() =>
-    expect(screen.queryByText("确认保存 1 个频道")).toBeNull(),
+    expect(screen.queryByRole("button", { name: "导入 1 个频道" })).toBeNull(),
   );
   expect(repo.importSource).not.toHaveBeenCalled();
 });
@@ -116,17 +111,17 @@ test("URL preview cannot overwrite the previously selected local file content", 
   });
   await openForm();
   await fireEvent.press(screen.getByText("文件"));
-  await fireEvent.press(screen.getByText("选择 / 更换文件"));
+  await fireEvent.press(screen.getByRole("button", { name: "选择节目单文件" }));
   await waitFor(() => expect(screen.getByText("自己的文件.m3u")).toBeTruthy());
   await fireEvent.press(screen.getByText("链接"));
-  await fireEvent.press(screen.getByText("解析并预览"));
+  await fireEvent.press(screen.getByText("预览"));
   await waitFor(() => expect(screen.getByText("网络频道B")).toBeTruthy());
   await fireEvent.press(screen.getByText("返回修改"));
   await fireEvent.press(screen.getByText("文件"));
-  await fireEvent.press(screen.getByText("解析并预览"));
+  await fireEvent.press(screen.getByText("预览"));
   await waitFor(() => expect(screen.getByText("文件频道A")).toBeTruthy());
   expect(screen.queryByText("网络频道B")).toBeNull();
-  await fireEvent.press(screen.getByText("确认保存 1 个频道"));
+  await fireEvent.press(screen.getByRole("button", { name: "导入 1 个频道" }));
   await waitFor(() =>
     expect(repo.importSource).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -136,4 +131,21 @@ test("URL preview cannot overwrite the previously selected local file content", 
       }),
     ),
   );
+});
+test("a first import on mobile data asks once: consent covers the data warning", async () => {
+  (Network.getNetworkStateAsync as jest.Mock).mockResolvedValue({
+    type: "CELLULAR",
+    isConnected: true,
+  });
+  (downloadPlaylist as jest.Mock).mockResolvedValue({
+    text: "#EXTM3U\n#EXTINF:-1,山野\nhttps://example.com/live.m3u8",
+    url: "https://example.com/list.m3u",
+  });
+  const alert = jest.spyOn(Alert, "alert");
+  await openForm();
+  await fireEvent.press(screen.getByText("预览"));
+  expect(await screen.findByText(/可能在用移动数据/)).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "允许" }));
+  await waitFor(() => expect(downloadPlaylist).toHaveBeenCalledTimes(1));
+  expect(alert).not.toHaveBeenCalled();
 });

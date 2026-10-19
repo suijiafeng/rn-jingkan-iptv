@@ -16,7 +16,7 @@ export function About() {
     <>
       <SettingRow
         title="关于静看 TV"
-        caption={versionLabel()}
+        value={Constants.expoConfig?.version}
         trailing={<Chevron />}
         onPress={() => setOpen(true)}
       />

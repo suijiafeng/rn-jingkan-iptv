@@ -105,9 +105,6 @@ export function BackupControls({
     });
   return (
     <View style={{ padding: 16, gap: 10 }}>
-      <Text style={styles.caption}>
-        手动备份节目源、收藏和播放偏好。文件含私密地址；观看记录与联网许可不备份。
-      </Text>
       <Button
         label={busy ? "正在处理备份…" : "导出备份"}
         disabled={busy}

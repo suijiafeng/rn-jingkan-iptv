@@ -139,7 +139,9 @@ export async function openSourceManager() {
   await waitFor(() => expect(screen.getByText("设置")).toBeTruthy());
   await fireEvent.press(screen.getByText("设置"));
   await fireEvent.press(await screen.findByText("管理节目来源"));
-  await waitFor(() => expect(screen.getByText("检测可用性")).toBeTruthy());
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "检测可用性" })).toBeTruthy(),
+  );
   return ui;
 }
 function listChannelsForLookup(): Promise<unknown> {

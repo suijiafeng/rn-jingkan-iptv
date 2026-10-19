@@ -28,7 +28,6 @@ function props() {
   return {
     tab: "all" as const,
     sources: [source, { ...source, id: "other", name: "另一个来源" }],
-    channelCount: 2,
     search: "",
     sourceId: "",
     facets: {
@@ -161,7 +160,6 @@ test("each facet clears independently and keeps the source selection", async () 
 test("recent management replaces search and exposes only its editing actions", async () => {
   const callbacks = props();
   const ui = await render(<ChannelListHeader {...callbacks} tab="recent" />);
-  expect(screen.getByText("按最近播放排序")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "清空最近观看" })).toBeNull();
   expect(screen.queryByRole("button", { name: "完成历史管理" })).toBeNull();
   await fireEvent.press(screen.getByRole("button", { name: "管理观看记录" }));
@@ -169,7 +167,6 @@ test("recent management replaces search and exposes only its editing actions", a
   await ui.rerender(
     <ChannelListHeader {...callbacks} tab="recent" recentEditing />,
   );
-  expect(screen.getByText("删除记录不会影响频道和收藏")).toBeTruthy();
   expect(screen.queryByLabelText("搜索频道名称")).toBeNull();
   expect(screen.queryByRole("button", { name: "管理观看记录" })).toBeNull();
   await fireEvent.press(screen.getByRole("button", { name: "清空最近观看" }));
@@ -187,12 +184,7 @@ test("recent actions use the full history count and disable mutations while busy
   await fireEvent.press(screen.getByRole("button", { name: "管理观看记录" }));
   expect(callbacks.onToggleRecentEditing).not.toHaveBeenCalled();
   await ui.rerender(
-    <ChannelListHeader
-      {...callbacks}
-      tab="recent"
-      search="没有结果"
-      channelCount={0}
-    />,
+    <ChannelListHeader {...callbacks} tab="recent" search="没有结果" />,
   );
   expect(
     screen.getByRole("button", { name: "管理观看记录" }),
@@ -304,4 +296,32 @@ test("sources without usable channels lead to source management", async () => {
   expect(screen.queryByRole("button", { name: "管理节目来源" })).toBeNull();
   await fireEvent.press(screen.getByRole("button", { name: "查看全部频道" }));
   expect(onShowAll).toHaveBeenCalledTimes(1);
+});
+
+test("the header carries no explanatory copy: scope on the chip, progress as a bar", async () => {
+  const callbacks = props();
+  await render(
+    <ChannelListHeader
+      {...callbacks}
+      sourceId="other"
+      autoCheck={{ done: 1, total: 4 }}
+    />,
+  );
+  expect(screen.queryByText(/份节目单|范围：|检测可用性/)).toBeNull();
+  expect(screen.getByText("另一个来源")).toBeTruthy();
+  expect(
+    screen.getByRole("progressbar", { name: "正在检测可用性" }).props
+      .accessibilityValue,
+  ).toEqual({ min: 0, max: 4, now: 1 });
+  await fireEvent.press(screen.getByRole("button", { name: "清除来源筛选" }));
+  expect(callbacks.onSourceChange).toHaveBeenCalledWith("");
+});
+
+test("a scope whose source is no longer listed can still be cleared", async () => {
+  const callbacks = props();
+  await render(
+    <ChannelListHeader {...callbacks} sources={[source]} sourceId="gone" />,
+  );
+  await fireEvent.press(screen.getByRole("button", { name: "清除来源筛选" }));
+  expect(callbacks.onSourceChange).toHaveBeenCalledWith("");
 });

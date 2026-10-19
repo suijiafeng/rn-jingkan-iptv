@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { Source } from "../../../domain/types";
 import { RenameSourceModal } from "../RenameSourceModal";
 import { SourceManagerModal } from "../SourceManagerModal";
+import { updatedAgo } from "../SourceCard";
 
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: jest.requireActual("react-native").View,
@@ -83,13 +84,12 @@ test("manager shows a private-by-default empty state and both add methods", asyn
   );
 
   expect(screen.getByText("还没有节目来源")).toBeTruthy();
-  expect(screen.getByText(/不会自动添加远程来源/)).toBeTruthy();
   await fireEvent.press(screen.getByRole("button", { name: "添加链接" }));
   await fireEvent.press(screen.getByRole("button", { name: "导入文件" }));
   expect(add.mock.calls).toEqual([["url"], ["file"]]);
 });
 
-test("manager has one close action and folds the check rules into one line", async () => {
+test("manager has one close action and no explanatory copy", async () => {
   const close = jest.fn();
   await render(
     <SourceManagerModal
@@ -109,20 +109,13 @@ test("manager has one close action and folds the check rules into one line", asy
   );
 
   expect(screen.queryByRole("button", { name: "返回" })).toBeNull();
-  expect(screen.queryByText(/复用 24 小时/)).toBeNull();
-  await fireEvent.press(
-    screen.getByRole("button", { name: "展开可用性检测说明" }),
-  );
-  expect(screen.getByText(/复用 24 小时/)).toBeTruthy();
-  await fireEvent.press(
-    screen.getByRole("button", { name: "收起可用性检测说明" }),
-  );
-  expect(screen.queryByText(/复用 24 小时/)).toBeNull();
+  expect(screen.getByRole("header", { name: "节目来源" })).toBeTruthy();
+  expect(screen.queryByText(/缓存|只在你操作时联网|已启用/)).toBeNull();
   await fireEvent.press(screen.getByRole("button", { name: "完成" }));
   expect(close).toHaveBeenCalledTimes(1);
 });
 
-test("manager separates source identity, status and actions", async () => {
+test("a card keeps two everyday actions in view and folds the rest", async () => {
   const refresh = jest.fn();
   const rename = jest.fn();
   await render(
@@ -142,12 +135,13 @@ test("manager separates source identity, status and actions", async () => {
     />,
   );
 
-  expect(screen.getByText("文件")).toBeTruthy();
-  expect(screen.getByText("需注意")).toBeTruthy();
-  expect(screen.getByText("上次刷新未完成，旧频道已保留。")).toBeTruthy();
+  // Only something to act on earns a third line.
+  expect(screen.getByText("上次刷新未完成，旧频道已保留")).toBeTruthy();
   await fireEvent.press(
     screen.getByRole("button", { name: "重新解析 / 更换文件" }),
   );
+  expect(screen.queryByRole("button", { name: "改名" })).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "更多操作" }));
   await fireEvent.press(screen.getByRole("button", { name: "改名" }));
   expect(refresh).toHaveBeenCalledWith(
     expect.objectContaining({ id: "source" }),
@@ -176,6 +170,7 @@ test("manager can disable and re-enable a source", async () => {
     />,
   );
 
+  await fireEvent.press(screen.getByRole("button", { name: "更多操作" }));
   await fireEvent.press(screen.getByRole("button", { name: "停用" }));
   expect(change).toHaveBeenCalledWith(source, false);
 
@@ -196,7 +191,6 @@ test("manager can disable and re-enable a source", async () => {
     />,
   );
   expect(screen.getByText("已停用")).toBeTruthy();
-  expect(screen.getByText("不参与频道与播放")).toBeTruthy();
   await fireEvent.press(screen.getByRole("button", { name: "启用" }));
   expect(change).toHaveBeenLastCalledWith(
     expect.objectContaining({ id: source.id }),
@@ -236,7 +230,7 @@ test.each(["manager", "rename"] as const)(
   },
 );
 
-test("a stored check result is shown without a check in this session", async () => {
+test("a stored check result shows only the unreachable count", async () => {
   const checkedAt = new Date(2026, 9, 19, 14, 38).getTime();
   await render(
     <SourceManagerModal
@@ -261,7 +255,20 @@ test("a stored check result is shown without a check in this session", async () 
       onStopCheck={() => {}}
     />,
   );
-  expect(
-    screen.getByText("上次检测 2026/10/19 14:38 · 可访问 508 个，不可达 10 个"),
-  ).toBeTruthy();
+  expect(screen.getByText(/1 个频道 · 10 个不可达/)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "重新检测" })).toBeTruthy();
+});
+
+test("update times read as days, not timestamps", () => {
+  const now = new Date(2026, 9, 20, 9, 0).getTime();
+  expect(updatedAgo(new Date(2026, 9, 20, 1, 0).getTime(), now)).toBe(
+    "今天更新",
+  );
+  expect(updatedAgo(new Date(2026, 9, 19, 23, 0).getTime(), now)).toBe(
+    "昨天更新",
+  );
+  expect(updatedAgo(new Date(2026, 9, 16, 12, 0).getTime(), now)).toBe(
+    "4 天前更新",
+  );
+  expect(updatedAgo(0, now)).toBe("");
 });

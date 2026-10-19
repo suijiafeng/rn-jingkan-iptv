@@ -80,7 +80,12 @@ export const sessionStyles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: colors.line,
   },
-  infoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  infoRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+  },
   infoTitle: {
     color: colors.text,
     fontSize: 18,

@@ -8,6 +8,8 @@ export const colors = {
   /** An idle star or icon beside a row: muted at 60%. */
   mutedFaint: "#A6B6BD99",
   accent: "#8CE7D4",
+  /** A selected filter chip's fill: accent at 16%. */
+  accentSoft: "#8CE7D429",
   ink: "#092B26",
   line: "#293B43",
   warn: "#F3C58B",

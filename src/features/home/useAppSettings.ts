@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as Network from "expo-network";
 import { openRepository, Repository } from "../../data/repository";
 import { ImportIOError } from "../../data/importIO";
-import { confirm, RISK } from "../common/confirm";
+import { confirm } from "../common/confirm";
 import { isOffline, mightUseMobileData } from "../player/playbackController";
 import type { Tab } from "../channel/ChannelListParts";
 
@@ -35,13 +35,25 @@ export function useAppSettings({
     [artworkRevokePending, setArtworkRevokePending] = useState(false),
     [guideVisible, setGuideVisible] = useState(false),
     // One confirmation covers this metered connection until Wi-Fi returns.
-    [mobileAccepted, setMobileAccepted] = useState(false);
+    [mobileAccepted, setMobileAcceptedState] = useState(false),
+    // The network consent dialog: null while hidden, else whether it also
+    // stands in for the mobile-data confirmation.
+    [consentCellular, setConsentCellular] = useState<boolean | null>(null);
   const mounted = useRef(true),
+    consentAnswer = useRef<((allowed: boolean) => void) | null>(null),
+    // Read by checks that run right after consent in the same task, before
+    // a re-render could hand them the new state.
+    mobileAcceptedRef = useRef(false),
     preserveTabOnReload = useRef(false),
     remoteRef = useRef(false),
     // Bumped on revocation; async work started under an older epoch stops.
     permissionEpoch = useRef(0),
     artworkMutation = useRef(false);
+
+  const setMobileAccepted = (accepted: boolean) => {
+    mobileAcceptedRef.current = accepted;
+    setMobileAcceptedState(accepted);
+  };
 
   useEffect(() => {
     mounted.current = true;
@@ -104,11 +116,20 @@ export function useAppSettings({
       return false;
     }
     const epoch = permissionEpoch.current;
-    const accepted = await confirm(
-      "允许访问节目来源？",
-      RISK,
-      "了解风险并允许",
-    );
+    // On mobile data the consent also covers the data warning: one question
+    // for a first play instead of two.
+    const network = await Network.getNetworkStateAsync().catch(() => null);
+    const cellular =
+      mobileWarning &&
+      !mobileAcceptedRef.current &&
+      !!network &&
+      !isOffline(network) &&
+      mightUseMobileData(network);
+    const accepted = await new Promise<boolean>((resolve) => {
+      consentAnswer.current?.(false);
+      consentAnswer.current = resolve;
+      setConsentCellular(cellular);
+    });
     if (
       !accepted ||
       !repo ||
@@ -126,6 +147,7 @@ export function useAppSettings({
     if (epoch !== permissionEpoch.current || !mounted.current) return false;
     remoteRef.current = true;
     setRemoteAllowed(true);
+    if (cellular) setMobileAccepted(true);
     return true;
   };
 
@@ -135,7 +157,11 @@ export function useAppSettings({
     if (isOffline(network))
       throw new ImportIOError("当前没有可用网络，请连接后重试");
     // Same rule as playback: VPN/unknown transports may be metered.
-    if (mobileWarning && !mobileAccepted && mightUseMobileData(network)) {
+    if (
+      mobileWarning &&
+      !mobileAcceptedRef.current &&
+      mightUseMobileData(network)
+    ) {
       const accepted = await confirm(
         "可能使用移动数据？",
         "下载节目单或播放直播会消耗流量。确认后，在连回 Wi-Fi 之前不再询问。",
@@ -285,6 +311,14 @@ export function useAppSettings({
     /** Logos load only with their own consent and live network permission. */
     artworkEnabled: artworkAllowed && remoteAllowed && !revokePending,
     guardRemote,
+    /** Whether the consent dialog shows, and with the mobile-data line. */
+    consentCellular,
+    answerConsent: (allowed: boolean) => {
+      const answer = consentAnswer.current;
+      consentAnswer.current = null;
+      setConsentCellular(null);
+      answer?.(allowed);
+    },
     checkNetwork,
     changeArtwork,
     saveToggle,

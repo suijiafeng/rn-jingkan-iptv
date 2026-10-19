@@ -343,7 +343,12 @@ export function useChannelSession(props: SessionProps) {
     <SourceChip
       quality={qualityName(props.channel)}
       qualityKnown={!!props.channel.qualityLabel}
-      sourceName={props.channel.sourceName}
+      position={
+        Math.max(
+          props.sources.findIndex((source) => source.id === props.channel.id),
+          0,
+        ) + 1
+      }
       count={props.sources.length}
       accessibilityLabel={
         props.sources.length > 1

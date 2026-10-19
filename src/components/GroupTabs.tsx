@@ -82,8 +82,8 @@ export function GroupTabs({
       horizontal
       style={styles.scroller}
       contentContainerStyle={styles.content}
-      showsHorizontalScrollIndicator
-      indicatorStyle="white"
+      // The chips themselves show the row scrolls; a bar only adds noise.
+      showsHorizontalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       onLayout={({ nativeEvent }) => {
         if (viewport.current !== nativeEvent.layout.width) {

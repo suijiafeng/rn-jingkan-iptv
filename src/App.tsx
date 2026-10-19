@@ -14,6 +14,7 @@ import {
 } from "./features/region/useRegionPreference";
 import { ErrorNotice } from "./components/ui";
 import { ToastHost } from "./components/Toast";
+import { NetworkConsentDialog } from "./features/common/NetworkConsentDialog";
 import { styles as theme } from "./theme";
 import { useAutoAvailabilityCheck } from "./features/channel/useAutoAvailabilityCheck";
 import { useChannelFilters } from "./features/channel/useChannelFilters";
@@ -258,7 +259,6 @@ export default function App() {
   const listHeaderProps: HeaderProps = {
     tab: listTab,
     sources: enabledSources,
-    channelCount: list.channelTotal ?? channels.length,
     search,
     sourceId,
     facets: list.facets,
@@ -438,6 +438,11 @@ export default function App() {
         onRemoveSource={(source) => void controls.removeSource(source)}
         onSetSourceEnabled={controls.setSourceEnabled}
         changed={changed}
+      />
+      <NetworkConsentDialog
+        visible={settings.consentCellular !== null}
+        cellular={!!settings.consentCellular}
+        onAnswer={settings.answerConsent}
       />
       <FirstRunGuide
         visible={settings.guideVisible}

@@ -35,14 +35,9 @@ beforeEach(() => {
 });
 
 test("availability check never sends requests without network consent", async () => {
-  jest
-    .spyOn(Alert, "alert")
-    .mockImplementation((_title, _message, buttons) =>
-      buttons?.[0]?.onPress?.(),
-    );
   await openSourceManager();
-  await fireEvent.press(screen.getByText("检测可用性"));
-  await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+  await fireEvent.press(screen.getByRole("button", { name: "检测可用性" }));
+  await fireEvent.press(await screen.findByRole("button", { name: "不用了" }));
   expect(checkChannels).not.toHaveBeenCalled();
   expect(repo.saveCheckResults).not.toHaveBeenCalled();
 });
@@ -71,7 +66,7 @@ test("availability check shows progress, can be stopped, and saves finished resu
       }),
   );
   await openSourceManager();
-  await fireEvent.press(screen.getByText("检测可用性"));
+  await fireEvent.press(screen.getByRole("button", { name: "检测可用性" }));
   await waitFor(() =>
     expect(screen.getByText("正在检测可用性 1/2")).toBeTruthy(),
   );
@@ -81,9 +76,7 @@ test("availability check shows progress, can be stopped, and saves finished resu
       { channelId: "a", streamUrl: "https://a.example.com/a", ok: true },
     ]),
   );
-  await waitFor(() =>
-    expect(screen.getByText(/已停止：可访问 1 个，不可达 0 个/)).toBeTruthy(),
-  );
+  await waitFor(() => expect(screen.getByText(/检测已停止/)).toBeTruthy());
 });
 
 test.each(["revocation", "background", "stop", "unmount"])(
@@ -120,7 +113,7 @@ test.each(["revocation", "background", "stop", "unmount"])(
       { id: "a", streamUrl: "https://a.example.com/live" },
     ]);
     try {
-      await fireEvent.press(screen.getByText("检测可用性"));
+      await fireEvent.press(screen.getByRole("button", { name: "检测可用性" }));
       await waitFor(() =>
         expect(Network.getNetworkStateAsync).toHaveBeenCalledTimes(1),
       );
@@ -169,12 +162,12 @@ test("a stopped preflight cannot clear a replacement sweep", async () => {
       }),
   );
   await openSourceManager();
-  await fireEvent.press(screen.getByText("检测可用性"));
+  await fireEvent.press(screen.getByRole("button", { name: "检测可用性" }));
   await waitFor(() =>
     expect(Network.getNetworkStateAsync).toHaveBeenCalledTimes(1),
   );
   await fireEvent.press(screen.getByText("停止检测"));
-  await fireEvent.press(screen.getByText("检测可用性"));
+  await fireEvent.press(screen.getByRole("button", { name: "检测可用性" }));
   await waitFor(() => expect(checkChannels).toHaveBeenCalledTimes(1));
   await act(async () => finishPreflight({ type: "WIFI", isConnected: true }));
   expect(screen.getByText("停止检测")).toBeTruthy();
@@ -213,11 +206,11 @@ test("source-manager network failures are visible without closing the modal", as
     isConnected: false,
   });
   await openSourceManager();
-  await fireEvent.press(screen.getByText("检测可用性"));
+  await fireEvent.press(screen.getByRole("button", { name: "检测可用性" }));
   await waitFor(() =>
     expect(screen.getByText("当前没有可用网络，请连接后重试")).toBeTruthy(),
   );
-  expect(screen.getByRole("header", { name: "管理节目来源" })).toBeTruthy();
+  expect(screen.getByRole("header", { name: "节目来源" })).toBeTruthy();
   expect(checkChannels).not.toHaveBeenCalled();
   await fireEvent.press(screen.getByText("关闭提示"));
   expect(screen.queryByText("当前没有可用网络，请连接后重试")).toBeNull();
@@ -231,24 +224,26 @@ test("source deletion failure is shown inside source management", async () => {
       buttons?.[1]?.onPress?.(),
     );
   await openSourceManager();
+  await fireEvent.press(screen.getByRole("button", { name: "更多操作" }));
   await fireEvent.press(screen.getByText("删除", { exact: true }));
   await waitFor(() =>
     expect(screen.getByText("删除未完成，请重试")).toBeTruthy(),
   );
-  expect(screen.getByRole("header", { name: "管理节目来源" })).toBeTruthy();
+  expect(screen.getByRole("header", { name: "节目来源" })).toBeTruthy();
 });
 
 test("source enable changes are persisted and failures stay visible in management", async () => {
   repo.setSourceEnabled.mockRejectedValueOnce(new Error("disk unavailable"));
   await openSourceManager();
 
+  await fireEvent.press(screen.getByRole("button", { name: "更多操作" }));
   await fireEvent.press(screen.getByRole("button", { name: "停用" }));
 
   await waitFor(() =>
     expect(repo.setSourceEnabled).toHaveBeenCalledWith(checkSource.id, false),
   );
   expect(screen.getByText("停用来源失败，请重试")).toBeTruthy();
-  expect(screen.getByRole("header", { name: "管理节目来源" })).toBeTruthy();
+  expect(screen.getByRole("header", { name: "节目来源" })).toBeTruthy();
 });
 
 test("deleting one playback source refreshes alternatives and switches off the deleted address", async () => {
@@ -334,18 +329,19 @@ test("failed saving of finished results after a manual stop remains visible", as
       }),
   );
   await openSourceManager();
-  await fireEvent.press(screen.getByText("检测可用性"));
+  await fireEvent.press(screen.getByRole("button", { name: "检测可用性" }));
   await waitFor(() => expect(checkChannels).toHaveBeenCalledTimes(1));
   await fireEvent.press(screen.getByText("停止检测"));
   await waitFor(() =>
     expect(screen.getByText("检测结果未能保存，请重试")).toBeTruthy(),
   );
-  expect(screen.getByRole("header", { name: "管理节目来源" })).toBeTruthy();
+  expect(screen.getByRole("header", { name: "节目来源" })).toBeTruthy();
 });
 
 test("rename failure remains visible with the input and a working retry", async () => {
   repo.renameSource.mockRejectedValueOnce(new Error("disk unavailable"));
   await openSourceManager();
+  await fireEvent.press(screen.getByRole("button", { name: "更多操作" }));
   await fireEvent.press(screen.getByText("改名", { exact: true }));
   await fireEvent.changeText(screen.getByLabelText("来源名称"), "新的名称");
   await fireEvent.press(screen.getByText("保存名称"));
@@ -353,7 +349,7 @@ test("rename failure remains visible with the input and a working retry", async 
   expect(screen.getByDisplayValue("新的名称")).toBeTruthy();
   await fireEvent.press(screen.getByText("保存名称"));
   await waitFor(() =>
-    expect(screen.getByRole("header", { name: "管理节目来源" })).toBeTruthy(),
+    expect(screen.getByRole("header", { name: "节目来源" })).toBeTruthy(),
   );
   expect(screen.queryByText("改名失败")).toBeNull();
   expect(repo.renameSource).toHaveBeenCalledTimes(2);

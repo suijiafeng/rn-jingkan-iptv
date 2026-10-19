@@ -27,23 +27,30 @@ export function SettingSection({
 }
 
 /**
- * One row: title with an optional status pill, a caption underneath and a
- * trailing control (switch, text action or chevron). Pressable as a whole
- * when onPress is given.
+ * One row: title with an optional status pill, a caption underneath only
+ * when something needs saying, an optional current value and a trailing
+ * control (switch, text action or chevron). Pressable as a whole when
+ * onPress is given.
  */
 export function SettingRow({
   title,
   caption,
   status,
+  value,
   trailing,
   onPress,
   accessibilityLabel,
   danger = false,
   dimmed = false,
+  warn = false,
 }: {
   title: string;
   caption?: string;
   status?: { label: string; tone: "accent" | "muted" | "warn" };
+  /** The current value, muted, before the trailing control ("2 份"). */
+  value?: string;
+  /** A caption in the warning colour: something the user should act on. */
+  warn?: boolean;
   trailing?: React.ReactNode;
   onPress?: () => void;
   accessibilityLabel?: string;
@@ -65,8 +72,13 @@ export function SettingRow({
             </Text>
           )}
         </View>
-        {caption && <Text style={styles.caption}>{caption}</Text>}
+        {caption && (
+          <Text style={[styles.caption, warn && rowStyles.warnCaption]}>
+            {caption}
+          </Text>
+        )}
       </View>
+      {value && <Text style={rowStyles.value}>{value}</Text>}
       {trailing}
     </>
   );
@@ -150,6 +162,8 @@ const rowStyles = StyleSheet.create({
   text: { flex: 1, minWidth: 0, gap: 2 },
   titleLine: { flexDirection: "row", alignItems: "center", gap: 8 },
   dangerTitle: { color: colors.bad },
+  warnCaption: { color: colors.warn },
+  value: { ...type.body, color: colors.muted },
   pill: {
     ...type.caption,
     borderRadius: 999,

@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -12,9 +14,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Card, Heading, Notice } from "../../components/ui";
 import { displayGroups } from "../../domain/channelLabels";
-import { MAX_MIB } from "../../domain/m3u";
 import { IMPORT_ISSUE_LABELS, ImportIssueReason } from "../../domain/types";
-import { colors, styles } from "../../theme";
+import { colors, sizes, styles, type } from "../../theme";
 import type { SourceFormState } from "./form";
 
 interface Props {
@@ -52,40 +53,30 @@ export function SourceFormModal({
           >
             {form && (
               <>
-                <Heading
-                  title={
-                    form.preview
-                      ? "确认导入"
-                      : form.refresh
-                        ? "刷新节目单"
-                        : "添加节目单"
-                  }
-                  subtitle={
-                    form.preview
-                      ? "确认后才保存，已有资料不会提前改动"
-                      : "仅使用你信任且有权访问的来源"
-                  }
-                />
-                {error && (
-                  <Notice
-                    title={error}
-                    error
-                    body="你的输入已保留。没有提前修改频道。"
+                <View style={formStyles.header}>
+                  <View style={formStyles.headerText}>
+                    <Heading
+                      title={
+                        form.preview
+                          ? `${form.preview.stats.valid} 个频道`
+                          : form.refresh
+                            ? "刷新节目单"
+                            : "添加节目单"
+                      }
+                    />
+                  </View>
+                  <Button
+                    compact
+                    secondary
+                    // Not "取消": closing asks 放弃这次导入？ with its own 取消.
+                    label="关闭"
+                    disabled={busy && !!form.preview}
+                    onPress={onClose}
                   />
-                )}
+                </View>
+                {error && <Notice title={error} error />}
                 {!form.preview ? (
                   <>
-                    <Text style={styles.body}>来源名称</Text>
-                    <TextInput
-                      accessibilityLabel="来源名称"
-                      editable={!busy && !form.refresh}
-                      style={styles.input}
-                      value={form.name}
-                      maxLength={100}
-                      placeholder="可留空，使用主机或文件名"
-                      placeholderTextColor={colors.muted}
-                      onChangeText={(name) => onUpdate({ name })}
-                    />
                     {!form.refresh && (
                       <View style={styles.row}>
                         <Button
@@ -105,94 +96,68 @@ export function SourceFormModal({
                       </View>
                     )}
                     {form.kind === "url" ? (
-                      <>
-                        <Text style={styles.body}>节目单链接</Text>
-                        <TextInput
-                          accessibilityLabel="节目单链接"
-                          autoCapitalize="none"
-                          autoCorrect={false}
-                          keyboardType="url"
-                          editable={!busy && !form.refresh}
-                          style={styles.input}
-                          value={form.url}
-                          onChangeText={(url) => onUpdate({ url })}
-                          placeholder="https://example.com/channels.m3u"
-                          placeholderTextColor={colors.muted}
-                        />
-                      </>
+                      <TextInput
+                        accessibilityLabel="节目单链接"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        keyboardType="url"
+                        editable={!busy && !form.refresh}
+                        style={styles.input}
+                        value={form.url}
+                        onChangeText={(url) => onUpdate({ url })}
+                        placeholder="https://example.com/channels.m3u"
+                        placeholderTextColor={colors.muted}
+                      />
                     ) : (
-                      <>
-                        <Notice
-                          title={form.fileName || "选择节目单文件"}
-                          body={`使用系统文件选择器，仅读取你选中的文件。支持 M3U 与 TXT，UTF-8 或 GBK 编码，上限 ${MAX_MIB} MiB。`}
-                        />
-                        <Button
-                          label="选择 / 更换文件"
-                          secondary
-                          disabled={busy}
-                          onPress={onChooseFile}
-                        />
-                      </>
+                      // Encoding and size limits are only worth a word when
+                      // a file breaks them; the error says so then.
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          form.fileName
+                            ? `更换文件，当前 ${form.fileName}`
+                            : "选择节目单文件"
+                        }
+                        disabled={busy}
+                        onPress={onChooseFile}
+                        style={({ pressed }) => [
+                          formStyles.fileBox,
+                          pressed && { opacity: 0.7 },
+                        ]}
+                      >
+                        <Text style={styles.heading} numberOfLines={1}>
+                          {form.fileName || "选择文件"}
+                        </Text>
+                        <Text style={styles.muted}>
+                          {form.fileName ? "点按更换" : "M3U / TXT"}
+                        </Text>
+                      </Pressable>
                     )}
-                    <Notice
-                      title="只导入你信任的来源"
-                      body="来源服务器会收到 IP 地址与请求。HTTP 可能泄露或被篡改；首次联网前需要明确同意。"
+                    <TextInput
+                      accessibilityLabel="来源名称"
+                      editable={!busy && !form.refresh}
+                      style={styles.input}
+                      value={form.name}
+                      maxLength={100}
+                      placeholder="名称（可选）"
+                      placeholderTextColor={colors.muted}
+                      onChangeText={(name) => onUpdate({ name })}
                     />
                     <Button
-                      label={busy ? "正在读取与解析…" : "解析并预览"}
+                      label={busy ? "正在读取…" : "预览"}
                       disabled={busy}
                       onPress={onPreview}
                     />
                   </>
                 ) : (
-                  <>
-                    <Notice
-                      title={`${form.preview.stats.valid} 个可导入频道`}
-                      body={`${form.preview.stats.duplicates} 条重复 · ${form.preview.stats.ignored} 条忽略 · ${form.preview.stats.http} 个 HTTP 频道`}
-                    />
-                    {Object.entries(form.preview.issueCounts).map(
-                      ([reason, count]) => (
-                        <Text key={reason} style={styles.muted}>
-                          {IMPORT_ISSUE_LABELS[reason as ImportIssueReason]}：
-                          {count}
-                        </Text>
-                      ),
-                    )}
-                    {form.preview.channels.slice(0, 5).map((channel) => (
-                      <Card key={channel.identityKey}>
-                        <Text style={styles.heading}>{channel.name}</Text>
-                        <Text style={styles.muted}>
-                          {displayGroups(channel.groupName)}
-                        </Text>
-                      </Card>
-                    ))}
-                    <Text style={styles.muted}>
-                      仅展示前 5 项。导入成功不代表每个频道可播放。
-                    </Text>
-                    <Button
-                      label={
-                        busy
-                          ? "正在保存…"
-                          : `确认保存 ${form.preview.stats.valid} 个频道`
-                      }
-                      disabled={busy || !form.preview.stats.valid}
-                      onPress={onSave}
-                    />
-                    <Button
-                      label="返回修改"
-                      secondary
-                      disabled={busy}
-                      onPress={() => onUpdate({ preview: null })}
-                    />
-                  </>
+                  <ImportPreviewBody
+                    preview={form.preview}
+                    busy={busy}
+                    onSave={onSave}
+                    onBack={() => onUpdate({ preview: null })}
+                  />
                 )}
                 {busy && <ActivityIndicator color={colors.accent} />}
-                <Button
-                  label="取消并返回"
-                  secondary
-                  disabled={busy && !!form.preview}
-                  onPress={onClose}
-                />
               </>
             )}
           </ScrollView>
@@ -201,3 +166,89 @@ export function SourceFormModal({
     </Modal>
   );
 }
+
+/**
+ * The parsed playlist before saving: the count is the title, risk (HTTP) in
+ * the warning colour, and everything that was skipped behind one line.
+ */
+function ImportPreviewBody({
+  preview,
+  busy,
+  onSave,
+  onBack,
+}: {
+  preview: NonNullable<SourceFormState["preview"]>;
+  busy: boolean;
+  onSave: () => void;
+  onBack: () => void;
+}) {
+  const [skippedOpen, setSkippedOpen] = useState(false);
+  const { stats } = preview;
+  const skipped = stats.duplicates + stats.ignored;
+  const shown = preview.channels.slice(0, 5);
+  return (
+    <>
+      {stats.http > 0 && (
+        <Text style={formStyles.warnText}>
+          {stats.http} 个频道使用 HTTP 明文
+        </Text>
+      )}
+      {skipped > 0 && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: skippedOpen }}
+          onPress={() => setSkippedOpen((open) => !open)}
+          style={formStyles.skippedToggle}
+        >
+          <Text style={styles.muted}>{skipped} 条未导入</Text>
+          <Text style={styles.muted}>{skippedOpen ? "收起" : "›"}</Text>
+        </Pressable>
+      )}
+      {skippedOpen &&
+        Object.entries(preview.issueCounts).map(([reason, count]) => (
+          <Text key={reason} style={styles.muted}>
+            {IMPORT_ISSUE_LABELS[reason as ImportIssueReason]}：{count}
+          </Text>
+        ))}
+      {shown.map((channel) => (
+        <Card key={channel.identityKey}>
+          <Text style={styles.heading}>{channel.name}</Text>
+          <Text style={styles.muted}>{displayGroups(channel.groupName)}</Text>
+        </Card>
+      ))}
+      {stats.valid > shown.length && (
+        <Text style={styles.muted}>… 还有 {stats.valid - shown.length} 个</Text>
+      )}
+      <Button
+        label={busy ? "正在保存…" : "导入"}
+        accessibilityLabel={`导入 ${stats.valid} 个频道`}
+        disabled={busy || !stats.valid}
+        onPress={onSave}
+      />
+      <Button label="返回修改" secondary disabled={busy} onPress={onBack} />
+    </>
+  );
+}
+
+const formStyles = StyleSheet.create({
+  header: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  headerText: { flex: 1, minWidth: 0 },
+  fileBox: {
+    minHeight: 88,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: colors.line,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingHorizontal: 16,
+  },
+  warnText: { ...type.body, color: colors.warn },
+  skippedToggle: {
+    minHeight: sizes.touch,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+});
