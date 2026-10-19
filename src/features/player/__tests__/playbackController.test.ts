@@ -639,3 +639,30 @@ test("errors before the first frame, and network errors after it, do not reconne
   });
   controller.dispose();
 });
+
+test("a player held paused keeps its pause through later native loading and errors", async () => {
+  const { controller, checkNetwork } = setup();
+  await controller.requestPlay();
+  const id = controller.getSnapshot().attemptId!;
+  controller.nativeStarted(id);
+  expect(controller.userPaused(id)).toBe(true);
+  // Retained: the last frame stays on screen.
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: "paused",
+    attemptId: id,
+    pauseReason: "manual",
+  });
+  controller.nativeStatus(id, "loading");
+  expect(controller.getSnapshot().phase).toBe("paused");
+  // A live window that moved on must not reconnect and play by itself.
+  checkNetwork.mockClear();
+  controller.nativeStatus(id, "error", "media");
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: "paused",
+    attemptId: null,
+    pauseReason: "manual",
+  });
+  await Promise.resolve();
+  expect(checkNetwork).not.toHaveBeenCalled();
+  controller.dispose();
+});

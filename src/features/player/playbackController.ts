@@ -279,6 +279,14 @@ export class PlaybackController {
     failure: Exclude<AttemptFailure, "timeout"> = "unknown",
   ) {
     if (!this.isCurrentAttempt(id)) return;
+    // A player held paused (to keep its last frame) may still fail or report
+    // loading, e.g. a live window that moved on. Neither may undo the pause:
+    // drop the player quietly; the next ▶ reconnects.
+    if (this.snapshot.phase === "paused") {
+      if (status === "error")
+        this.stop("paused", this.snapshot.pauseReason ?? "manual");
+      return;
+    }
     if (status === "error") {
       const played = this.startedAttempt === id;
       if (played && failure === "media" && this.takeLiveReconnect())
