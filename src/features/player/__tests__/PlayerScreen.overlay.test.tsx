@@ -488,4 +488,22 @@ describe("controls timing and the docked title", () => {
     }
   });
 
+  test("a long press on the docked picture names the channel for a moment", async () => {
+    jest.useFakeTimers();
+    try {
+      const ui = await render(<PlayerScreen {...props({ mini: true })} />);
+      await start();
+      expect(ui.queryByTestId("mini-title")).toBeNull();
+      await fireEvent(
+        ui.getByRole("button", { name: "展开播放器，山野纪实" }),
+        "longPress",
+      );
+      expect(ui.getByTestId("mini-title")).toHaveTextContent("山野纪实");
+      await act(() => jest.advanceTimersByTime(2500));
+      expect(ui.queryByTestId("mini-title")).toBeNull();
+      await ui.unmount();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

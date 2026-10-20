@@ -14,6 +14,16 @@ export const sessionStyles = StyleSheet.create({
   audioSymbol: { color: colors.accent, fontSize: 32 },
   // The docked window has no centre key: the note sits in the middle.
   miniAudioStage: { justifyContent: "center", paddingTop: 0 },
+  miniTitleStrip: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: "#0B1115B3",
+  },
+  miniTitleText: { color: colors.text, fontSize: 12, lineHeight: 16 },
   audioCaption: { color: colors.muted, fontSize: 12, lineHeight: 18 },
   fullscreenSources: {
     position: "absolute",
