@@ -458,7 +458,15 @@ const partStyles = StyleSheet.create({
     backgroundColor: colors.accentSoft,
   },
   sourceText: { ...type.body, color: colors.accent },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 4 },
+  // The 48pt hit area overhangs the 32pt title row instead of growing it, so
+  // 最近观看 sits exactly where 频道, 收藏 and 设置 do when switching tabs.
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    // Heading: title line plus its 4pt bottom margin.
+    marginVertical: -(sizes.touch - (type.title.lineHeight + 4)) / 2,
+  },
   headerAction: {
     minHeight: sizes.touch,
     minWidth: sizes.touch,
