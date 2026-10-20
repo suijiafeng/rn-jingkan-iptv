@@ -1,5 +1,7 @@
 import { checkChannels } from "../availability";
 import {
+  AvailabilitySaveError,
+  CHECK_SAVE_BATCH,
   checkAvailability,
   OK_RESULT_TTL_MS,
   UNREACHABLE_RESULT_TTL_MS,
@@ -197,4 +199,93 @@ test("cached reads never run a network preflight; a cancelled preflight does not
   await expect(checkAvailability(db, [beta], options())).resolves.toMatchObject(
     { refreshed: true },
   );
+});
+
+describe("saving while probing", () => {
+  const many = (count: number) =>
+    Array.from({ length: count }, (_unused, index) => ({
+      id: `c${index}`,
+      streamUrl: `https://example.com/${index}`,
+    }));
+  // Reports results one by one, as the real sweep does, and passes the
+  // concurrency it was given through to the test.
+  const reporting = (failAfter = Infinity) =>
+    probe.mockImplementation(async (targets, sweep) => {
+      const results = [];
+      for (const row of targets as (typeof alpha)[]) {
+        if (results.length >= failAfter) throw new Error("killed");
+        const result = {
+          channelId: row.id,
+          streamUrl: row.streamUrl,
+          ok: true,
+        };
+        results.push(result);
+        sweep.onResult?.(result);
+        await Promise.resolve();
+      }
+      return results;
+    });
+
+  test("results are written in batches and each is written once", async () => {
+    reporting();
+    const db = store();
+    const result = await checkAvailability(db, many(250), {
+      ...options(),
+      concurrency: () => 8,
+    });
+    expect(probe.mock.calls[0][1].concurrency).toBe(8);
+    const batches = (db.saveCheckResults as jest.Mock).mock.calls.map(
+      ([batch]) => batch.length,
+    );
+    expect(batches).toEqual([CHECK_SAVE_BATCH, CHECK_SAVE_BATCH, 50]);
+    expect(result.results).toHaveLength(250);
+  });
+
+  test("a sweep that dies midway keeps the batches already written", async () => {
+    reporting(150);
+    const db = store();
+    await expect(checkAvailability(db, many(250), options())).rejects.toThrow(
+      "killed",
+    );
+    const stored = await db.getCheckResults(
+      many(250).map((row) => row.streamUrl),
+    );
+    expect(stored).toHaveLength(CHECK_SAVE_BATCH);
+  });
+
+  test("nothing more is written once permission is withdrawn", async () => {
+    reporting();
+    const db = store();
+    let permitted = true;
+    probe.mockImplementationOnce(async (targets, sweep) => {
+      const results = [];
+      for (const row of targets as (typeof alpha)[]) {
+        if (results.length === 120) permitted = false;
+        const result = {
+          channelId: row.id,
+          streamUrl: row.streamUrl,
+          ok: true,
+        };
+        results.push(result);
+        sweep.onResult?.(result);
+        await Promise.resolve();
+      }
+      return results;
+    });
+    const result = await checkAvailability(db, many(250), {
+      signal: new AbortController().signal,
+      isPermitted: () => permitted,
+    });
+    expect(result.results).toEqual([]);
+    expect(db.saveCheckResults).toHaveBeenCalledTimes(1);
+  });
+
+  test("a failed batch is reported like a failed final save", async () => {
+    reporting();
+    const db = store();
+    (db.saveCheckResults as jest.Mock).mockRejectedValueOnce(new Error("full"));
+    await expect(
+      checkAvailability(db, many(150), options()),
+    ).rejects.toBeInstanceOf(AvailabilitySaveError);
+  });
 });

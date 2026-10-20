@@ -6,6 +6,7 @@ import {
   type MutableRefObject,
 } from "react";
 import { AppState } from "react-native";
+import * as Network from "expo-network";
 import type { Repository } from "../../data/repository";
 import type { Source } from "../../domain/types";
 import { ImportIOError } from "../../data/importIO";
@@ -17,7 +18,13 @@ import {
   lookupIptvOrgLanguages,
   needsLanguageLookup,
 } from "../source/iptvOrgLanguages";
-import type { CheckProgress, CheckSummary } from "../source/availability";
+import {
+  CHECK_CONCURRENCY,
+  UNMETERED_CHECK_CONCURRENCY,
+  type CheckProgress,
+  type CheckSummary,
+} from "../source/availability";
+import { isOffline, mightUseMobileData } from "../player/playbackController";
 
 /**
  * Network work on one source: the availability sweep started from source
@@ -151,13 +158,23 @@ export function useSourceTasks({
         sourceId: source.id,
         includeVariants: true,
       });
-      if (!allowed()) return;
+      let concurrency = CHECK_CONCURRENCY;
       const { results, skipped } = await checkAvailability(repo, targets, {
         signal: abort.signal,
         force,
+        concurrency: () => concurrency,
         isPermitted: stillPermitted,
-        beforeRequests: async () =>
-          (await checkNetwork(abort.signal)) && allowed(),
+        beforeRequests: async () => {
+          if (!(await checkNetwork(abort.signal)) || !allowed()) return false;
+          // Same rule as the mobile-data warning: only known Wi-Fi/Ethernet
+          // counts as unmetered and gets the wider sweep.
+          const network = await Network.getNetworkStateAsync().catch(
+            () => null,
+          );
+          if (network && !isOffline(network) && !mightUseMobileData(network))
+            concurrency = UNMETERED_CHECK_CONCURRENCY;
+          return allowed();
+        },
         onProgress: (done, total) => {
           if (allowed()) setCheck({ sourceId: source.id, done, total });
         },

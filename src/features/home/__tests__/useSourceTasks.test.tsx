@@ -1,11 +1,20 @@
 import { act, renderHook } from "@testing-library/react-native";
+import { AppState } from "react-native";
+import * as Network from "expo-network";
 import type { Repository } from "../../../data/repository";
+import type { Source } from "../../../domain/types";
+import { checkAvailability } from "../../source/availabilityCoordinator";
 import {
   LanguageLookupError,
   lookupIptvOrgLanguages,
 } from "../../source/iptvOrgLanguages";
 import { useSourceTasks } from "../useSourceTasks";
 
+jest.mock("expo-network", () => ({ getNetworkStateAsync: jest.fn() }));
+jest.mock("../../source/availabilityCoordinator", () => ({
+  ...jest.requireActual("../../source/availabilityCoordinator"),
+  checkAvailability: jest.fn(),
+}));
 jest.mock("../../source/iptvOrgLanguages", () => ({
   ...jest.requireActual("../../source/iptvOrgLanguages"),
   lookupIptvOrgLanguages: jest.fn(),
@@ -80,4 +89,32 @@ test("declining mobile data downloads nothing", async () => {
   checkNetwork.mockResolvedValueOnce(false);
   await act(async () => result.current.runLanguageLookup("s1"));
   expect(lookupIptvOrgLanguages).not.toHaveBeenCalled();
+});
+
+test.each([
+  ["WIFI", 8],
+  ["ETHERNET", 8],
+  ["CELLULAR", 4],
+  ["VPN", 4],
+])("a manual check on %s probes %i addresses at once", async (type, width) => {
+  (Network.getNetworkStateAsync as jest.Mock).mockResolvedValue({
+    type,
+    isConnected: true,
+  });
+  // Runs the preflight like the real coordinator, then reads the width.
+  (checkAvailability as jest.Mock).mockImplementation(
+    async (_store, _targets, sweep) => {
+      await sweep.beforeRequests();
+      return { results: [], refreshed: false, width: sweep.concurrency() };
+    },
+  );
+  // Checks only run while the app is in front.
+  Object.defineProperty(AppState, "currentState", {
+    value: "active",
+    configurable: true,
+  });
+  const { result } = await mount();
+  await act(async () => result.current.runCheck({ id: "s1" } as Source));
+  const sweep = (checkAvailability as jest.Mock).mock.results[0].value;
+  expect((await sweep).width).toBe(width);
 });

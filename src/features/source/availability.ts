@@ -1,6 +1,8 @@
 import { checkStream } from "./streamProbe";
 
 export const CHECK_CONCURRENCY = 4;
+/** A manual sweep on Wi-Fi or Ethernet runs twice as many probes at once. */
+export const UNMETERED_CHECK_CONCURRENCY = 8;
 
 export interface CheckTarget {
   id: string;
@@ -31,6 +33,8 @@ export async function checkChannels(
     signal: AbortSignal;
     concurrency?: number;
     onProgress?: (done: number, total: number) => void;
+    /** Each result as it lands; the same object ends up in the returned list. */
+    onResult?: (result: CheckResult) => void;
     check?: (url: string, signal: AbortSignal) => Promise<boolean>;
   },
 ): Promise<CheckResult[]> {
@@ -42,7 +46,9 @@ export async function checkChannels(
       const target = targets[next++];
       const ok = await check(target.streamUrl, options.signal);
       if (options.signal.aborted) return;
-      results.push({ channelId: target.id, streamUrl: target.streamUrl, ok });
+      const result = { channelId: target.id, streamUrl: target.streamUrl, ok };
+      results.push(result);
+      options.onResult?.(result);
       options.onProgress?.(results.length, targets.length);
     }
   };

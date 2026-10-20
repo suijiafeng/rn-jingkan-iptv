@@ -22,6 +22,11 @@ interface Options {
   beforeRequests?: () => Promise<boolean>;
   force?: boolean;
   maxRequests?: number;
+  /**
+   * Probes at once, read after beforeRequests passes; the caller picks it
+   * from the network type it saw there.
+   */
+  concurrency?: () => number;
   onProgress?: (done: number, total: number) => void;
   /** Clock for result freshness; tests inject a fixed time. */
   now?: () => number;
@@ -35,6 +40,12 @@ export const OK_RESULT_TTL_MS = 24 * 60 * 60 * 1000;
  * expires sooner.
  */
 export const UNREACHABLE_RESULT_TTL_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Results are written every this many, so a sweep the system kills midway
+ * keeps what it finished and the next run starts from the rest.
+ */
+export const CHECK_SAVE_BATCH = 100;
 
 /** A clock that moved backwards makes the age unknown: probe again. */
 function isFresh(entry: StoredCheck, now: number): boolean {
@@ -103,19 +114,46 @@ export async function checkAvailability(
         !options.isPermitted())
     )
       return { results: reused, refreshed: false, skipped: true };
+    // Batches are saved one after another while probing goes on; each save
+    // checks permission when it runs, so nothing is written after revocation.
+    const saved = new Set<CheckResult>();
+    let unsaved: CheckResult[] = [],
+      saving = Promise.resolve(),
+      saveFailed = false;
+    const save = (batch: CheckResult[]) => {
+      saving = saving
+        .then(async () => {
+          if (saveFailed || !options.isPermitted()) return;
+          await store.saveCheckResults(batch);
+          for (const result of batch) saved.add(result);
+        })
+        .catch(() => {
+          saveFailed = true;
+        });
+    };
     const checked = selected.length
       ? await checkChannels(selected, {
           signal: options.signal,
+          concurrency: options.concurrency?.(),
+          onResult: (result) => {
+            unsaved.push(result);
+            if (unsaved.length < CHECK_SAVE_BATCH) return;
+            save(unsaved);
+            unsaved = [];
+          },
           onProgress: (done) =>
             options.onProgress?.(reused.length + done, total),
         })
       : [];
     // The queue is held through persistence. The next caller reads SQLite
     // after this commit rather than racing a second request against the save.
+    await saving;
+    if (saveFailed) throw new AvailabilitySaveError();
     if (!options.isPermitted()) return { results: [], refreshed: false };
-    if (checked.length) {
+    const rest = checked.filter((result) => !saved.has(result));
+    if (rest.length) {
       try {
-        await store.saveCheckResults(checked);
+        await store.saveCheckResults(rest);
       } catch {
         throw new AvailabilitySaveError();
       }

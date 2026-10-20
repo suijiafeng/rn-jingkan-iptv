@@ -47,3 +47,18 @@ test("stopping keeps finished results and starts no new checks", async () => {
   expect(check).toHaveBeenCalledTimes(2);
   expect(results.map((result) => result.channelId)).toEqual(["c0"]);
 });
+
+test("each result is handed over as it lands, the same object as returned", async () => {
+  const landed: unknown[] = [];
+  const targets = Array.from({ length: 5 }, (_unused, index) => ({
+    id: `c${index}`,
+    streamUrl: `https://a.example.com/${index}`,
+  }));
+  const results = await checkChannels(targets, {
+    signal: signal(),
+    check: async () => true,
+    onResult: (result) => landed.push(result),
+  });
+  expect(landed).toHaveLength(5);
+  results.forEach((result, index) => expect(landed[index]).toBe(result));
+});
