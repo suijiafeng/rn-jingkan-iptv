@@ -166,7 +166,7 @@ export function SettingsScreen(props: Props) {
           trailing={
             <Switch
               accessibilityLabel="后台播放"
-              value={props.backgroundPlayback ?? false}
+              value={props.backgroundPlayback ?? true}
               disabled={props.backgroundSaving}
               trackColor={{ true: colors.accent }}
               onValueChange={props.onBackgroundPlaybackChange}

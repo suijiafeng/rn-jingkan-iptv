@@ -28,7 +28,8 @@ export function useAppSettings({
     [remoteAllowed, setRemoteAllowed] = useState(false),
     [revokePending, setRevokePending] = useState(false),
     [mobileWarning, setMobileWarning] = useState(true),
-    [backgroundPlayback, setBackgroundPlayback] = useState(false),
+    // On by default; switching it back on after turning it off asks again.
+    [backgroundPlayback, setBackgroundPlayback] = useState(true),
     [backgroundSaving, setBackgroundSaving] = useState(false),
     [swipeReverse, setSwipeReverse] = useState(false),
     // Leaving the player docks it in a small floating window.
@@ -67,7 +68,7 @@ export function useAppSettings({
       .then(async (opened) => {
         const allowed = await opened.getSetting("remoteAllowed", false);
         const warning = await opened.getSetting("mobileWarning", true);
-        const background = await opened.getSetting("backgroundPlayback", false);
+        const background = await opened.getSetting("backgroundPlayback", true);
         const reverse = await opened.getSetting("swipeReverse", false);
         const docking = await opened.getSetting("miniPlayer", true);
         const artwork = await opened.getSetting("artworkAllowed", false);
@@ -270,7 +271,7 @@ export function useAppSettings({
   const resetToDefaults = () => {
     setRevokePending(false);
     setMobileWarning(true);
-    setBackgroundPlayback(false);
+    setBackgroundPlayback(true);
     setMobileAccepted(false);
     setSwipeReverse(false);
     setMiniPlayer(true);

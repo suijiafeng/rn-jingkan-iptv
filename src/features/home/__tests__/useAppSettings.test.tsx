@@ -47,7 +47,24 @@ test("a first run shows the guide and finishing it is remembered", async () => {
 test("the guide stays closed once seen or when sources already exist", async () => {
   const seen = await mount(fakeRepository({ guideSeen: true }, 0));
   expect(seen.result.current.guideVisible).toBe(false);
-  seen.unmount();
+  await seen.unmount();
   const upgraded = await mount(fakeRepository({}, 2));
   expect(upgraded.result.current.guideVisible).toBe(false);
+  await upgraded.unmount();
+});
+
+test("background playback and the mini player start on", async () => {
+  const { result } = await mount(fakeRepository({}, 0));
+  expect(result.current.backgroundPlayback).toBe(true);
+  expect(result.current.miniPlayer).toBe(true);
+  await act(async () => result.current.resetToDefaults());
+  expect(result.current.backgroundPlayback).toBe(true);
+});
+
+test("a saved off stays off", async () => {
+  const { result } = await mount(
+    fakeRepository({ backgroundPlayback: false, miniPlayer: false }, 1),
+  );
+  expect(result.current.backgroundPlayback).toBe(false);
+  expect(result.current.miniPlayer).toBe(false);
 });
