@@ -9,8 +9,10 @@ import type { useSourceTasks } from "./useSourceTasks";
 
 /**
  * Source management and the dialogs it opens: rename, and the add/refresh
- * form. Renaming returns to management; the form replaces it, and a
- * cancelled form returns to management too.
+ * form. Both open on top of management, which stays open underneath, so
+ * leaving them simply reveals it again. Closing one Android modal while
+ * opening another in the same moment could leave the new one undrawn yet
+ * still taking touches.
  */
 export function SourceDialogs({
   repo,
@@ -43,33 +45,24 @@ export function SourceDialogs({
 }) {
   const [renameText, setRenameText] = useState("");
   const [sourceSaving, setSourceSaving] = useState<string | null>(null);
-  const backToManagement = () => {
-    setRenaming(null);
-    setManaging(true);
-  };
+  const backToManagement = () => setRenaming(null);
   return (
     <>
       <SourceManagerModal
         visible={managing}
-        error={error}
+        // A dialog open on top shows the shared error itself.
+        error={renaming || importer.form ? undefined : error}
         onDismissError={() => setError("")}
         sources={sources}
         check={sourceTasks.check}
         summaries={sourceTasks.checkSummaries}
         onClose={() => setManaging(false)}
-        onAdd={(kind) => {
-          setManaging(false);
-          importer.startForm(kind, true);
-        }}
-        onRefresh={(source) => {
-          setManaging(false);
-          void importer.refresh(source, true);
-        }}
+        onAdd={(kind) => importer.startForm(kind, true)}
+        onRefresh={(source) => void importer.refresh(source, true)}
         onRename={(source) => {
           setError("");
           setRenaming(source);
           setRenameText(source.name);
-          setManaging(false);
         }}
         onRemove={onRemoveSource}
         sourceSaving={sourceSaving}

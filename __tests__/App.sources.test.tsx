@@ -355,3 +355,17 @@ test("rename failure remains visible with the input and a working retry", async 
   expect(screen.queryByText("名称未保存，请重试")).toBeNull();
   expect(repo.renameSource).toHaveBeenCalledTimes(2);
 });
+
+test("the add form opens over management, which never closes and reopens", async () => {
+  await openSourceManager();
+  await fireEvent.press(screen.getByRole("button", { name: "添加节目来源" }));
+  // Management stays mounted underneath: on Android, closing one modal
+  // while opening another could leave the new one undrawn but touchable.
+  expect(screen.getByRole("header", { name: "节目来源" })).toBeTruthy();
+  expect(screen.getByLabelText("节目单链接")).toBeTruthy();
+  await fireEvent.press(
+    screen.getAllByRole("button", { name: "返回" }).at(-1)!,
+  );
+  await waitFor(() => expect(screen.queryByLabelText("节目单链接")).toBeNull());
+  expect(screen.getByRole("header", { name: "节目来源" })).toBeTruthy();
+});

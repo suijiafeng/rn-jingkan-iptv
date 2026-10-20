@@ -109,6 +109,8 @@ export default function App() {
     reconcilePlayingSources: playback.reconcilePlayingSources,
     changed,
     onImported: () => {
+      // The form opened over management; a saved list shows its channels.
+      setManage(false);
       setTab("all");
       setRecentEditing(false);
       filters.reset();
