@@ -39,8 +39,6 @@ export interface PlayerScreenProps {
   onStopMobileReminders?: () => void;
   /** Fullscreen swipe up = next channel; true flips it (我的电视 “换台反转”). */
   swipeReverse?: boolean;
-  /** Previous/next step over channels the last manual check found unreachable. */
-  skipUnreachable?: boolean;
   /** The channel watched just before this one, for a one-tap return. */
   previousChannel?: Channel | null;
   artworkEnabled?: boolean;

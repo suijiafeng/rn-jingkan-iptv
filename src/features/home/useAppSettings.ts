@@ -10,7 +10,7 @@ import type { Tab } from "../channel/ChannelListParts";
 
 /** A boolean setting that is shown at once and rolled back if saving fails. */
 export type SavedToggleKey =
-  "mobileWarning" | "swipeReverse" | "skipUnreachable" | "backgroundPlayback";
+  "mobileWarning" | "swipeReverse" | "miniPlayer" | "backgroundPlayback";
 
 /**
  * Opens the local database and owns the settings and network permissions
@@ -31,7 +31,8 @@ export function useAppSettings({
     [backgroundPlayback, setBackgroundPlayback] = useState(false),
     [backgroundSaving, setBackgroundSaving] = useState(false),
     [swipeReverse, setSwipeReverse] = useState(false),
-    [skipUnreachable, setSkipUnreachable] = useState(true),
+    // Leaving the player docks it in a small floating window.
+    [miniPlayer, setMiniPlayer] = useState(true),
     [artworkAllowed, setArtworkAllowed] = useState(false),
     [artworkSaving, setArtworkSaving] = useState(false),
     [artworkRevokePending, setArtworkRevokePending] = useState(false),
@@ -68,7 +69,7 @@ export function useAppSettings({
         const warning = await opened.getSetting("mobileWarning", true);
         const background = await opened.getSetting("backgroundPlayback", false);
         const reverse = await opened.getSetting("swipeReverse", false);
-        const skipDead = await opened.getSetting("skipUnreachable", true);
+        const docking = await opened.getSetting("miniPlayer", true);
         const artwork = await opened.getSetting("artworkAllowed", false);
         const favorites = await opened.listChannels({ mode: "favorites" });
         const guideSeen = await opened.getSetting("guideSeen", false);
@@ -78,7 +79,7 @@ export function useAppSettings({
           setMobileWarning(warning);
           setBackgroundPlayback(background);
           setSwipeReverse(reverse);
-          setSkipUnreachable(skipDead);
+          setMiniPlayer(docking);
           setArtworkAllowed(artwork);
           // Only a true first run: people who already added sources skip
           // it. The check does not hold up opening the home screen.
@@ -217,7 +218,7 @@ export function useAppSettings({
     mobileWarning: setMobileWarning,
     backgroundPlayback: setBackgroundPlayback,
     swipeReverse: setSwipeReverse,
-    skipUnreachable: setSkipUnreachable,
+    miniPlayer: setMiniPlayer,
   };
   const saveToggle = (key: SavedToggleKey, value: boolean) => {
     const setValue = toggleSetters[key];
@@ -272,7 +273,7 @@ export function useAppSettings({
     setBackgroundPlayback(false);
     setMobileAccepted(false);
     setSwipeReverse(false);
-    setSkipUnreachable(true);
+    setMiniPlayer(true);
     setArtworkAllowed(false);
     setArtworkRevokePending(false);
   };
@@ -296,7 +297,7 @@ export function useAppSettings({
     mobileAccepted,
     setMobileAccepted,
     swipeReverse,
-    skipUnreachable,
+    miniPlayer,
     artworkAllowed,
     artworkSaving,
     artworkRevokePending,

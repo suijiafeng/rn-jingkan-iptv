@@ -77,7 +77,10 @@ export function HomePlayer({
         mini={playerMini}
         // Inside the window's 1dp border.
         miniSize={{ width: floating.width - 2, height: floating.height - 2 }}
-        onMinimize={() => playback.setPlayerMini(true)}
+        // Without the mini player, leaving the player closes it.
+        onMinimize={
+          settings.miniPlayer ? () => playback.setPlayerMini(true) : undefined
+        }
         onExpand={() => playback.setPlayerMini(false)}
         error={error}
         onDismissError={onDismissError}
@@ -103,7 +106,6 @@ export function HomePlayer({
           settings.saveToggle("mobileWarning", false)
         }
         swipeReverse={settings.swipeReverse}
-        skipUnreachable={settings.skipUnreachable}
         previousChannel={shownPrevious}
       />
       {playerMini && (

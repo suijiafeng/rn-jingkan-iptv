@@ -21,6 +21,7 @@ const text = JSON.stringify({
     mobileWarning: true,
     swipeReverse: false,
     skipUnreachable: true,
+    miniPlayer: true,
   },
 });
 const mockFile = {

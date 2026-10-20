@@ -88,22 +88,14 @@ describe("zapping", () => {
     await ui.unmount();
   });
 
-  test("swipes skip channels last checked unreachable when enabled", async () => {
+  test("swipes always skip channels last checked unreachable", async () => {
     const dead = { ...second, checkStatus: "unreachable" as const };
-    const options = props({
-      channel: first,
-      channels: [first, dead, third],
-      skipUnreachable: true,
-    });
+    const options = props({ channel: first, channels: [first, dead, third] });
     const ui = await fullscreen(options);
     await swipe(ui, -120);
+    // Skipping is not a setting: a dead channel is never a step.
     expect(options.onSelect).toHaveBeenLastCalledWith(third);
     await ui.unmount();
-    const plain = props({ channel: first, channels: [first, dead, third] });
-    const ui2 = await fullscreen(plain);
-    await swipe(ui2, -120);
-    expect(plain.onSelect).toHaveBeenLastCalledWith(dead);
-    await ui2.unmount();
   });
 
   test("the picture has no previous/next buttons in either layout", async () => {

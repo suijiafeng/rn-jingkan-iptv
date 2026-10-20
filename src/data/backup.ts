@@ -35,11 +35,14 @@ const CHANNEL_COLUMNS = [
   "qualityLabel",
   "qualityRank",
 ] as const;
-const PREFERENCES = [
-  "mobileWarning",
-  "swipeReverse",
-  "skipUnreachable",
-] as const;
+const PREFERENCES = ["mobileWarning", "swipeReverse"] as const;
+/**
+ * Added after version 1 files were written: missing in a file means the
+ * default. skipUnreachable is no longer a choice (always on) but is still
+ * written, so an older app can restore a newer backup.
+ */
+const OPTIONAL_PREFERENCES = { miniPlayer: true } as const;
+const LEGACY_PREFERENCES = { skipUnreachable: true } as const;
 type BackupRow = Record<string, SqlValue>;
 export interface LocalBackup {
   format: "jingkan-backup";
@@ -180,6 +183,11 @@ export function parseBackup(text: string): LocalBackup {
       if (typeof saved[key] !== "boolean") throw new BackupError();
       preferences[key] = saved[key];
     }
+    for (const [key, fallback] of Object.entries(OPTIONAL_PREFERENCES)) {
+      const value = saved[key] ?? fallback;
+      if (typeof value !== "boolean") throw new BackupError();
+      preferences[key] = value;
+    }
     return {
       format: "jingkan-backup",
       version: 1,
@@ -209,6 +217,14 @@ export async function readBackup(
       row?.value === "true" ||
       (row?.value !== "false" && key !== "swipeReverse");
   }
+  for (const [key, fallback] of Object.entries(OPTIONAL_PREFERENCES)) {
+    const row = await tx.getFirstAsync<{ value: string }>(
+      "SELECT value FROM settings WHERE key = ?",
+      [key],
+    );
+    preferences[key] = row ? row.value === "true" : fallback;
+  }
+  Object.assign(preferences, LEGACY_PREFERENCES);
   return {
     format: "jingkan-backup",
     version: 1,
@@ -253,7 +269,7 @@ export async function writeBackup(
       );
     }
   }
-  for (const key of PREFERENCES)
+  for (const key of [...PREFERENCES, ...Object.keys(OPTIONAL_PREFERENCES)])
     await tx.runAsync("INSERT INTO settings(key,value) VALUES(?,?)", [
       key,
       JSON.stringify(backup.preferences[key]),

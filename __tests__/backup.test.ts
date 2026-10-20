@@ -108,3 +108,25 @@ test("empty backups are valid and unrecognized preferences never restore permiss
     db.native.close();
   }
 });
+
+test("the mini player choice travels in backups, and older files still restore", async () => {
+  const origin = await openTestRepository(),
+    target = await openTestRepository();
+  try {
+    await origin.repo.setSetting("miniPlayer", false);
+    const text = await origin.repo.exportBackup();
+    // Still written so an older app, which requires it, can restore this.
+    expect(JSON.parse(text).preferences.skipUnreachable).toBe(true);
+    await target.repo.restoreBackup(text);
+    expect(await target.repo.getSetting("miniPlayer", true)).toBe(false);
+
+    // A file from before the switch existed restores with it on.
+    const older = JSON.parse(text);
+    delete older.preferences.miniPlayer;
+    await target.repo.restoreBackup(JSON.stringify(older));
+    expect(await target.repo.getSetting("miniPlayer", false)).toBe(true);
+  } finally {
+    origin.db.native.close();
+    target.db.native.close();
+  }
+});

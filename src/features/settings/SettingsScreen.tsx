@@ -33,8 +33,8 @@ interface Props {
   onMobileWarningChange: (value: boolean) => void;
   swipeReverse: boolean;
   onSwipeReverseChange: (value: boolean) => void;
-  skipUnreachable: boolean;
-  onSkipUnreachableChange: (value: boolean) => void;
+  miniPlayer: boolean;
+  onMiniPlayerChange: (value: boolean) => void;
   onClearAll: () => void;
   onShowGuide?: () => void;
   /** The docked player window floats over the page bottom. */
@@ -163,7 +163,6 @@ export function SettingsScreen(props: Props) {
       <SettingSection label="播放">
         <SettingRow
           title="后台播放"
-
           trailing={
             <Switch
               accessibilityLabel="后台播放"
@@ -175,12 +174,10 @@ export function SettingsScreen(props: Props) {
           }
         />
         <SettingRow
-          title="换台反转"
-          // The switch alone does not say which way is which.
-          caption={props.swipeReverse ? "上滑 = 上一台" : "上滑 = 下一台"}
+          title="滑动换台"
           trailing={
             <Switch
-              accessibilityLabel="换台反转"
+              accessibilityLabel="滑动换台"
               value={props.swipeReverse}
               trackColor={{ true: colors.accent }}
               onValueChange={props.onSwipeReverseChange}
@@ -188,13 +185,13 @@ export function SettingsScreen(props: Props) {
           }
         />
         <SettingRow
-          title="换台时跳过无法连接的频道"
+          title="小浮窗播放器"
           trailing={
             <Switch
-              accessibilityLabel="换台时跳过无法连接的频道"
-              value={props.skipUnreachable}
+              accessibilityLabel="小浮窗播放器"
+              value={props.miniPlayer}
               trackColor={{ true: colors.accent }}
-              onValueChange={props.onSkipUnreachableChange}
+              onValueChange={props.onMiniPlayerChange}
             />
           }
         />

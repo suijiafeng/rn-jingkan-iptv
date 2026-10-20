@@ -361,14 +361,14 @@ export default function App() {
             onSwipeReverseChange={(value) =>
               settings.saveToggle("swipeReverse", value)
             }
-            skipUnreachable={settings.skipUnreachable}
+            miniPlayer={settings.miniPlayer}
             backgroundPlayback={settings.backgroundPlayback}
             backgroundSaving={settings.backgroundSaving}
             onBackgroundPlaybackChange={(value) =>
               void settings.changeBackgroundPlayback(value)
             }
-            onSkipUnreachableChange={(value) =>
-              settings.saveToggle("skipUnreachable", value)
+            onMiniPlayerChange={(value) =>
+              settings.saveToggle("miniPlayer", value)
             }
             onClearAll={() => void controls.clearAll()}
             onShowGuide={settings.showGuide}
