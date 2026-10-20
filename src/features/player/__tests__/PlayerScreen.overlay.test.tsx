@@ -316,6 +316,29 @@ describe("docked bar", () => {
     await ui.unmount();
   });
 
+  test("paused, back closes the player instead of docking it", async () => {
+    const { press, spy } = backKey();
+    const options = props({ onMinimize: jest.fn(), onExpand: jest.fn() });
+    const ui = await render(<PlayerScreen {...options} />);
+    await start();
+    await fireEvent.press(ui.getByTestId("primary-play-pause"));
+    expect(mockNative.pause).toHaveBeenCalledTimes(1);
+    await press();
+    expect(options.onMinimize).not.toHaveBeenCalled();
+    expect(options.onClose).toHaveBeenCalledTimes(1);
+    // The arrow says so and does the same.
+    await fireEvent.press(ui.getByRole("button", { name: "关闭播放器" }));
+    expect(options.onMinimize).not.toHaveBeenCalled();
+    expect(options.onClose).toHaveBeenCalledTimes(2);
+    // Playing again, back docks as before.
+    await fireEvent.press(ui.getByTestId("primary-play-pause"));
+    await start();
+    await press();
+    expect(options.onMinimize).toHaveBeenCalledTimes(1);
+    await ui.unmount();
+    spy.mockRestore();
+  });
+
   test("without onMinimize, portrait back still closes the player", async () => {
     const { press, spy } = backKey();
     const options = props();

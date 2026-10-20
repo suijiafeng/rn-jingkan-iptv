@@ -137,6 +137,8 @@ export function PlayerScreen(props: PlayerScreenProps) {
     props.onSelectSource,
   );
   const { onClose, onMinimize } = props;
+  // Reported by the session: a paused player is closed by back, not docked.
+  const [paused, setPaused] = useState(false);
   const handleBack = useCallback(() => {
     if (sourcesOpen) {
       setSourcesOpen(false);
@@ -145,10 +147,10 @@ export function PlayerScreen(props: PlayerScreenProps) {
     const destination = backDestination(fullscreen && sheetOpen, fullscreen);
     if (destination === "sheet") setSheetOpen(false);
     else if (destination === "fullscreen") setFullscreen(false);
-    else if (!mini && onMinimize) onMinimize();
+    else if (!mini && !paused && onMinimize) onMinimize();
     else onClose();
     return true;
-  }, [sourcesOpen, sheetOpen, fullscreen, mini, onMinimize, onClose]);
+  }, [sourcesOpen, sheetOpen, fullscreen, mini, paused, onMinimize, onClose]);
   useEffect(() => {
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
@@ -216,6 +218,7 @@ export function PlayerScreen(props: PlayerScreenProps) {
         sourcesOpen={sourcesOpen}
         onSourcesOpenChange={setSourcesOpen}
         mini={mini}
+        onPausedChange={setPaused}
       />
       {!fullscreen && !mini && (
         <View style={screenStyles.inlineList} testID="player-channel-sheet">

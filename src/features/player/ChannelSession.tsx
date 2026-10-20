@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -42,6 +42,8 @@ export interface SessionProps extends PlayerScreenProps {
   sourcesOpen: boolean;
   onSourcesOpenChange: (open: boolean) => void;
   mini: boolean;
+  /** Tells the screen whether back should stop rather than dock. */
+  onPausedChange: (paused: boolean) => void;
 }
 
 /** One channel's playback: owns the controller and native attempt; renders
@@ -74,6 +76,10 @@ export function ChannelSession(props: SessionProps) {
     sourceButton,
     favoriteButton,
   } = view;
+  const paused = state.phase === "paused";
+  const docks = !!props.onMinimize && !paused;
+  const { onPausedChange } = props;
+  useEffect(() => onPausedChange(paused), [onPausedChange, paused]);
   return (
     <View
       style={
@@ -270,15 +276,16 @@ export function ChannelSession(props: SessionProps) {
             </View>
             <View style={sessionStyles.portraitTopLeft}>
               {/* Same as the back key: back to the list, playback docks in
-                  the bar, whose ✕ is what stops it. */}
+                  the floating window, whose ✕ is what stops it. Paused, there
+                  is nothing to keep watching: back stops instead. */}
               <OverlayButton
                 label="返回频道列表"
                 icon={<ChevronLeftIcon size={20} />}
                 variant="quiet"
                 accessibilityLabel={
-                  props.onMinimize ? "返回频道列表，继续小窗播放" : "关闭播放器"
+                  docks ? "返回频道列表，继续小窗播放" : "关闭播放器"
                 }
-                onPress={props.onMinimize ?? props.onClose}
+                onPress={(docks && props.onMinimize) || props.onClose}
               />
             </View>
             <View style={sessionStyles.portraitTopRight}>
