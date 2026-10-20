@@ -185,10 +185,10 @@ export function SettingsScreen(props: Props) {
           }
         />
         <SettingRow
-          title="小浮窗播放器"
+          title="浮窗播放"
           trailing={
             <Switch
-              accessibilityLabel="小浮窗播放器"
+              accessibilityLabel="浮窗播放"
               value={props.miniPlayer}
               trackColor={{ true: colors.accent }}
               onValueChange={props.onMiniPlayerChange}
