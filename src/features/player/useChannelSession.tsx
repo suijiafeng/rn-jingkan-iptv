@@ -30,6 +30,7 @@ import {
   VolumeIcon,
 } from "./playerIcons";
 import { OverlayButton, SourceChip } from "./overlayWidgets";
+import { sourcePosition } from "./sourceFailover";
 import {
   CenterChip,
   LoadingDots,
@@ -342,12 +343,7 @@ export function useChannelSession(props: SessionProps) {
   // so even a single source opens it. TalkBack also hears quality and name.
   const sourceButton = (
     <SourceChip
-      position={
-        Math.max(
-          props.sources.findIndex((source) => source.id === props.channel.id),
-          0,
-        ) + 1
-      }
+      position={sourcePosition(props.sources, props.channel)?.index ?? 1}
       count={props.sources.length}
       accessibilityLabel={
         props.sources.length > 1

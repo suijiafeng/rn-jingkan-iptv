@@ -493,7 +493,8 @@ describe("source failover", () => {
     expect(classifyPlayerError(undefined)).toBe("unknown");
   });
   test("a timeout moves to the next source in quality order", () => {
-    expect(sourcePosition(sources, low)).toEqual({ index: 1, total: 3 });
+    // The position names the list as shown, not the quality walk.
+    expect(sourcePosition(sources, low)).toEqual({ index: 2, total: 3 });
     const step = advanceRound(null, low, sources, "timeout");
     expect(step.next?.id).toBe("b");
     expect(step.round).toEqual({

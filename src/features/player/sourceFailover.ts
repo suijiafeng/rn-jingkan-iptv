@@ -41,14 +41,17 @@ export function orderedSources(sources: readonly Channel[]): Channel[] {
   return [...sources].sort(compareChannelSources);
 }
 
-/** 1-based position of the current address among its channel's sources. */
+/**
+ * 1-based position of the current address in `sources` as given: the order
+ * the source list shows, which the chip and the switching notice both name.
+ * (Failover walks the sources in quality order instead.)
+ */
 export function sourcePosition(
   sources: readonly Channel[],
   current: Pick<Channel, "id">,
 ): { index: number; total: number } | null {
-  const ordered = orderedSources(sources);
-  const index = ordered.findIndex((source) => source.id === current.id);
-  return index < 0 ? null : { index: index + 1, total: ordered.length };
+  const index = sources.findIndex((source) => source.id === current.id);
+  return index < 0 ? null : { index: index + 1, total: sources.length };
 }
 
 /**
