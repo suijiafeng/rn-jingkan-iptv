@@ -32,12 +32,11 @@ interface ManagerProps {
 }
 
 /**
- * The source manager, laid out like the settings page it opens from: a
- * grouped card of the two ways to add a source, then one card per source.
+ * The source manager, laid out like the settings page it opens from: one
+ * row to add a source, then one card per source.
  */
 export function SourceManagerModal(props: ManagerProps) {
   const { check, sources } = props;
-  const enabledCount = sources.filter((source) => source.enabled).length;
   return (
     <Modal
       visible={props.visible}
@@ -51,16 +50,12 @@ export function SourceManagerModal(props: ManagerProps) {
         >
           <Heading title="节目来源" />
           <ErrorNotice message={props.error} onDismiss={props.onDismissError} />
+          {/* Link or file is chosen inside the form, not twice. */}
           <SettingSection label="添加">
             <SettingRow
-              title="添加链接"
+              title="添加节目来源"
               trailing={<Chevron />}
               onPress={() => props.onAdd("url")}
-            />
-            <SettingRow
-              title="导入文件"
-              trailing={<Chevron />}
-              onPress={() => props.onAdd("file")}
             />
           </SettingSection>
           {sources.length === 0 ? (
@@ -72,11 +67,6 @@ export function SourceManagerModal(props: ManagerProps) {
             </View>
           ) : (
             <View style={managerStyles.list}>
-              <Text style={[styles.caption, managerStyles.listLabel]}>
-                {enabledCount === sources.length
-                  ? `已添加 ${sources.length} 份`
-                  : `已添加 ${sources.length} 份，启用 ${enabledCount} 份`}
-              </Text>
               {sources.map((source) => (
                 <SourceCard
                   key={source.id}
@@ -107,7 +97,6 @@ export function SourceManagerModal(props: ManagerProps) {
 const managerStyles = StyleSheet.create({
   content: { gap: 16 },
   list: { gap: 10 },
-  listLabel: { paddingHorizontal: 4, marginBottom: -4 },
   emptyCard: {
     minHeight: 200,
     borderRadius: 14,

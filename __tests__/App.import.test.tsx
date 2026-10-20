@@ -137,8 +137,8 @@ test("URL preview cannot overwrite the previously selected local file content", 
     url: "https://example.com/list.m3u",
   });
   await openForm();
+  // Switching to 文件 opens the picker by itself.
   await fireEvent.press(screen.getByText("文件"));
-  await fireEvent.press(screen.getByRole("button", { name: "选择节目单文件" }));
   await waitFor(() => expect(screen.getByText("自己的文件.m3u")).toBeTruthy());
   await fireEvent.press(screen.getByText("链接"));
   await fireEvent.press(screen.getByText("预览"));

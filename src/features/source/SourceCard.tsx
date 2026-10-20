@@ -59,16 +59,17 @@ export function SourceCard({
   ]
     .filter(Boolean)
     .join(" · ");
-  const attention = [
-    // Checks run per address, not per channel.
-    checked && unreachable > 0 ? `${unreachable} 个地址暂时无法连接` : "",
-    summary?.stopped ? "测试已停止" : "",
-    source.enabled && source.lastErrorCategory
-      ? "上次刷新未完成，旧频道已保留"
-      : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  // A stopped source has nothing to act on, so it gets no third line.
+  const attention = !source.enabled
+    ? ""
+    : [
+        // Checks run per address, not per channel.
+        checked && unreachable > 0 ? `${unreachable} 个地址暂时无法连接` : "",
+        summary?.stopped ? "测试已停止" : "",
+        source.lastErrorCategory ? "上次刷新未完成，旧频道已保留" : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
   const sheetActions: SheetAction[] = [
     ...(source.enabled && props.onLookupLanguages && !lookupRunning
       ? [

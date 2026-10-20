@@ -65,7 +65,7 @@ function renderModal(
   );
 }
 
-test("manager shows a private-by-default empty state and both add methods", async () => {
+test("manager shows a private-by-default empty state and one way to add", async () => {
   const add = jest.fn();
   await render(
     <SourceManagerModal
@@ -85,9 +85,9 @@ test("manager shows a private-by-default empty state and both add methods", asyn
   );
 
   expect(screen.getByText("还没有节目来源")).toBeTruthy();
-  await fireEvent.press(screen.getByRole("button", { name: "添加链接" }));
-  await fireEvent.press(screen.getByRole("button", { name: "导入文件" }));
-  expect(add.mock.calls).toEqual([["url"], ["file"]]);
+  // Link or file is picked inside the form; the list offers one entry.
+  await fireEvent.press(screen.getByRole("button", { name: "添加节目来源" }));
+  expect(add.mock.calls).toEqual([["url"]]);
 });
 
 test("manager has one close action and no explanatory copy", async () => {

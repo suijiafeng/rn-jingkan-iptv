@@ -82,7 +82,12 @@ export function SourceFormModal({
                           secondary={form.kind !== "file"}
                           label="文件"
                           disabled={busy}
-                          onPress={() => onUpdate({ kind: "file" })}
+                          // Straight to the picker: the box underneath is
+                          // only for changing a file already chosen.
+                          onPress={() => {
+                            onUpdate({ kind: "file" });
+                            if (!form.fileName) onChooseFile();
+                          }}
                         />
                       </View>
                     )}
