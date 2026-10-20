@@ -318,6 +318,40 @@ test("constructs empty, leaves controls to the app overlay, and loads one HLS at
   controller.dispose();
 });
 
+test("a stall that reports not-playing before loading is not an interruption", async () => {
+  jest.useFakeTimers();
+  const { controller, id } = await readyController();
+  const ui = await render(
+    <NativeAttempt
+      uri="https://example.test/live.m3u8"
+      attemptId={id}
+      controller={controller}
+    />,
+  );
+  const native = mockPlayers[0];
+  await act(() => native.handlers.playingChange({ isPlaying: true }));
+  expect(controller.getSnapshot().phase).toBe("playing");
+  // Buffering: not playing while still ready, then loading arrives.
+  await act(() => native.handlers.playingChange({ isPlaying: false }));
+  native.status = "loading";
+  await act(() => native.handlers.statusChange({ status: "loading" }));
+  await act(() => jest.advanceTimersByTime(1000));
+  expect(controller.getSnapshot().phase).toBe("buffering");
+  expect(controller.getSnapshot().pauseReason).toBeUndefined();
+  // A pause that holds while ready (audio focus taken) still reports.
+  native.status = "readyToPlay";
+  await act(() => native.handlers.playingChange({ isPlaying: true }));
+  await act(() => native.handlers.playingChange({ isPlaying: false }));
+  expect(controller.getSnapshot().phase).toBe("playing");
+  await act(() => jest.advanceTimersByTime(400));
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: "paused",
+    pauseReason: "interrupted",
+  });
+  await ui.unmount();
+  jest.useRealTimers();
+});
+
 test("the media handle samples only catch-up windows and detaches at teardown", async () => {
   const { controller, id } = await readyController();
   const media = new MediaHandle();

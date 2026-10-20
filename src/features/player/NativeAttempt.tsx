@@ -24,6 +24,9 @@ interface Props {
   media?: MediaHandle;
 }
 
+/** How long a not-playing report must hold before it counts as a pause. */
+const STOP_CONFIRM_MS = 400;
+
 // A target, not a guaranteed reserve: live sources may have no future segments
 // beyond the playlist window, so the reachable reserve is often shorter.
 // Size takes precedence over duration, particularly for high bitrate TV streams.
@@ -100,6 +103,12 @@ export function NativeAttempt({
     let live = true;
     let instance: VideoPlayer | undefined;
     let exitTimer: ReturnType<typeof setTimeout> | undefined;
+    // A not-playing report waits to see whether it was only buffering.
+    let stopTimer: ReturnType<typeof setTimeout> | undefined;
+    const cancelStop = () => {
+      if (stopTimer !== undefined) clearTimeout(stopTimer);
+      stopTimer = undefined;
+    };
     let settleExit: (() => void) | undefined;
     const sniff = new AbortController();
     const subscriptions: { remove: () => void }[] = [];
@@ -169,6 +178,7 @@ export function NativeAttempt({
       subscriptions.push(
         ownedPlayer.addListener("statusChange", ({ status, error }) => {
           if (!current()) return;
+          if (status !== "readyToPlay") cancelStop();
           media?.sample(ownedPlayer);
           // Only a coarse category leaves this closure; the message does not.
           controller.nativeStatus(
@@ -182,9 +192,21 @@ export function NativeAttempt({
         }),
         ownedPlayer.addListener("playingChange", ({ isPlaying }) => {
           if (!current()) return;
+          cancelStop();
           if (isPlaying) controller.nativeStarted(attemptId);
           else if (ownedPlayer.status === "readyToPlay")
-            controller.nativeStopped(attemptId);
+            // A stall can report not-playing a moment before its loading
+            // status; only a pause that holds while ready is an interruption
+            // (it would otherwise read as "audio taken by another app").
+            stopTimer = setTimeout(() => {
+              stopTimer = undefined;
+              if (
+                current() &&
+                !ownedPlayer.playing &&
+                ownedPlayer.status === "readyToPlay"
+              )
+                controller.nativeStopped(attemptId);
+            }, STOP_CONFIRM_MS);
         }),
         ownedPlayer.addListener("playToEnd", () => {
           if (current()) controller.nativeEnded(attemptId);
@@ -237,6 +259,7 @@ export function NativeAttempt({
       alive.current = false;
       live = false;
       if (exitTimer !== undefined) clearTimeout(exitTimer);
+      cancelStop();
       exitPictureInPicture.current = null;
       if (pendingPip.current) {
         clearTimeout(pendingPip.current.timer);
