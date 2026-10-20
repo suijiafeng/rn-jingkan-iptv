@@ -13,7 +13,10 @@ export interface Source {
   lastSuccessAt: number;
   lastErrorCategory: string | null;
   revision: number;
+  /** Logical channels, as the channel list shows them. */
   channelCount: number;
+  /** Distinct stream addresses; above channelCount when channels share. */
+  addressCount: number;
   favoriteCount: number;
   /**
    * Stored availability of this source's distinct addresses, from manual or

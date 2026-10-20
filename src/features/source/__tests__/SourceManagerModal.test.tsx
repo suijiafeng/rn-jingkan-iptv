@@ -20,6 +20,7 @@ const source: Source = {
   lastErrorCategory: null,
   revision: 1,
   channelCount: 1,
+  addressCount: 1,
   favoriteCount: 0,
   reachableCount: 0,
   unreachableCount: 0,
@@ -239,6 +240,8 @@ test("a stored check result shows only the unreachable count", async () => {
       sources={[
         {
           ...source,
+          channelCount: 500,
+          addressCount: 518,
           reachableCount: 508,
           unreachableCount: 10,
           lastCheckedAt: checkedAt,
@@ -256,7 +259,10 @@ test("a stored check result shows only the unreachable count", async () => {
       onStopCheck={() => {}}
     />,
   );
-  expect(screen.getByText(/1 个频道 · 10 个暂时无法连接/)).toBeTruthy();
+  // Channels as the list shows them; checks count addresses.
+  expect(
+    screen.getByText(/500 个频道（518 个地址） · 10 个地址暂时无法连接/),
+  ).toBeTruthy();
   expect(screen.getByRole("button", { name: "重新检测" })).toBeTruthy();
 });
 

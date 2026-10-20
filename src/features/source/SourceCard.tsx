@@ -47,8 +47,12 @@ export function SourceCard({
   const checked = !!summary || typeof source.lastCheckedAt === "number";
   const unreachable = summary ? summary.unreachable : source.unreachableCount;
   const meta = [
-    `${source.channelCount} 个频道`,
-    checked && unreachable > 0 ? `${unreachable} 个暂时无法连接` : "",
+    // The list shows logical channels; several addresses can share one.
+    source.addressCount > source.channelCount
+      ? `${source.channelCount} 个频道（${source.addressCount} 个地址）`
+      : `${source.channelCount} 个频道`,
+    // Checks run per address, not per channel.
+    checked && unreachable > 0 ? `${unreachable} 个地址暂时无法连接` : "",
     summary?.stopped ? "检测已停止" : "",
     updatedAgo(source.lastSuccessAt, now),
   ]

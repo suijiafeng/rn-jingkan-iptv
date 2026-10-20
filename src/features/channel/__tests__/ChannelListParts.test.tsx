@@ -21,6 +21,7 @@ const source: Source = {
   lastErrorCategory: null,
   revision: 1,
   channelCount: 2,
+  addressCount: 2,
   favoriteCount: 1,
   reachableCount: 0,
   unreachableCount: 0,

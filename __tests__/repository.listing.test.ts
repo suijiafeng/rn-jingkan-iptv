@@ -51,6 +51,10 @@ describe("SQLite repository with real SQLite", () => {
       qualityRank: 576,
     });
     expect(await repo.countChannels()).toBe(1);
+    // The source counts channels as the list shows them, plus addresses.
+    expect(await repo.listSources()).toMatchObject([
+      { channelCount: 1, addressCount: 2 },
+    ]);
     const alternatives = await repo.listChannelSources(shown[0].groupKey!);
     expect(alternatives.map((item) => item.qualityLabel)).toEqual([
       "标清",

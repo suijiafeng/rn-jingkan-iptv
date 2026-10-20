@@ -39,7 +39,10 @@ export interface RawChannel extends Omit<
 
 export const SOURCE_SELECT = `SELECT s.id, s.name, s.kind, s.location, s.createdAt, s.lastSuccessAt,
   s.lastErrorCategory, s.revision, s.enabled,
-  (SELECT COUNT(*) FROM channels c WHERE c.sourceId = s.id AND c.active = 1) AS channelCount,
+  (SELECT COUNT(DISTINCT c.groupKey) FROM channels c
+    WHERE c.sourceId = s.id AND c.active = 1) AS channelCount,
+  (SELECT COUNT(DISTINCT c.streamUrl) FROM channels c
+    WHERE c.sourceId = s.id AND c.active = 1) AS addressCount,
   (SELECT COUNT(DISTINCT c.groupKey) FROM channels c JOIN favorite_groups f ON f.groupKey = c.groupKey
     WHERE c.sourceId = s.id AND c.active = 1) AS favoriteCount,
   (SELECT COUNT(DISTINCT c.streamUrl) FROM channels c
