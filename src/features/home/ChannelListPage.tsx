@@ -29,8 +29,11 @@ import {
   type ChannelListItem,
 } from "./channelListItems";
 
-/** Bar height plus its margins, reserved under the list while docked. */
-const MINI_BAR_SPACE = 88;
+/**
+ * Docked window (close key 40 + gap 6 + 16:9 picture 99) plus its 12dp
+ * margin, reserved under the list so the last rows can scroll clear of it.
+ */
+const MINI_BAR_SPACE = 160;
 /** Space between the header overlay and the first row. */
 const LIST_TOP_GAP = 12;
 

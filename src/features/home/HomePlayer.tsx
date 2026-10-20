@@ -1,19 +1,20 @@
 import React from "react";
-import { StyleSheet, View } from "react-native";
+import { Animated, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Channel } from "../../domain/types";
 import { colors } from "../../theme";
 import { PlayerScreen } from "../player/PlayerScreen";
 import type { ChannelSheetProps } from "../player/playerShared";
 import type { AppSettings } from "./useAppSettings";
 import type { Playback } from "./usePlayback";
-
-/** Gap between the docked bar and the tab bar under it. */
-const MINI_BAR_GAP = 8;
+import { FloatingChrome } from "./FloatingChrome";
+import { MINI_EDGE, useFloatingWindow } from "./useFloatingWindow";
 
 /**
- * The player over the home screen: full screen, or docked as a bar just
- * above the bottom tabs. One tree position for both sizes, so shrinking to
- * the bar and expanding again never remounts the session or its player.
+ * The player over the home screen: full screen, or docked as a small
+ * floating window just above the bottom tabs. One tree position for both
+ * sizes, so docking and expanding again never remounts the session or its
+ * player.
  */
 export function HomePlayer({
   playing,
@@ -42,22 +43,40 @@ export function HomePlayer({
   onAvailability: (channel: Channel, ok: boolean) => void;
 }) {
   const { playerMini, previousChannel } = playback;
+  // The app's safe-area view pads the bottom, and an absolute child is
+  // placed from the padding edge: the window must clear that inset too.
+  const insets = useSafeAreaInsets();
+  const floating = useFloatingWindow({
+    bottomOffset: insets.bottom + tabsHeight + MINI_EDGE,
+    topInset: insets.top,
+  });
   // Prefer a fresh row: a refresh may have changed the channel.
   const shownPrevious = previousChannel
     ? (freshRows.find((channel) => channel.id === previousChannel.id) ??
       previousChannel)
     : null;
   return (
-    <View
+    <Animated.View
       testID="player-container"
       style={
         playerMini
-          ? [playerStyles.miniContainer, { bottom: tabsHeight + MINI_BAR_GAP }]
+          ? [
+              playerStyles.miniContainer,
+              {
+                bottom: insets.bottom + tabsHeight + MINI_EDGE,
+                width: floating.width,
+                height: floating.height,
+                transform: floating.transform,
+              },
+            ]
           : playerStyles.playerOverlay
       }
+      {...(playerMini ? floating.panHandlers : {})}
     >
       <PlayerScreen
         mini={playerMini}
+        // Inside the window's 1dp border.
+        miniSize={{ width: floating.width - 2, height: floating.height - 2 }}
         onMinimize={() => playback.setPlayerMini(true)}
         onExpand={() => playback.setPlayerMini(false)}
         error={error}
@@ -87,7 +106,15 @@ export function HomePlayer({
         skipUnreachable={settings.skipUnreachable}
         previousChannel={shownPrevious}
       />
-    </View>
+      {playerMini && (
+        <FloatingChrome
+          side={floating.side}
+          onClose={playback.closePlayer}
+          onEdgeTouch={floating.onEdgeTouch}
+          onEdgeTouchEnd={floating.onEdgeTouchEnd}
+        />
+      )}
+    </Animated.View>
   );
 }
 
@@ -100,13 +127,15 @@ const playerStyles = StyleSheet.create({
     right: 0,
     backgroundColor: colors.bg,
   },
+  // Home spot bottom-right; dragging moves it by a transform from there.
   miniContainer: {
     position: "absolute",
-    left: 8,
-    right: 8,
-    borderRadius: 14,
-    backgroundColor: colors.raised,
-    // Elevation keeps the bar above list rows on Android.
-    elevation: 6,
+    right: MINI_EDGE,
+    borderWidth: 1,
+    borderColor: "#FFFFFF1F",
+    overflow: "hidden",
+    backgroundColor: "#000000",
+    // Elevation keeps the window above list rows on Android.
+    elevation: 8,
   },
 });

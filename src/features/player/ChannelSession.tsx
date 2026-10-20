@@ -1,12 +1,13 @@
 import React, { useRef } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from "react-native";
-import { qualityName } from "../../domain/channelSources";
+import { colors } from "../../theme";
 import { channelTitle, displayGroups } from "../../domain/channelLabels";
 import { NativeAttempt } from "./NativeAttempt";
 import { FullscreenBars } from "./FullscreenBars";
@@ -65,14 +66,9 @@ export function ChannelSession(props: SessionProps) {
     setControlsShown,
     controlsVisible,
     waiting,
-    primaryLabel,
-    primaryAction,
     title,
     osd,
     zap,
-    description,
-    primaryIcon,
-    primaryDisabled,
     centerStatus,
     retained,
     sourceButton,
@@ -82,7 +78,7 @@ export function ChannelSession(props: SessionProps) {
     <View
       style={
         props.mini
-          ? sessionStyles.miniBar
+          ? sessionStyles.miniWindow
           : props.fullscreen
             ? sessionStyles.flex
             : undefined
@@ -98,7 +94,7 @@ export function ChannelSession(props: SessionProps) {
           sessionStyles.videoStage,
           !props.fullscreen && !props.mini && { height: portraitStageHeight },
           props.fullscreen && sessionStyles.fullscreenVideo,
-          props.mini && sessionStyles.miniVideo,
+          props.mini && props.miniSize,
         ]}
       >
         {props.remoteAllowed && state.attemptId !== null && (
@@ -123,7 +119,11 @@ export function ChannelSession(props: SessionProps) {
         )}
         {props.audioOnly && (
           <View
-            style={[StyleSheet.absoluteFill, sessionStyles.audioStage]}
+            style={[
+              StyleSheet.absoluteFill,
+              sessionStyles.audioStage,
+              props.mini && sessionStyles.miniAudioStage,
+            ]}
             pointerEvents="none"
             testID="audio-stage"
           >
@@ -233,6 +233,11 @@ export function ChannelSession(props: SessionProps) {
               {centerStatus}
             </View>
           )}
+        {props.mini && view.starting && (
+          <View style={sessionStyles.videoNotice} pointerEvents="none">
+            <ActivityIndicator color={colors.accent} />
+          </View>
+        )}
         {props.mini && (
           <Pressable
             style={StyleSheet.absoluteFill}
@@ -279,44 +284,6 @@ export function ChannelSession(props: SessionProps) {
           </>
         )}
       </View>
-      {props.mini && (
-        <>
-          <Pressable
-            style={sessionStyles.miniText}
-            accessibilityRole="button"
-            accessibilityLabel={`展开播放器，${title}`}
-            onPress={props.onExpand}
-          >
-            <Text style={sessionStyles.miniTitle} numberOfLines={1}>
-              {title}
-            </Text>
-            <Text style={sessionStyles.miniSubtitle} numberOfLines={1}>
-              {state.phase === "playing"
-                ? `${props.audioOnly ? "听音频" : qualityName(props.channel)} · ${props.channel.sourceName}`
-                : description.title}
-            </Text>
-          </Pressable>
-          <OverlayButton
-            label={primaryIcon}
-            accessibilityLabel={primaryLabel}
-            variant="quiet"
-            disabled={primaryDisabled}
-            onPress={primaryAction}
-          />
-          {view.muteButton}
-          <OverlayButton
-            label={props.audioOnly ? "看视频" : "听音频"}
-            selected={props.audioOnly}
-            onPress={props.onToggleAudioOnly}
-          />
-          <OverlayButton
-            label="✕"
-            accessibilityLabel="停止播放"
-            variant="quiet"
-            onPress={props.onClose}
-          />
-        </>
-      )}
       {!props.fullscreen && !props.mini && (
         <View style={sessionStyles.portraitInfo} testID="portrait-info">
           {/* Title on its own line: room for longer names and extra text. */}

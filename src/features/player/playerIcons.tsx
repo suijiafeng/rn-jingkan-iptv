@@ -199,12 +199,16 @@ export function ExitFullscreenIcon({
   return <CornerBrackets size={size} color={color} inward />;
 }
 
-/** Close a panel: two crossed bars. */
-export function CloseIcon({ size = 20, color = colors.text }: IconProps) {
+/** Close a panel: two crossed bars; `weight` thins them for small marks. */
+export function CloseIcon({
+  size = 20,
+  color = colors.text,
+  weight = 2.5,
+}: IconProps & { weight?: number }) {
   const bar = {
     position: "absolute" as const,
     width: size * 0.7,
-    height: 2.5,
+    height: weight,
     borderRadius: 2,
     backgroundColor: color,
   };

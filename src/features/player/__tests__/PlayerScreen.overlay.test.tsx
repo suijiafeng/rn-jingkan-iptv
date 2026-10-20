@@ -33,8 +33,9 @@ describe("one overlay instead of native controls", () => {
     await fireEvent.press(ui.getByRole("button", { name: "取消静音" }));
     expect(mockNative.muted).toBe(false);
     await ui.rerender(<PlayerScreen {...next} mini />);
-    await fireEvent.press(ui.getByRole("button", { name: "静音" }));
-    expect(mockNative.muted).toBe(true);
+    // Docked, the window holds only the picture: mute keeps its setting.
+    expect(ui.queryByRole("button", { name: "静音" })).toBeNull();
+    expect(mockNative.muted).toBe(false);
     expect(mockMounts).toHaveBeenCalledTimes(2);
   });
   const start = async () => {
@@ -285,18 +286,13 @@ describe("docked bar", () => {
     expect(mockUnmounts).not.toHaveBeenCalled();
     expect(ui.queryByTestId("player-channel-list")).toBeNull();
     expect(ui.queryByTestId("video-tap-layer")).toBeNull();
-    expect(
-      ui.getAllByRole("button", { name: "展开播放器，山野纪实" }),
-    ).toHaveLength(2);
     await fireEvent.press(
-      ui.getAllByRole("button", { name: "展开播放器，山野纪实" })[1],
+      ui.getByRole("button", { name: "展开播放器，山野纪实" }),
     );
     expect(options.onExpand).toHaveBeenCalledTimes(1);
-    // While docked the bar stops on back; stop is also one tap away.
+    // While docked the window stops on back (its ✕ belongs to the owner).
     await press();
     expect(options.onClose).toHaveBeenCalledTimes(1);
-    await fireEvent.press(ui.getByRole("button", { name: "停止播放" }));
-    expect(options.onClose).toHaveBeenCalledTimes(2);
     await ui.rerender(<PlayerScreen {...options} />);
     expect(ui.getByTestId("player-channel-list")).toBeTruthy();
     expect(mockMounts).toHaveBeenCalledTimes(1);
@@ -304,18 +300,19 @@ describe("docked bar", () => {
     spy.mockRestore();
   });
 
-  test("the bar's play/pause drives the same controller", async () => {
-    const options = props({ mini: true });
+  test("docked, the session shows only the picture and its expand key", async () => {
+    const options = props({ mini: true, onExpand: jest.fn() });
     const ui = await render(<PlayerScreen {...options} />);
+    const keys = () =>
+      ui.getAllByRole("button").map((key) => key.props.accessibilityLabel);
+    expect(keys()).toEqual(["展开播放器，山野纪实"]);
     await start();
-    await fireEvent.press(ui.getByRole("button", { name: "暂停" }));
-    expect(mockNative.pause).toHaveBeenCalledTimes(1);
+    expect(keys()).toEqual(["展开播放器，山野纪实"]);
+    await fireEvent.press(
+      ui.getByRole("button", { name: "展开播放器，山野纪实" }),
+    );
+    expect(options.onExpand).toHaveBeenCalledTimes(1);
     expect(mockUnmounts).not.toHaveBeenCalled();
-    // The docked bar still names the state in its subtitle.
-    expect(ui.getByText("已暂停")).toBeTruthy();
-    await fireEvent.press(ui.getByRole("button", { name: "播放" }));
-    expect(mockNative.play).toHaveBeenCalledTimes(1);
-    expect(mockMounts).toHaveBeenCalledTimes(1);
     await ui.unmount();
   });
 
@@ -392,10 +389,12 @@ test("fullscreen and docked listening switches retain the native attempt", async
   expect(ui.queryByTestId("fullscreen-bottom-controls")).toBeNull();
   expect(mockMounts).toHaveBeenCalledTimes(1);
   await ui.rerender(<PlayerScreen {...initial} mini />);
+  // Docked keeps listening; switching back happens in the full player.
+  expect(ui.getByTestId("audio-stage")).toBeTruthy();
+  expect(ui.queryByRole("button", { name: "看视频" })).toBeNull();
+  await ui.rerender(<PlayerScreen {...initial} />);
   await fireEvent.press(ui.getByRole("button", { name: "看视频" }));
   expect(ui.queryByTestId("audio-stage")).toBeNull();
-  await fireEvent.press(ui.getByRole("button", { name: "听音频" }));
-  expect(ui.getByTestId("audio-stage")).toBeTruthy();
   expect(mockMounts).toHaveBeenCalledTimes(1);
   await ui.unmount();
 });

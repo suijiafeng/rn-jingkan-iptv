@@ -288,11 +288,8 @@ export function PlayerScreen(props: PlayerScreenProps) {
 
 const screenStyles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  miniScreen: {
-    borderRadius: 14,
-    overflow: "hidden",
-    backgroundColor: colors.raised,
-  },
+  // The docked window draws its own frame; the picture fills it.
+  miniScreen: { flex: 1, backgroundColor: "transparent" },
   flex: { flex: 1 },
   inlineList: { flex: 1, paddingHorizontal: 12, paddingTop: 8, gap: 8 },
   overlay: {

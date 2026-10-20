@@ -29,22 +29,10 @@ export const sessionStyles = StyleSheet.create({
     left: 0,
     width: undefined,
   },
-  miniBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingRight: 6,
-    backgroundColor: colors.raised,
-  },
-  miniText: { flex: 1, minHeight: 64, justifyContent: "center", gap: 2 },
-  miniSubtitle: { color: colors.muted, fontSize: 11, lineHeight: 16 },
-  miniTitle: {
-    color: colors.text,
-    fontSize: 14,
-    lineHeight: 21,
-    fontWeight: "600",
-  },
-  miniVideo: { width: 100, height: 64 },
+  // Docked: the picture fills the owner's floating window, which draws
+  // the frame, close key and resize edges.
+  miniWindow: { flex: 1 },
+  miniAudioStage: { justifyContent: "center", paddingTop: 0 },
   osd: {
     position: "absolute",
     top: 24,

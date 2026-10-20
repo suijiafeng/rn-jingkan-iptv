@@ -235,7 +235,14 @@ test("the docked player bar leaves the page usable and yields the back key to di
     expect(screen.getByTestId("channel-list")).toBeTruthy();
     expect(
       StyleSheet.flatten(screen.getByTestId("player-container").props.style),
-    ).toMatchObject({ left: 8, right: 8 });
+    ).toMatchObject({ right: 12, width: 176, height: 99 });
+    // Docked: the window carries its own close key and resize edges.
+    expect(
+      screen.getByTestId("floating-resize-top", {
+        includeHiddenElements: true,
+      }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "停止播放" })).toBeTruthy();
     // Docked: the page's own dialog takes the key first…
     await fireEvent.press(screen.getByRole("tab", { name: "设置" }));
     await fireEvent.press(screen.getByText("管理节目来源"));
@@ -251,6 +258,12 @@ test("the docked player bar leaves the page usable and yields the back key to di
     await fireEvent.press(await screen.findByLabelText("CCTV-1，播放"));
     await waitFor(() =>
       expect(mockPlayerProps.mock.calls.at(-1)![0].mini).toBe(false),
+    );
+    // Docked again, the window's ✕ stops playback and the window goes.
+    await act(() => mockPlayerProps.mock.calls.at(-1)![0].onMinimize());
+    await fireEvent.press(screen.getByRole("button", { name: "停止播放" }));
+    await waitFor(() =>
+      expect(screen.queryByTestId("player-container")).toBeNull(),
     );
   } finally {
     listener.mockRestore();

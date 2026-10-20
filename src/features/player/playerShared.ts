@@ -47,11 +47,17 @@ export interface PlayerScreenProps {
   error?: string;
   onDismissError?: () => void;
   /**
-   * Docked as a small bar over the channel page while playback continues
-   * (background behavior follows the playback setting). The owner switches the
-   * container's size; the session, its player and the stream stay mounted.
+   * Docked as a small floating window over the channel page while playback
+   * continues (background behavior follows the playback setting). The owner
+   * switches the container's size; the session, its player and the stream
+   * stay mounted.
    */
   mini?: boolean;
+  /**
+   * The docked picture's size in dp. The native video view lays itself out
+   * only from numeric sizes: under flex alone it kept a stale frame.
+   */
+  miniSize?: { width: number; height: number };
   /** Portrait back (key and arrow): shrink to the bar instead of stopping. */
   onMinimize?: () => void;
   onExpand?: () => void;
