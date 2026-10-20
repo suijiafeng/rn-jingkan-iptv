@@ -176,7 +176,9 @@ export function MobileDataPrompt({
         >
           {stopReminding && <View style={statusStyles.checkMark} />}
         </View>
-        <Text style={statusStyles.checkText}>不再提醒</Text>
+        <Text style={statusStyles.checkText}>
+          不再提醒（可在设置里重新打开）
+        </Text>
       </Pressable>
     </View>
   );
