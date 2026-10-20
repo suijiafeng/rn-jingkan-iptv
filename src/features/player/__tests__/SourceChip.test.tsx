@@ -2,23 +2,25 @@ import React from "react";
 import { render, screen } from "@testing-library/react-native";
 import { SourceChip } from "../overlayWidgets";
 
-const chip = (quality: string | null, count: number) => (
+const chip = (position: number, count: number) => (
   <SourceChip
-    quality={quality}
-    position={1}
+    position={position}
     count={count}
     accessibilityLabel="来源"
     onPress={() => {}}
   />
 );
 
-test("the source chip says only what is known", async () => {
-  const ui = await render(chip("1080p", 2));
-  expect(screen.getByText(/1080p/)).toBeTruthy();
-  expect(screen.getByText(/· 1\/2/)).toBeTruthy();
-  await ui.rerender(chip(null, 2));
-  expect(screen.queryByText(/未知清晰度/)).toBeNull();
-  expect(screen.getByText("1/2")).toBeTruthy();
-  await ui.rerender(chip(null, 1));
+test("the source chip shows only which address of how many", async () => {
+  const ui = await render(chip(2, 3));
+  expect(screen.getByText("视频来源：2/3")).toBeTruthy();
+  expect(screen.queryByText(/1080p|未知清晰度/)).toBeNull();
+  // A single source still shows, and opens the list with its address.
+  await ui.rerender(chip(1, 1));
+  expect(screen.getByText("视频来源：1/1")).toBeTruthy();
+  expect(screen.getByRole("button").props.accessibilityState.disabled).toBe(
+    false,
+  );
+  await ui.rerender(chip(1, 0));
   expect(screen.queryByRole("button")).toBeNull();
 });

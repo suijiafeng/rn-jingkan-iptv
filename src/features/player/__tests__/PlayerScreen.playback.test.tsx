@@ -64,7 +64,7 @@ test("the video is edge-to-edge and alternative sources can be selected", async 
   // Portrait: the source chip opens a bottom sheet; choosing closes it.
   await fireEvent.press(
     ui.getByRole("button", {
-      name: "来源：标清 · 我的节目单，共 2 个，点击切换",
+      name: "视频来源：标清 · 我的节目单，共 2 个，点击切换",
     }),
   );
   expect(ui.getByTestId("source-sheet")).toBeTruthy();
@@ -158,7 +158,7 @@ test("fullscreen media stays edge-to-edge while controls and sheets respect disp
 
   await fireEvent.press(
     ui.getByRole("button", {
-      name: "来源：未知清晰度 · 我的节目单，共 2 个，点击切换",
+      name: "视频来源：未知清晰度 · 我的节目单，共 2 个，点击切换",
     }),
   );
   expect(

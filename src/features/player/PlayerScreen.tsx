@@ -238,13 +238,13 @@ export function PlayerScreen(props: PlayerScreenProps) {
             <View style={screenStyles.sheetHeading}>
               <View style={screenStyles.flex}>
                 <Text accessibilityRole="header" style={theme.heading}>
-                  播放来源
+                  视频来源
                 </Text>
               </View>
               <Pressable
                 style={screenStyles.sheetAction}
                 accessibilityRole="button"
-                accessibilityLabel="关闭播放来源"
+                accessibilityLabel="关闭视频来源"
                 onPress={() => setSourcesOpen(false)}
               >
                 <CloseIcon />

@@ -64,7 +64,7 @@ describe("one overlay instead of native controls", () => {
     expect(bottom.getByLabelText("直播，不可回看")).toBeTruthy();
     expect(
       top.getByRole("button", {
-        name: "来源：未知清晰度 · 我的节目单，共 2 个，点击切换",
+        name: "视频来源：未知清晰度 · 我的节目单，共 2 个，点击切换",
       }),
     ).toBeTruthy();
     expect(bottom.getByRole("button", { name: "频道列表" })).toBeTruthy();
@@ -190,8 +190,8 @@ describe("portrait layout", () => {
     expect(info.getByText("纪录片")).toBeTruthy();
     expect(info.queryByText(/我的节目单/)).toBeNull();
     expect(ui.queryByRole("button", { name: /上一台|下一台/ })).toBeNull();
-    // One source with no declared quality: the chip would say nothing.
-    expect(ui.queryByRole("button", { name: /^来源：/ })).toBeNull();
+    // One source: the chip still shows 1/1 and opens the address list.
+    expect(ui.getByText("视频来源：1/1")).toBeTruthy();
     // Without a bar to dock into, the arrow closes the player.
     await fireEvent.press(ui.getByRole("button", { name: "关闭播放器" }));
     expect(options.onClose).toHaveBeenCalledTimes(1);
@@ -213,7 +213,7 @@ describe("portrait layout", () => {
     const ui = await render(<PlayerScreen {...options} />);
     await fireEvent.press(
       ui.getByRole("button", {
-        name: "来源：未知清晰度 · 我的节目单，共 2 个，点击切换",
+        name: "视频来源：未知清晰度 · 我的节目单，共 2 个，点击切换",
       }),
     );
     expect(ui.getByTestId("source-sheet")).toBeTruthy();
@@ -235,11 +235,11 @@ describe("portrait layout", () => {
     const ui = await render(<PlayerScreen {...options} />);
     await fireEvent.press(
       ui.getByRole("button", {
-        name: "来源：未知清晰度 · 我的节目单，共 2 个，点击切换",
+        name: "视频来源：未知清晰度 · 我的节目单，共 2 个，点击切换",
       }),
     );
     expect(ui.queryByText("关闭")).toBeNull();
-    await fireEvent.press(ui.getByRole("button", { name: "关闭播放来源" }));
+    await fireEvent.press(ui.getByRole("button", { name: "关闭视频来源" }));
     expect(ui.queryByTestId("source-sheet")).toBeNull();
     expect(options.onClose).not.toHaveBeenCalled();
     await ui.unmount();

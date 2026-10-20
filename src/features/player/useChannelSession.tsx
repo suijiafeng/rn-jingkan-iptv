@@ -337,11 +337,11 @@ export function useChannelSession(props: SessionProps) {
   ) : state.phase === "blocked" ? null : (
     playPauseButton
   );
-  // Quality and source of the address that is actually playing; the chip opens
-  // the alternatives (a popover in fullscreen, a bottom sheet in portrait).
+  // Which of the channel's addresses is playing (2/3); the chip opens the
+  // list with each address (a popover in fullscreen, a sheet in portrait),
+  // so even a single source opens it. TalkBack also hears quality and name.
   const sourceButton = (
     <SourceChip
-      quality={props.channel.qualityLabel ?? null}
       position={
         Math.max(
           props.sources.findIndex((source) => source.id === props.channel.id),
@@ -351,11 +351,10 @@ export function useChannelSession(props: SessionProps) {
       count={props.sources.length}
       accessibilityLabel={
         props.sources.length > 1
-          ? `来源：${qualityName(props.channel)} · ${props.channel.sourceName}，共 ${props.sources.length} 个，点击切换`
-          : `来源：${qualityName(props.channel)} · ${props.channel.sourceName}`
+          ? `视频来源：${qualityName(props.channel)} · ${props.channel.sourceName}，共 ${props.sources.length} 个，点击切换`
+          : `视频来源：${qualityName(props.channel)} · ${props.channel.sourceName}，点击查看地址`
       }
       solid={!props.fullscreen}
-      disabled={props.sources.length < 2}
       onPress={() => setSourcesOpen(!sourcesOpen)}
     />
   );

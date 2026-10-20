@@ -163,7 +163,7 @@ describe("automatic source failover", () => {
     await settle();
     await fireEvent.press(
       ui.getByRole("button", {
-        name: "来源：标清 · 我的节目单，共 3 个，点击切换",
+        name: "视频来源：标清 · 我的节目单，共 3 个，点击切换",
       }),
     );
     await fireEvent.press(
