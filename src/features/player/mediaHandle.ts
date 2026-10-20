@@ -13,6 +13,8 @@ export interface MediaInfo {
   isLive: boolean;
   /** Only catch-up live windows and finite on-demand media can be scrubbed. */
   seekable: boolean;
+  /** Shown in the system's small window: the overlay stays out of it. */
+  pictureInPicture: boolean;
 }
 export interface MediaTimeline {
   /** Seconds since the start of the seekable window (or the file). */
@@ -26,7 +28,11 @@ export function seekableMedia(isLive: boolean, duration: number): boolean {
   return isLive ? duration >= CATCHUP_MIN_WINDOW_S : true;
 }
 
-const NO_INFO: MediaInfo = { isLive: false, seekable: false };
+const NO_INFO: MediaInfo = {
+  isLive: false,
+  seekable: false,
+  pictureInPicture: false,
+};
 
 /**
  * The UI's narrow handle on the current attempt's native player: play/pause
@@ -68,6 +74,11 @@ export class MediaHandle {
     this.enterPictureInPicture = null;
     this.publish(NO_INFO, null);
   }
+  /** The attached player entered or left the system's small window. */
+  setPictureInPicture(player: VideoPlayer, active: boolean) {
+    if (this.player !== player) return;
+    this.publish({ ...this.info, pictureInPicture: active }, this.timeline);
+  }
   /** Samples the attached player; native reads may throw after release. */
   sample(player: VideoPlayer) {
     if (this.player !== player) return;
@@ -76,7 +87,7 @@ export class MediaHandle {
       const isLive = player.isLive;
       const seekable = seekableMedia(isLive, duration);
       this.publish(
-        { isLive, seekable },
+        { isLive, seekable, pictureInPicture: this.info.pictureInPicture },
         seekable
           ? {
               duration,
@@ -91,7 +102,8 @@ export class MediaHandle {
   private publish(info: MediaInfo, timeline: MediaTimeline | null) {
     if (
       info.isLive !== this.info.isLive ||
-      info.seekable !== this.info.seekable
+      info.seekable !== this.info.seekable ||
+      info.pictureInPicture !== this.info.pictureInPicture
     ) {
       this.info = info;
       this.infoListeners.forEach((listener) => listener());

@@ -133,6 +133,7 @@ export function NativeAttempt({
         exitTimer = undefined;
         if (!live) return;
         pipActive.current = false;
+        media?.setPictureInPicture(ownedPlayer, false);
         ownedPlayer.staysActiveInBackground = backgroundPolicy.current;
         ownedPlayer.showNowPlayingNotification = backgroundPolicy.current;
         controller.setPictureInPicture(attemptId, false);
@@ -312,6 +313,7 @@ export function NativeAttempt({
         pipActive.current = true;
         pendingPip.current?.resolve();
         controller.setPictureInPicture(attemptId, true);
+        media?.setPictureInPicture(player, true);
       }}
       onPictureInPictureStop={() => {
         if (currentInstance.current && player === currentInstance.current) {

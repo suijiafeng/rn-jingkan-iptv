@@ -158,12 +158,14 @@ export function useChannelSession(props: SessionProps) {
   // Loading keeps the picture clear for zapping; states that need a decision
   // (error, timeout, paused, cellular...) always bring the controls back.
   const loading = ["checking", "connecting", "buffering"].includes(state.phase);
+  // The system's small window has its own controls; ours would cover it.
   const controlsVisible =
-    props.audioOnly ||
-    controlsShown ||
-    props.sheetOpen ||
-    screenReader ||
-    (state.phase !== "playing" && !loading);
+    !mediaInfo.pictureInPicture &&
+    (props.audioOnly ||
+      controlsShown ||
+      props.sheetOpen ||
+      screenReader ||
+      (state.phase !== "playing" && !loading));
 
   const busy = ["checking", "connecting", "playing", "buffering"].includes(
     state.phase,

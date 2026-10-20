@@ -318,6 +318,27 @@ test("constructs empty, leaves controls to the app overlay, and loads one HLS at
   controller.dispose();
 });
 
+test("the media handle says while the picture is in the system's window", async () => {
+  const { controller, id } = await readyController();
+  const media = new MediaHandle();
+  const ui = await render(
+    <NativeAttempt
+      uri="https://example.test/live.m3u8"
+      attemptId={id}
+      controller={controller}
+      media={media}
+    />,
+  );
+  await act(() => mockPlayers[0].handlers.playingChange({ isPlaying: true }));
+  expect(media.getInfo().pictureInPicture).toBe(false);
+  const view = ui.getByTestId("native-video-view");
+  await act(() => view.props.onPictureInPictureStart());
+  expect(media.getInfo().pictureInPicture).toBe(true);
+  await act(() => view.props.onPictureInPictureStop());
+  expect(media.getInfo().pictureInPicture).toBe(false);
+  await ui.unmount();
+});
+
 test("a stall that reports not-playing before loading is not an interruption", async () => {
   jest.useFakeTimers();
   const { controller, id } = await readyController();
@@ -372,18 +393,30 @@ test("the media handle samples only catch-up windows and detaches at teardown", 
   expect(native.timeUpdateEventInterval).toBe(1);
   Object.assign(native, { isLive: true, duration: 30, currentTime: 25 });
   await act(() => native.handlers.timeUpdate({}));
-  expect(media.getInfo()).toEqual({ isLive: true, seekable: false });
+  expect(media.getInfo()).toEqual({
+    isLive: true,
+    seekable: false,
+    pictureInPicture: false,
+  });
   expect(media.getTimeline()).toBeNull();
   Object.assign(native, { duration: 3600, currentTime: 1800 });
   await act(() => native.handlers.timeUpdate({}));
-  expect(media.getInfo()).toEqual({ isLive: true, seekable: true });
+  expect(media.getInfo()).toEqual({
+    isLive: true,
+    seekable: true,
+    pictureInPicture: false,
+  });
   expect(media.getTimeline()).toEqual({ position: 1800, duration: 3600 });
   expect(media.goLive()).toBe(true);
   expect(native.currentTime).toBe(3590);
   expect(media.pause()).toBe(true);
   expect(native.pause).toHaveBeenCalledTimes(1);
   await ui.unmount();
-  expect(media.getInfo()).toEqual({ isLive: false, seekable: false });
+  expect(media.getInfo()).toEqual({
+    isLive: false,
+    seekable: false,
+    pictureInPicture: false,
+  });
   expect(media.play()).toBe(false);
   controller.dispose();
 });
