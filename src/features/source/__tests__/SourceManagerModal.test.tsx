@@ -140,7 +140,7 @@ test("a card keeps two everyday actions in view and folds the rest", async () =>
   // Only something to act on earns a third line.
   expect(screen.getByText("上次刷新未完成，旧频道已保留")).toBeTruthy();
   await fireEvent.press(
-    screen.getByRole("button", { name: "重新解析 / 更换文件" }),
+    screen.getByRole("button", { name: "更新节目单 / 更换文件" }),
   );
   expect(screen.queryByRole("button", { name: "改名" })).toBeNull();
   await fireEvent.press(screen.getByRole("button", { name: "更多操作" }));
@@ -263,7 +263,7 @@ test("a stored check result shows only the unreachable count", async () => {
   expect(
     screen.getByText(/500 个频道（518 个地址） · 10 个地址暂时无法连接/),
   ).toBeTruthy();
-  expect(screen.getByRole("button", { name: "重新检测" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "重新测试连通" })).toBeTruthy();
 });
 
 test("update times read as days, not timestamps", () => {

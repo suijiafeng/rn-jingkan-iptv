@@ -339,10 +339,10 @@ test("the header carries no explanatory copy: scope on the chip, progress as a b
       autoCheck={{ done: 1, total: 4 }}
     />,
   );
-  expect(screen.queryByText(/份节目单|范围：|检测可用性/)).toBeNull();
+  expect(screen.queryByText(/份节目单|范围：|测试连通/)).toBeNull();
   expect(screen.getByText("另一个来源")).toBeTruthy();
   expect(
-    screen.getByRole("progressbar", { name: "正在检测可用性" }).props
+    screen.getByRole("progressbar", { name: "正在测试连通" }).props
       .accessibilityValue,
   ).toEqual({ min: 0, max: 4, now: 1 });
   await fireEvent.press(screen.getByRole("button", { name: "清除来源筛选" }));

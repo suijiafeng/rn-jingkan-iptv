@@ -182,7 +182,7 @@ test("database failures are visible and never fall back to duplicate network pro
   await renderHook(() => useAutoAvailabilityCheck(opts));
   await waitFor(() =>
     expect(opts.onError).toHaveBeenCalledWith(
-      "可用性检测未完成，可在来源管理中重试",
+      "连通测试未完成，可在来源管理中重试",
     ),
   );
   expect(mockCheck).not.toHaveBeenCalled();

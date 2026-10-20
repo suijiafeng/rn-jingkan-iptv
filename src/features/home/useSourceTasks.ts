@@ -195,7 +195,7 @@ export function useSourceTasks({
             ? failure.message
             : failure instanceof ImportIOError
               ? failure.message
-              : "检测未完成，可重新检测",
+              : "测试未完成，可重新测试",
         );
     } finally {
       if (checkController.current === abort) {

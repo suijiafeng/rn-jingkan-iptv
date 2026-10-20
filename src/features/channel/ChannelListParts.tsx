@@ -277,7 +277,7 @@ export function ChannelFilterBar(
         <View
           accessible
           accessibilityRole="progressbar"
-          accessibilityLabel="正在检测可用性"
+          accessibilityLabel="正在测试连通"
           accessibilityValue={{
             min: 0,
             max: props.autoCheck.total,

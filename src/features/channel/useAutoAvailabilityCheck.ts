@@ -110,7 +110,7 @@ export function useAutoAvailabilityCheck(options: AutoCheckOptions) {
     run()
       .catch(() => {
         if (!abortController.signal.aborted)
-          latest.current.onError("可用性检测未完成，可在来源管理中重试");
+          latest.current.onError("连通测试未完成，可在来源管理中重试");
       })
       .finally(() => {
         if (controller.current === abortController) {

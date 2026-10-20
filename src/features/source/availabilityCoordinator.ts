@@ -13,7 +13,7 @@ export type CheckStore = Pick<
 >;
 export class AvailabilitySaveError extends Error {
   constructor() {
-    super("检测结果未保存，可重新检测");
+    super("测试结果未保存，可重新测试");
   }
 }
 interface Options {

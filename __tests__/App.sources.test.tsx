@@ -36,7 +36,7 @@ beforeEach(() => {
 
 test("availability check never sends requests without network consent", async () => {
   await openSourceManager();
-  await fireEvent.press(screen.getByRole("button", { name: "检测可用性" }));
+  await fireEvent.press(screen.getByRole("button", { name: "测试连通" }));
   await fireEvent.press(await screen.findByRole("button", { name: "不用了" }));
   expect(checkChannels).not.toHaveBeenCalled();
   expect(repo.saveCheckResults).not.toHaveBeenCalled();
@@ -66,17 +66,17 @@ test("availability check shows progress, can be stopped, and saves finished resu
       }),
   );
   await openSourceManager();
-  await fireEvent.press(screen.getByRole("button", { name: "检测可用性" }));
+  await fireEvent.press(screen.getByRole("button", { name: "测试连通" }));
   await waitFor(() =>
-    expect(screen.getByText("正在检测可用性 1/2")).toBeTruthy(),
+    expect(screen.getByText("正在测试连通 1/2")).toBeTruthy(),
   );
-  await fireEvent.press(screen.getByText("停止检测"));
+  await fireEvent.press(screen.getByText("停止测试"));
   await waitFor(() =>
     expect(repo.saveCheckResults).toHaveBeenCalledWith([
       { channelId: "a", streamUrl: "https://a.example.com/a", ok: true },
     ]),
   );
-  await waitFor(() => expect(screen.getByText(/检测已停止/)).toBeTruthy());
+  await waitFor(() => expect(screen.getByText(/测试已停止/)).toBeTruthy());
 });
 
 test.each(["revocation", "background", "stop", "unmount"])(
@@ -113,7 +113,7 @@ test.each(["revocation", "background", "stop", "unmount"])(
       { id: "a", streamUrl: "https://a.example.com/live" },
     ]);
     try {
-      await fireEvent.press(screen.getByRole("button", { name: "检测可用性" }));
+      await fireEvent.press(screen.getByRole("button", { name: "测试连通" }));
       await waitFor(() =>
         expect(Network.getNetworkStateAsync).toHaveBeenCalledTimes(1),
       );
@@ -131,7 +131,7 @@ test.each(["revocation", "background", "stop", "unmount"])(
           listeners.forEach((listener) => listener("active"));
         });
       } else if (action === "stop") {
-        await fireEvent.press(screen.getByText("停止检测"));
+        await fireEvent.press(screen.getByText("停止测试"));
       } else {
         await ui.unmount();
       }
@@ -162,17 +162,17 @@ test("a stopped preflight cannot clear a replacement sweep", async () => {
       }),
   );
   await openSourceManager();
-  await fireEvent.press(screen.getByRole("button", { name: "检测可用性" }));
+  await fireEvent.press(screen.getByRole("button", { name: "测试连通" }));
   await waitFor(() =>
     expect(Network.getNetworkStateAsync).toHaveBeenCalledTimes(1),
   );
-  await fireEvent.press(screen.getByText("停止检测"));
-  await fireEvent.press(screen.getByRole("button", { name: "检测可用性" }));
+  await fireEvent.press(screen.getByText("停止测试"));
+  await fireEvent.press(screen.getByRole("button", { name: "测试连通" }));
   await waitFor(() => expect(checkChannels).toHaveBeenCalledTimes(1));
   await act(async () => finishPreflight({ type: "WIFI", isConnected: true }));
-  expect(screen.getByText("停止检测")).toBeTruthy();
+  expect(screen.getByText("停止测试")).toBeTruthy();
   expect(checkChannels).toHaveBeenCalledTimes(1);
-  await fireEvent.press(screen.getByText("停止检测"));
+  await fireEvent.press(screen.getByText("停止测试"));
 });
 
 test("rapid check callbacks share a single preflight and sweep", async () => {
@@ -206,7 +206,7 @@ test("source-manager network failures are visible without closing the modal", as
     isConnected: false,
   });
   await openSourceManager();
-  await fireEvent.press(screen.getByRole("button", { name: "检测可用性" }));
+  await fireEvent.press(screen.getByRole("button", { name: "测试连通" }));
   await waitFor(() =>
     expect(screen.getByText("当前没有可用网络，请连接后重试")).toBeTruthy(),
   );
@@ -329,11 +329,11 @@ test("failed saving of finished results after a manual stop remains visible", as
       }),
   );
   await openSourceManager();
-  await fireEvent.press(screen.getByRole("button", { name: "检测可用性" }));
+  await fireEvent.press(screen.getByRole("button", { name: "测试连通" }));
   await waitFor(() => expect(checkChannels).toHaveBeenCalledTimes(1));
-  await fireEvent.press(screen.getByText("停止检测"));
+  await fireEvent.press(screen.getByText("停止测试"));
   await waitFor(() =>
-    expect(screen.getByText("检测结果未保存，可重新检测")).toBeTruthy(),
+    expect(screen.getByText("测试结果未保存，可重新测试")).toBeTruthy(),
   );
   expect(screen.getByRole("header", { name: "节目来源" })).toBeTruthy();
 });

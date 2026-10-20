@@ -150,7 +150,7 @@ test("save failures are reported and release the queue for a later explicit retr
     new Error("disk full"),
   );
   await expect(checkAvailability(db, [alpha], options())).rejects.toThrow(
-    "检测结果未保存，可重新检测",
+    "测试结果未保存，可重新测试",
   );
   await expect(checkAvailability(db, [beta], options())).resolves.toMatchObject(
     {

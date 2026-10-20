@@ -128,7 +128,7 @@ export function useChannelActions({
       list.setChannels((items) => items.map(patch));
       list.setRecent((items) => items.map(patch));
     } catch {
-      if (mounted.current) setError("检测结果未保存，频道不受影响");
+      if (mounted.current) setError("测试结果未保存，频道不受影响");
     }
   };
 
