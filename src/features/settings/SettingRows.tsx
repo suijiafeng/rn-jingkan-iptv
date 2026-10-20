@@ -106,19 +106,27 @@ export function RowAction({
   label,
   onPress,
   danger = false,
+  disabled = false,
   accessibilityLabel,
 }: {
   label: string;
   onPress: () => void;
   danger?: boolean;
+  disabled?: boolean;
   accessibilityLabel?: string;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [rowStyles.action, pressed && rowStyles.pressed]}
+      style={({ pressed }) => [
+        rowStyles.action,
+        disabled && rowStyles.dimmed,
+        pressed && rowStyles.pressed,
+      ]}
     >
       <Text style={[rowStyles.actionText, danger && rowStyles.dangerTitle]}>
         {label}

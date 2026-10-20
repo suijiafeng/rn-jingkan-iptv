@@ -1,14 +1,14 @@
 import React, { useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { StorageAccessFramework, deleteAsync } from "expo-file-system/legacy";
 import type { Repository } from "../../data/repository";
 import { BackupError, MAX_BACKUP_BYTES, parseBackup } from "../../data/backup";
-import { Button } from "../../components/ui";
-import { styles } from "../../theme";
 import { confirm } from "../common/confirm";
+import { RowAction, SettingRow } from "./SettingRows";
 
+/** One settings row: 备份 with 导出 and 恢复 at its end, the outcome below. */
 export function BackupControls({
   repo,
   onRestore,
@@ -102,24 +102,29 @@ export function BackupControls({
       }
     });
   return (
-    <View style={{ padding: 16, gap: 10 }}>
-      <Button
-        label={busy ? "正在处理备份…" : "导出备份"}
-        disabled={busy}
-        secondary
-        onPress={() => void exportFile()}
-      />
-      <Button
-        label="从备份恢复"
-        disabled={busy}
-        secondary
-        onPress={() => void restoreFile()}
-      />
-      {!!message && (
-        <Text accessibilityLiveRegion="polite" style={styles.caption}>
-          {message}
-        </Text>
-      )}
-    </View>
+    <SettingRow
+      title="备份"
+      caption={busy ? "正在处理备份…" : message || undefined}
+      trailing={
+        <View style={backupStyles.actions}>
+          <RowAction
+            label="导出"
+            accessibilityLabel="导出备份"
+            disabled={busy}
+            onPress={() => void exportFile()}
+          />
+          <RowAction
+            label="恢复"
+            accessibilityLabel="从备份恢复"
+            disabled={busy}
+            onPress={() => void restoreFile()}
+          />
+        </View>
+      }
+    />
   );
 }
+
+const backupStyles = StyleSheet.create({
+  actions: { flexDirection: "row", gap: 8 },
+});
