@@ -17,6 +17,7 @@ const repo = {
   beginRefresh: jest.fn(),
   cancelRefresh: jest.fn(),
   getSourceContent: jest.fn(),
+  importSource: jest.fn(),
 };
 const source = {
   id: "s1",
@@ -27,6 +28,7 @@ const source = {
 
 async function mount() {
   const onReturnToManagement = jest.fn(),
+    onFillLanguages = jest.fn(),
     setError = jest.fn();
   const hook = await renderHook(() =>
     useSourceImport({
@@ -40,9 +42,10 @@ async function mount() {
       changed: jest.fn(),
       onImported: jest.fn(),
       onReturnToManagement,
+      onFillLanguages,
     }),
   );
-  return { ...hook, onReturnToManagement, setError };
+  return { ...hook, onReturnToManagement, onFillLanguages, setError };
 }
 
 const pick = (name: string) =>
@@ -117,4 +120,45 @@ test("a refresh that cannot start from management shows its error there", async 
     "该来源正在刷新或已删除，请稍后重试",
   );
   expect(onReturnToManagement).toHaveBeenCalledTimes(1);
+});
+
+describe("languages after saving", () => {
+  const fileImport = async (tvgId: string | null, fillLanguages: boolean) => {
+    const mounted = await mount();
+    repo.importSource.mockResolvedValueOnce({ id: "new" });
+    await act(async () => {
+      mounted.result.current.startForm("file");
+    });
+    pick("list.m3u");
+    (readPickedFile as jest.Mock).mockResolvedValueOnce(
+      `#EXTM3U\n#EXTINF:-1 ${tvgId ? `tvg-id="${tvgId}"` : ""},频道\nhttps://example.com/a.m3u8\n`,
+    );
+    await act(async () => mounted.result.current.chooseFile());
+    await act(async () => mounted.result.current.preview());
+    expect(mounted.result.current.formError).toBe("");
+    expect(mounted.result.current.form?.preview).toBeTruthy();
+    await act(async () => {
+      mounted.result.current.setFillLanguages(fillLanguages);
+    });
+    // The switch must not throw the preview away.
+    expect(mounted.result.current.form?.preview).toBeTruthy();
+    await act(async () => mounted.result.current.save());
+    return mounted;
+  };
+
+  test("an iptv-org list fills its languages once saved", async () => {
+    const { onFillLanguages } = await fileImport("CCTV1.cn@SD", true);
+    expect(onFillLanguages).toHaveBeenCalledWith("new");
+  });
+
+  test("switched off, nothing goes online", async () => {
+    const { onFillLanguages } = await fileImport("CCTV1.cn@SD", false);
+    expect(repo.importSource).toHaveBeenCalled();
+    expect(onFillLanguages).not.toHaveBeenCalled();
+  });
+
+  test("a list without iptv-org ids never asks", async () => {
+    const { onFillLanguages } = await fileImport(null, true);
+    expect(onFillLanguages).not.toHaveBeenCalled();
+  });
 });

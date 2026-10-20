@@ -22,6 +22,8 @@ interface Props {
   busy: boolean;
   error: string;
   onUpdate: (patch: Partial<SourceFormState>) => void;
+  /** The preview's 自动补全语言 switch. */
+  onFillLanguages: (on: boolean) => void;
   onChooseFile: () => void;
   onPreview: () => void;
   onSave: () => void;
@@ -35,6 +37,7 @@ export function SourceFormModal({
   busy,
   error,
   onUpdate,
+  onFillLanguages,
   onChooseFile,
   onPreview,
   onSave,
@@ -61,6 +64,8 @@ export function SourceFormModal({
                 </>
               }
               busy={busy}
+              fillLanguages={form.fillLanguages}
+              onFillLanguages={onFillLanguages}
               onSave={onSave}
               onBack={() => onUpdate({ preview: null })}
             />

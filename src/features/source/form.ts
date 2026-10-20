@@ -12,6 +12,8 @@ export type SourceFormState = {
   content: string;
   preview: ImportPreview | null;
   refresh: RefreshToken | null;
+  /** After saving, fill missing languages from iptv-org (shown in preview). */
+  fillLanguages: boolean;
 };
 
 export const initialForm = (kind: SourceKind = "url"): SourceFormState => ({
@@ -22,4 +24,5 @@ export const initialForm = (kind: SourceKind = "url"): SourceFormState => ({
   content: "",
   preview: null,
   refresh: null,
+  fillLanguages: true,
 });

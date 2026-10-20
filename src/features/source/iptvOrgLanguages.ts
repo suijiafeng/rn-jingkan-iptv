@@ -1,7 +1,8 @@
 import { fetch as expoFetch } from "expo/fetch";
 import { readBoundedStream } from "../../data/importIO";
 import { linkedDeadline } from "../../lib/abort";
-import { normalizeLanguages } from "../../domain/channelFacets";
+import { isIptvOrgId, normalizeLanguages } from "../../domain/channelFacets";
+import type { ParsedChannel } from "../../domain/types";
 
 /** Public iptv-org database; fetched only when the user asks for it. */
 export const IPTV_ORG_FEEDS_URL = "https://iptv-org.github.io/api/feeds.json";
@@ -10,6 +11,13 @@ export const MAX_FEEDS_BYTES = 24 * 1024 * 1024;
 export const FEEDS_TIMEOUT_MS = 120_000;
 
 export class LanguageLookupError extends Error {}
+
+/** An iptv-org formatted channel the playlist left without a language. */
+export function needsLanguageLookup(
+  channel: Pick<ParsedChannel, "tvgId" | "languages">,
+): boolean {
+  return isIptvOrgId(channel.tvgId) && !channel.languages?.length;
+}
 
 /**
  * Picks languages for the wanted tvg-ids out of iptv-org feeds.json.

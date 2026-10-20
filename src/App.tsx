@@ -107,6 +107,16 @@ export default function App() {
     checkNetwork: settings.checkNetwork,
     reconcilePlayingSources: playback.reconcilePlayingSources,
   };
+  const sourceTasks = useSourceTasks({
+    repo,
+    setError,
+    mounted,
+    remoteRef: settings.remoteRef,
+    permissionEpoch: settings.permissionEpoch,
+    guardRemote: settings.guardRemote,
+    checkNetwork: settings.checkNetwork,
+    changed,
+  });
   const importer = useSourceImport({
     repo,
     setError,
@@ -120,16 +130,7 @@ export default function App() {
       filters.reset();
     },
     onReturnToManagement: () => setManage(true),
-  });
-  const sourceTasks = useSourceTasks({
-    repo,
-    setError,
-    mounted,
-    remoteRef: settings.remoteRef,
-    permissionEpoch: settings.permissionEpoch,
-    guardRemote: settings.guardRemote,
-    checkNetwork: settings.checkNetwork,
-    changed,
+    onFillLanguages: (sourceId) => void sourceTasks.runLanguageLookup(sourceId),
   });
   // Background check of the shown channels after a category switch.
   const { progress: autoCheck, cancel: cancelAutoCheck } =

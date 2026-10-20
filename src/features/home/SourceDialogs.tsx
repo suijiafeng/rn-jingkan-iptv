@@ -94,6 +94,7 @@ export function SourceDialogs({
         busy={importer.busy}
         error={importer.formError || error}
         onUpdate={importer.updateForm}
+        onFillLanguages={importer.setFillLanguages}
         onChooseFile={() => void importer.chooseFile()}
         onPreview={() => void importer.preview()}
         onSave={() => void importer.save()}

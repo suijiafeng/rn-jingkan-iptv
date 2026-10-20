@@ -9,18 +9,21 @@ import { AppState } from "react-native";
 import type { Repository } from "../../data/repository";
 import type { Source } from "../../domain/types";
 import { ImportIOError } from "../../data/importIO";
-import { isIptvOrgId } from "../../domain/channelFacets";
 import {
   AvailabilitySaveError,
   checkAvailability,
 } from "../source/availabilityCoordinator";
-import { lookupIptvOrgLanguages } from "../source/iptvOrgLanguages";
+import {
+  lookupIptvOrgLanguages,
+  needsLanguageLookup,
+} from "../source/iptvOrgLanguages";
 import type { CheckProgress, CheckSummary } from "../source/availability";
 
 /**
- * User-started work on one source from source management: the availability
- * sweep and the iptv-org language lookup. Both pass the same network gates
- * as an import and stop when permission is withdrawn.
+ * Network work on one source: the availability sweep started from source
+ * management, and the iptv-org language lookup that follows an import whose
+ * preview asked for it. Both pass the same network gates as an import and
+ * stop when permission is withdrawn.
  */
 export function useSourceTasks({
   repo,
@@ -45,11 +48,8 @@ export function useSourceTasks({
     [checkSummaries, setCheckSummaries] = useState<
       Record<string, CheckSummary>
     >({}),
-    // iptv-org language lookup (user-triggered, one download).
-    [languageLookup, setLanguageLookup] = useState<string | null>(null),
-    [languageMessages, setLanguageMessages] = useState<Record<string, string>>(
-      {},
-    );
+    // iptv-org language lookup after an import (one download).
+    [languageLookup, setLanguageLookup] = useState<string | null>(null);
   const checkController = useRef<AbortController | null>(null),
     languageController = useRef<AbortController | null>(null),
     checkGeneration = useRef(0);
@@ -75,9 +75,10 @@ export function useSourceTasks({
 
   /**
    * Fills missing languages for this source's iptv-org formatted channels
-   * from the iptv-org database. Same gates as any other remote request.
+   * from the iptv-org database. Same gates as any other remote request;
+   * success shows in the language filter, only a failure is reported.
    */
-  const runLanguageLookup = async (source: Source) => {
+  const runLanguageLookup = async (sourceId: string) => {
     if (!repo || languageController.current) return;
     const abort = new AbortController();
     languageController.current = abort;
@@ -87,28 +88,20 @@ export function useSourceTasks({
       languageController.current === abort &&
       !abort.signal.aborted &&
       epoch === permissionEpoch.current;
-    const say = (message: string) =>
-      setLanguageMessages((all) => ({ ...all, [source.id]: message }));
-    setLanguageLookup(source.id);
+    setLanguageLookup(sourceId);
     try {
       if (!(await guardRemote(abort.signal)) || !current()) return;
       if (!(await checkNetwork(abort.signal)) || !current()) return;
       const targets = (
-        await repo.listChannels({ sourceId: source.id, includeVariants: true })
-      ).filter(
-        (channel) => isIptvOrgId(channel.tvgId) && !channel.languages?.length,
-      );
-      if (!current()) return;
-      if (!targets.length) {
-        say("没有需要补全的频道");
-        return;
-      }
+        await repo.listChannels({ sourceId, includeVariants: true })
+      ).filter(needsLanguageLookup);
+      if (!current() || !targets.length) return;
       const found = await lookupIptvOrgLanguages(
         new Set(targets.map((channel) => channel.tvgId!)),
         abort.signal,
       );
       if (!current()) return;
-      const changedCount = await repo.saveLookedUpLanguages(
+      await repo.saveLookedUpLanguages(
         targets.flatMap((channel) => {
           const languages = found.get(channel.tvgId!);
           return languages
@@ -116,14 +109,13 @@ export function useSourceTasks({
             : [];
         }),
       );
-      say(`已补全 ${changedCount} 个频道的语言`);
       changed();
     } catch (failure) {
-      if (mounted.current && epoch === permissionEpoch.current)
-        say(
+      if (current())
+        setError(
           failure instanceof Error && failure.message
-            ? failure.message
-            : "语言补全未完成，请稍后重试",
+            ? `频道已导入，语言未补全：${failure.message}`
+            : "频道已导入，语言暂未补全",
         );
     } finally {
       if (languageController.current === abort) {
@@ -216,7 +208,6 @@ export function useSourceTasks({
     checkSummaries,
     clearCheckSummaries: () => setCheckSummaries({}),
     languageLookup,
-    languageMessages,
     runCheck,
     runLanguageLookup,
     stopCheck,

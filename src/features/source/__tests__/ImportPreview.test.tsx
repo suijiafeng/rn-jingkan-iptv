@@ -40,6 +40,8 @@ test("the preview lists every channel, not the first five", async () => {
       preview={previewOf(12)}
       header={null}
       busy={false}
+      fillLanguages
+      onFillLanguages={() => {}}
       onSave={() => {}}
       onBack={() => {}}
     />,
@@ -57,6 +59,8 @@ test("a long list stays lazy and importing never needs scrolling to", async () =
       preview={previewOf(5000)}
       header={null}
       busy={false}
+      fillLanguages
+      onFillLanguages={() => {}}
       onSave={save}
       onBack={() => {}}
     />,
@@ -67,4 +71,46 @@ test("a long list stays lazy and importing never needs scrolling to", async () =
     screen.getByRole("button", { name: "导入 5000 个频道" }),
   );
   expect(save).toHaveBeenCalledTimes(1);
+});
+
+test("unlabelled iptv-org channels get a language switch that says it goes online", async () => {
+  const preview = previewOf(3);
+  preview.channels[0] = { ...preview.channels[0], tvgId: "CCTV1.cn@SD" };
+  preview.channels[1] = {
+    ...preview.channels[1],
+    tvgId: "BBCNews.uk@HD",
+    languages: ["en"],
+  };
+  const toggle = jest.fn();
+  await render(
+    <ImportPreviewBody
+      preview={preview}
+      header={null}
+      busy={false}
+      fillLanguages
+      onFillLanguages={toggle}
+      onSave={() => {}}
+      onBack={() => {}}
+    />,
+  );
+  expect(screen.getByText(/iptv-org.*1 个未标语言的频道/)).toBeTruthy();
+  const languageSwitch = screen.getByLabelText("导入后自动补全语言");
+  expect(languageSwitch.props.value).toBe(true);
+  await fireEvent(languageSwitch, "valueChange", false);
+  expect(toggle).toHaveBeenCalledWith(false);
+});
+
+test("no switch when nothing needs a language", async () => {
+  await render(
+    <ImportPreviewBody
+      preview={previewOf(3)}
+      header={null}
+      busy={false}
+      fillLanguages
+      onFillLanguages={() => {}}
+      onSave={() => {}}
+      onBack={() => {}}
+    />,
+  );
+  expect(screen.queryByLabelText("导入后自动补全语言")).toBeNull();
 });
