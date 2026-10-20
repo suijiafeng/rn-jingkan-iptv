@@ -25,8 +25,8 @@ const ROW_HEIGHT = 56;
  * The parsed playlist before saving. Every channel is listed and scrolls,
  * rendered lazily; the counts and warnings head the list, and 导入 stays
  * pinned at the bottom so it never needs scrolling to. When iptv-org
- * channels lack a language, a switch (on by default) says that saving will
- * fetch the iptv-org database to fill them in.
+ * channels lack a language, a switch (on by default) fills them in after
+ * saving; its title notes that this goes online for about 8 MB.
  */
 export function ImportPreviewBody({
   preview,
@@ -79,14 +79,15 @@ export function ImportPreviewBody({
             {unlabelled > 0 && (
               <View style={previewStyles.fillRow}>
                 <View style={previewStyles.fillText}>
-                  <Text style={styles.body}>自动补全语言</Text>
-                  <Text style={styles.caption}>
-                    导入后从 iptv-org 公开数据库下载约 8 MB 语言数据，为{" "}
-                    {unlabelled} 个未标语言的频道补全
+                  {/* The informed-consent note, kept to the title line. */}
+                  <Text style={styles.body}>
+                    自动补全语言
+                    <Text style={styles.muted}> · 联网约 8 MB</Text>
                   </Text>
                 </View>
                 <Switch
                   accessibilityLabel="导入后自动补全语言"
+                  accessibilityHint="从 iptv-org 公开数据库下载约 8 MB"
                   value={fillLanguages}
                   disabled={busy}
                   onValueChange={onFillLanguages}

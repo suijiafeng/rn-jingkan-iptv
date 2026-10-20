@@ -93,7 +93,8 @@ test("unlabelled iptv-org channels get a language switch that says it goes onlin
       onBack={() => {}}
     />,
   );
-  expect(screen.getByText(/iptv-org.*1 个未标语言的频道/)).toBeTruthy();
+  // Its title says it goes online and roughly how much it downloads.
+  expect(screen.getByText(/联网约 8 MB/)).toBeTruthy();
   const languageSwitch = screen.getByLabelText("导入后自动补全语言");
   expect(languageSwitch.props.value).toBe(true);
   await fireEvent(languageSwitch, "valueChange", false);
