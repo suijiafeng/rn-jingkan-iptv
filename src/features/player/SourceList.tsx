@@ -17,6 +17,9 @@ export function SourceList({
 }) {
   // Day granularity: the moment the list opened is precise enough.
   const [now] = useState(() => Date.now());
+  // With one playlist the name would repeat on every row and say nothing.
+  const manySources =
+    new Set(sources.map((source) => source.sourceName)).size > 1;
   return (
     <View
       style={styles.sourceList}
@@ -30,7 +33,7 @@ export function SourceList({
             key={source.id}
             accessibilityRole="button"
             accessibilityState={{ selected }}
-            accessibilityLabel={`${qualityName(source)}，${source.sourceName}${selected ? "，当前来源" : ""}`}
+            accessibilityLabel={`${qualityName(source)}${manySources ? `，${source.sourceName}` : ""}${selected ? "，当前来源" : ""}`}
             style={({ pressed }) => [
               styles.sourceRow,
               selected && styles.sourceRowSelected,
@@ -42,7 +45,8 @@ export function SourceList({
               style={[styles.sourceText, selected && styles.accent]}
               numberOfLines={1}
             >
-              {selected ? "●" : "○"} {qualityName(source)} · {source.sourceName}
+              {selected ? "●" : "○"} {qualityName(source)}
+              {manySources ? ` · ${source.sourceName}` : ""}
             </Text>
             {/* The full address, its query (often a token) hidden. */}
             <Text style={styles.sourceAddress} numberOfLines={3}>

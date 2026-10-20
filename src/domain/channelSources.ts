@@ -92,3 +92,24 @@ export function qualityName(
 ): string {
   return channel.qualityLabel ?? "未知清晰度";
 }
+
+/**
+ * One row per stream address. Two sources can list the very same address;
+ * playing either is the same stream, so the player shows it once. The
+ * order is kept, and the row named by keepId (what is playing) is the one
+ * kept for its address.
+ */
+export function uniqueStreams<T extends Pick<Channel, "id" | "streamUrl">>(
+  sources: T[],
+  keepId?: string,
+): T[] {
+  const kept = sources.find((source) => source.id === keepId);
+  const seen = new Set<string>();
+  const unique: T[] = [];
+  for (const source of sources) {
+    if (seen.has(source.streamUrl)) continue;
+    seen.add(source.streamUrl);
+    unique.push(kept && kept.streamUrl === source.streamUrl ? kept : source);
+  }
+  return unique;
+}
