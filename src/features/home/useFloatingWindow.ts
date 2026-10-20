@@ -13,6 +13,12 @@ export const MINI_DEFAULT_WIDTH = 176;
 export const MINI_MIN_WIDTH = 144;
 /** Margin kept to the screen sides and above the top inset. */
 export const MINI_EDGE = 12;
+/**
+ * Space a page keeps clear at its bottom while the window is docked: the
+ * default picture plus its margin, so the last rows can scroll past it.
+ */
+export const MINI_WINDOW_SPACE =
+  Math.round((MINI_DEFAULT_WIDTH * 9) / 16) + 2 * MINI_EDGE;
 /** Movement that turns a touch into a drag rather than a tap. */
 const DRAG_SLOP = 6;
 

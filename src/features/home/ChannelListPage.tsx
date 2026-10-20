@@ -28,12 +28,8 @@ import {
   EMPTY_ROW,
   type ChannelListItem,
 } from "./channelListItems";
+import { MINI_WINDOW_SPACE } from "./useFloatingWindow";
 
-/**
- * Docked window (close key 40 + gap 6 + 16:9 picture 99) plus its 12dp
- * margin, reserved under the list so the last rows can scroll clear of it.
- */
-const MINI_BAR_SPACE = 160;
 /** Space between the header overlay and the first row. */
 const LIST_TOP_GAP = 12;
 
@@ -151,7 +147,7 @@ export function ChannelListPage({
           // Rows are spaced by the separator alone, as getItemLayout assumes;
           // the page's content gap would add 12dp per row unaccounted for.
           { paddingTop: listTop, gap: 0 },
-          reserveMiniBar && { paddingBottom: MINI_BAR_SPACE },
+          reserveMiniBar && { paddingBottom: MINI_WINDOW_SPACE },
         ]}
         ItemSeparatorComponent={ListSeparator}
         renderItem={({ item }) =>

@@ -6,6 +6,7 @@ import { Chevron, RowAction, SettingRow, SettingSection } from "./SettingRows";
 import type { Repository } from "../../data/repository";
 import { BackupControls } from "./BackupControls";
 import { About } from "./About";
+import { MINI_WINDOW_SPACE } from "../home/useFloatingWindow";
 
 interface Props {
   repo?: Repository | null;
@@ -36,6 +37,8 @@ interface Props {
   onSkipUnreachableChange: (value: boolean) => void;
   onClearAll: () => void;
   onShowGuide?: () => void;
+  /** The docked player window floats over the page bottom. */
+  reserveMiniBar?: boolean;
 }
 
 export function SettingsScreen(props: Props) {
@@ -45,7 +48,13 @@ export function SettingsScreen(props: Props) {
     props.revokePending ||
     (!props.remoteAllowed && !props.artworkAllowed);
   return (
-    <ScrollView contentContainerStyle={[styles.content, screenStyles.content]}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.content,
+        screenStyles.content,
+        props.reserveMiniBar && { paddingBottom: MINI_WINDOW_SPACE },
+      ]}
+    >
       <Heading title="设置" />
       <SettingSection label="节目来源">
         <SettingRow
