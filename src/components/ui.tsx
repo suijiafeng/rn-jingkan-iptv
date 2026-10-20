@@ -139,7 +139,10 @@ export function ErrorNotice({
     </>
   );
 }
-/** Pinned top-left "‹ 返回" of a secondary page; goes back one level. */
+/**
+ * Pinned top-left back control of a secondary page: a round button with an
+ * arrow drawn from plain views (no icon font), aligned with the page content.
+ */
 export function BackBar({
   onBack,
   accessibilityLabel = "返回",
@@ -156,23 +159,53 @@ export function BackBar({
         onPress={onBack}
         style={({ pressed }) => [uiStyles.back, pressed && { opacity: 0.6 }]}
       >
-        <Text style={uiStyles.backLabel}>‹ 返回</Text>
+        <View accessible={false} style={uiStyles.arrow}>
+          <View style={uiStyles.arrowHead} />
+          <View style={uiStyles.arrowShaft} />
+        </View>
       </Pressable>
     </View>
   );
 }
+
 const uiStyles = StyleSheet.create({
   backBar: {
     flexDirection: "row",
-    minHeight: sizes.touch,
-    paddingHorizontal: 8,
+    paddingHorizontal: 20,
+    paddingTop: 8,
   },
   back: {
-    minHeight: sizes.touch,
-    paddingHorizontal: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.surface,
+  },
+  arrow: {
+    width: 18,
+    height: 18,
+    alignItems: "flex-start",
     justifyContent: "center",
   },
-  backLabel: { ...type.body, color: colors.text, fontWeight: "600" },
+  // A chevron (two borders of a rotated square) plus a shaft through it.
+  arrowHead: {
+    position: "absolute",
+    left: 2,
+    width: 10,
+    height: 10,
+    borderLeftWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: colors.text,
+    transform: [{ rotate: "45deg" }],
+  },
+  arrowShaft: {
+    marginLeft: 2,
+    width: 15,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: colors.text,
+  },
   button: {
     minHeight: sizes.button,
     borderRadius: 12,
