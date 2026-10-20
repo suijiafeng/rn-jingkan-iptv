@@ -384,7 +384,7 @@ export function useChannelSession(props: SessionProps) {
           if (!success)
             Alert.alert(
               "未能进入画中画",
-              "请确认系统允许静看使用画中画，并在视频开始播放后重试。",
+              "请确认系统允许静看使用画中画，并在视频开始播放后重试。若是用返回键退出后重新打开的，请先从最近任务中彻底关闭应用再试。",
             );
         });
       }}
