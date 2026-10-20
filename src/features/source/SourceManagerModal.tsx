@@ -1,9 +1,10 @@
 import React from "react";
 import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { BackBar, Button, ErrorNotice, Heading } from "../../components/ui";
+import { BackBar, ErrorNotice, Heading } from "../../components/ui";
 import type { Source, SourceKind } from "../../domain/types";
 import { colors, styles, type } from "../../theme";
+import { Chevron, SettingRow, SettingSection } from "../settings/SettingRows";
 import type { CheckProgress, CheckSummary } from "./availability";
 import { SourceCard } from "./SourceCard";
 
@@ -30,8 +31,13 @@ interface ManagerProps {
   onStopLanguageLookup?: () => void;
 }
 
+/**
+ * The source manager, laid out like the settings page it opens from: a
+ * grouped card of the two ways to add a source, then one card per source.
+ */
 export function SourceManagerModal(props: ManagerProps) {
-  const { check } = props;
+  const { check, sources } = props;
+  const enabledCount = sources.filter((source) => source.enabled).length;
   return (
     <Modal
       visible={props.visible}
@@ -45,46 +51,53 @@ export function SourceManagerModal(props: ManagerProps) {
         >
           <Heading title="节目来源" />
           <ErrorNotice message={props.error} onDismiss={props.onDismissError} />
-          <View style={managerStyles.addActions}>
-            <Button
-              style={managerStyles.addButton}
-              label="添加链接"
+          <SettingSection label="添加">
+            <SettingRow
+              title="添加链接"
+              trailing={<Chevron />}
               onPress={() => props.onAdd("url")}
             />
-            <Button
-              style={managerStyles.addButton}
-              label="导入文件"
-              secondary
+            <SettingRow
+              title="导入文件"
+              trailing={<Chevron />}
               onPress={() => props.onAdd("file")}
             />
-          </View>
-          {props.sources.length === 0 && (
+          </SettingSection>
+          {sources.length === 0 ? (
             <View style={managerStyles.emptyCard}>
               <View style={managerStyles.emptyMark} accessible={false}>
                 <Text style={managerStyles.emptyMarkText}>＋</Text>
               </View>
               <Text style={styles.heading}>还没有节目来源</Text>
             </View>
+          ) : (
+            <View style={managerStyles.list}>
+              <Text style={[styles.caption, managerStyles.listLabel]}>
+                {enabledCount === sources.length
+                  ? `已添加 ${sources.length} 份`
+                  : `已添加 ${sources.length} 份，启用 ${enabledCount} 份`}
+              </Text>
+              {sources.map((source) => (
+                <SourceCard
+                  key={source.id}
+                  source={source}
+                  check={check}
+                  summary={props.summaries[source.id]}
+                  saving={props.sourceSaving === source.id}
+                  languageLookup={props.languageLookup ?? null}
+                  languageMessage={props.languageMessages?.[source.id]}
+                  onRefresh={props.onRefresh}
+                  onRename={props.onRename}
+                  onRemove={props.onRemove}
+                  onEnabledChange={props.onEnabledChange}
+                  onCheck={props.onCheck}
+                  onStopCheck={props.onStopCheck}
+                  onLookupLanguages={props.onLookupLanguages}
+                  onStopLanguageLookup={props.onStopLanguageLookup}
+                />
+              ))}
+            </View>
           )}
-          {props.sources.map((source) => (
-            <SourceCard
-              key={source.id}
-              source={source}
-              check={check}
-              summary={props.summaries[source.id]}
-              saving={props.sourceSaving === source.id}
-              languageLookup={props.languageLookup ?? null}
-              languageMessage={props.languageMessages?.[source.id]}
-              onRefresh={props.onRefresh}
-              onRename={props.onRename}
-              onRemove={props.onRemove}
-              onEnabledChange={props.onEnabledChange}
-              onCheck={props.onCheck}
-              onStopCheck={props.onStopCheck}
-              onLookupLanguages={props.onLookupLanguages}
-              onStopLanguageLookup={props.onStopLanguageLookup}
-            />
-          ))}
         </ScrollView>
       </SafeAreaView>
     </Modal>
@@ -92,12 +105,12 @@ export function SourceManagerModal(props: ManagerProps) {
 }
 
 const managerStyles = StyleSheet.create({
-  content: { gap: 12 },
-  addActions: { flexDirection: "row", gap: 10 },
-  addButton: { flex: 1 },
+  content: { gap: 16 },
+  list: { gap: 10 },
+  listLabel: { paddingHorizontal: 4, marginBottom: -4 },
   emptyCard: {
-    minHeight: 220,
-    borderRadius: 16,
+    minHeight: 200,
+    borderRadius: 14,
     padding: 28,
     alignItems: "center",
     justifyContent: "center",

@@ -143,8 +143,10 @@ test("a card keeps two everyday actions in view and folds the rest", async () =>
     screen.getByRole("button", { name: "更新节目单 / 更换文件" }),
   );
   expect(screen.queryByRole("button", { name: "改名" })).toBeNull();
+  // 更多 opens a bottom sheet named after the source.
   await fireEvent.press(screen.getByRole("button", { name: "更多操作" }));
   await fireEvent.press(screen.getByRole("button", { name: "改名" }));
+  expect(screen.queryByRole("button", { name: "取消" })).toBeNull();
   expect(refresh).toHaveBeenCalledWith(
     expect.objectContaining({ id: "source" }),
   );
@@ -172,8 +174,8 @@ test("manager can disable and re-enable a source", async () => {
     />,
   );
 
-  await fireEvent.press(screen.getByRole("button", { name: "更多操作" }));
-  await fireEvent.press(screen.getByRole("button", { name: "停用" }));
+  // On and off is a switch, like the settings rows the manager opens from.
+  await fireEvent(screen.getByLabelText("停用"), "valueChange", false);
   expect(change).toHaveBeenCalledWith(source, false);
 
   await ui.rerender(
@@ -192,8 +194,11 @@ test("manager can disable and re-enable a source", async () => {
       onEnabledChange={change}
     />,
   );
-  expect(screen.getByText("已停用")).toBeTruthy();
-  await fireEvent.press(screen.getByRole("button", { name: "启用" }));
+  // A stopped source keeps only the switch and 更多 in reach.
+  expect(
+    screen.queryByRole("button", { name: "更新节目单 / 更换文件" }),
+  ).toBeNull();
+  await fireEvent(screen.getByLabelText("启用"), "valueChange", true);
   expect(change).toHaveBeenLastCalledWith(
     expect.objectContaining({ id: source.id }),
     true,
@@ -260,9 +265,8 @@ test("a stored check result shows only the unreachable count", async () => {
     />,
   );
   // Channels as the list shows them; checks count addresses.
-  expect(
-    screen.getByText(/500 个频道（518 个地址） · 10 个地址暂时无法连接/),
-  ).toBeTruthy();
+  expect(screen.getByText(/500 个频道，518 个地址/)).toBeTruthy();
+  expect(screen.getByText("10 个地址暂时无法连接")).toBeTruthy();
   expect(screen.getByRole("button", { name: "重新测试连通" })).toBeTruthy();
 });
 

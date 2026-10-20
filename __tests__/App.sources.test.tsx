@@ -236,8 +236,7 @@ test("source enable changes are persisted and failures stay visible in managemen
   repo.setSourceEnabled.mockRejectedValueOnce(new Error("disk unavailable"));
   await openSourceManager();
 
-  await fireEvent.press(screen.getByRole("button", { name: "更多操作" }));
-  await fireEvent.press(screen.getByRole("button", { name: "停用" }));
+  await fireEvent(screen.getByLabelText("停用"), "valueChange", false);
 
   await waitFor(() =>
     expect(repo.setSourceEnabled).toHaveBeenCalledWith(checkSource.id, false),
