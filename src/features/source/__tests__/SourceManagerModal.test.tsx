@@ -1,7 +1,8 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { Source } from "../../../domain/types";
-import { RenameSourceModal } from "../RenameSourceModal";
+import { EditSourceView } from "../EditSourceModal";
+import type { SourceEdit } from "../useSourceEdit";
 import { SourceManagerModal } from "../SourceManagerModal";
 import { updatedAgo } from "../SourceCard";
 
@@ -27,6 +28,23 @@ const source: Source = {
   lastCheckedAt: null,
 };
 
+function fakeEdit(overrides: Partial<SourceEdit> = {}): SourceEdit {
+  return {
+    name: source.name,
+    setName: () => {},
+    url: "",
+    setUrl: () => {},
+    fileName: source.location,
+    chooseFile: () => {},
+    busy: false,
+    error: "",
+    dismissError: () => {},
+    save: () => {},
+    cancel: () => {},
+    ...overrides,
+  } as SourceEdit;
+}
+
 function renderModal(
   kind: "manager" | "rename",
   error?: string,
@@ -34,14 +52,9 @@ function renderModal(
 ) {
   if (kind === "rename") {
     return (
-      <RenameSourceModal
+      <EditSourceView
         source={source}
-        text={source.name}
-        error={error}
-        onDismissError={onDismissError}
-        onChangeText={() => {}}
-        onSave={() => {}}
-        onCancel={() => {}}
+        edit={fakeEdit({ error: error ?? "", dismissError: onDismissError })}
       />
     );
   }
@@ -55,7 +68,6 @@ function renderModal(
       onDismissError={onDismissError}
       onClose={() => {}}
       onAdd={() => {}}
-      onRefresh={() => {}}
       onRename={() => {}}
       onRemove={() => {}}
       onCheck={() => {}}
@@ -75,7 +87,6 @@ test("manager shows a private-by-default empty state and one way to add", async 
       summaries={{}}
       onClose={() => {}}
       onAdd={add}
-      onRefresh={() => {}}
       onRename={() => {}}
       onRemove={() => {}}
       onCheck={() => {}}
@@ -100,7 +111,6 @@ test("manager has one close action and no explanatory copy", async () => {
       summaries={{}}
       onClose={close}
       onAdd={() => {}}
-      onRefresh={() => {}}
       onRename={() => {}}
       onRemove={() => {}}
       onCheck={() => {}}
@@ -117,8 +127,7 @@ test("manager has one close action and no explanatory copy", async () => {
   expect(close).toHaveBeenCalledTimes(1);
 });
 
-test("a card keeps two everyday actions in view and folds the rest", async () => {
-  const refresh = jest.fn();
+test("a card shows every action in one row, with nothing folded away", async () => {
   const rename = jest.fn();
   await render(
     <SourceManagerModal
@@ -128,7 +137,6 @@ test("a card keeps two everyday actions in view and folds the rest", async () =>
       summaries={{}}
       onClose={() => {}}
       onAdd={() => {}}
-      onRefresh={refresh}
       onRename={rename}
       onRemove={() => {}}
       onCheck={() => {}}
@@ -139,17 +147,13 @@ test("a card keeps two everyday actions in view and folds the rest", async () =>
 
   // Only something to act on earns a third line.
   expect(screen.getByText("上次刷新未完成，旧频道已保留")).toBeTruthy();
-  await fireEvent.press(
-    screen.getByRole("button", { name: "更新节目单 / 更换文件" }),
-  );
-  expect(screen.queryByRole("button", { name: "改名" })).toBeNull();
-  // 更多 opens a bottom sheet named after the source.
-  await fireEvent.press(screen.getByRole("button", { name: "更多操作" }));
-  await fireEvent.press(screen.getByRole("button", { name: "改名" }));
-  expect(screen.queryByRole("button", { name: "取消" })).toBeNull();
-  expect(refresh).toHaveBeenCalledWith(
-    expect.objectContaining({ id: "source" }),
-  );
+  // 测试连通, 编辑, 删除: no 刷新 or 改名 of their own, no 更多, no 补全语言.
+  expect(screen.queryByRole("button", { name: /刷新|改名/ })).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: /更多操作|补全语言/ }),
+  ).toBeNull();
+  expect(screen.getByRole("button", { name: "删除" })).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "编辑" }));
   expect(rename).toHaveBeenCalledWith(
     expect.objectContaining({ id: "source" }),
   );
@@ -165,7 +169,6 @@ test("manager can disable and re-enable a source", async () => {
       summaries={{}}
       onClose={() => {}}
       onAdd={() => {}}
-      onRefresh={() => {}}
       onRename={() => {}}
       onRemove={() => {}}
       onCheck={() => {}}
@@ -186,7 +189,6 @@ test("manager can disable and re-enable a source", async () => {
       summaries={{}}
       onClose={() => {}}
       onAdd={() => {}}
-      onRefresh={() => {}}
       onRename={() => {}}
       onRemove={() => {}}
       onCheck={() => {}}
@@ -194,10 +196,9 @@ test("manager can disable and re-enable a source", async () => {
       onEnabledChange={change}
     />,
   );
-  // A stopped source keeps only the switch and 更多 in reach.
-  expect(
-    screen.queryByRole("button", { name: "更新节目单 / 更换文件" }),
-  ).toBeNull();
+  // A stopped source keeps every action in place, the unusable ones greyed.
+  expect(screen.getByRole("button", { name: "测试连通" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "编辑" })).toBeEnabled();
   await fireEvent(screen.getByLabelText("启用"), "valueChange", true);
   expect(change).toHaveBeenLastCalledWith(
     expect.objectContaining({ id: source.id }),
@@ -225,7 +226,7 @@ test.each(["manager", "rename"] as const)(
   },
 );
 
-test.each(["manager", "rename"] as const)(
+test.each(["manager"] as const)(
   "%s modal can show an error without a dismiss callback",
   async (kind) => {
     await render(renderModal(kind, "本地资料操作失败，请重试"));
@@ -256,7 +257,6 @@ test("a stored check result shows only the unreachable count", async () => {
       summaries={{}}
       onClose={() => {}}
       onAdd={() => {}}
-      onRefresh={() => {}}
       onRename={() => {}}
       onRemove={() => {}}
       onEnabledChange={() => {}}
@@ -265,7 +265,9 @@ test("a stored check result shows only the unreachable count", async () => {
     />,
   );
   // Channels as the list shows them; checks count addresses.
-  expect(screen.getByText(/500 个频道，518 个地址/)).toBeTruthy();
+  expect(screen.getByText(/^500 个频道/)).toBeTruthy();
+  // The card stays short: no address count, no link/file label, no icon.
+  expect(screen.queryByText(/518 个地址|本地文件|链接/)).toBeNull();
   expect(screen.getByText("10 个地址暂时无法连接")).toBeTruthy();
   expect(screen.getByRole("button", { name: "重新测试连通" })).toBeTruthy();
 });
@@ -282,4 +284,43 @@ test("update times read as days, not timestamps", () => {
     "4 天前更新",
   );
   expect(updatedAgo(0, now)).toBe("");
+});
+
+test("the edit page holds the name and the link, applied by one 保存", async () => {
+  const save = jest.fn();
+  const setUrl = jest.fn();
+  const linked = {
+    ...source,
+    kind: "url" as const,
+    location: "https://a.test/x.m3u",
+  };
+  await render(
+    <EditSourceView
+      source={linked}
+      edit={fakeEdit({ url: linked.location, save, setUrl })}
+    />,
+  );
+  expect(screen.getByRole("header", { name: "编辑节目来源" })).toBeTruthy();
+  expect(screen.getByDisplayValue("本地节目单")).toBeTruthy();
+  await fireEvent.changeText(
+    screen.getByLabelText("节目单链接"),
+    "https://b.test/y.m3u",
+  );
+  expect(setUrl).toHaveBeenCalledWith("https://b.test/y.m3u");
+  // No separate update or preview step.
+  expect(screen.queryByRole("button", { name: /更新节目单|预览/ })).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "保存" }));
+  expect(save).toHaveBeenCalledTimes(1);
+});
+
+test("a local list shows its file in place of the link, tapped to change", async () => {
+  const chooseFile = jest.fn();
+  await render(
+    <EditSourceView source={source} edit={fakeEdit({ chooseFile })} />,
+  );
+  expect(screen.queryByLabelText("节目单链接")).toBeNull();
+  await fireEvent.press(
+    screen.getByRole("button", { name: "更换文件，当前 playlist.m3u" }),
+  );
+  expect(chooseFile).toHaveBeenCalledTimes(1);
 });

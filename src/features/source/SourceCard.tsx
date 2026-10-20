@@ -1,11 +1,9 @@
 import React, { useState } from "react";
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
-import { channelMonogram } from "../../domain/channelLabels";
 import { daysAgo } from "../../domain/timeAgo";
 import type { Source } from "../../domain/types";
 import { colors, sizes, styles, type } from "../../theme";
 import type { CheckProgress, CheckSummary } from "./availability";
-import { SourceActionSheet, type SheetAction } from "./SourceActionSheet";
 
 interface Props {
   source: Source;
@@ -13,48 +11,36 @@ interface Props {
   check: CheckProgress | null;
   summary?: CheckSummary;
   saving: boolean;
-  /** Source whose languages are being looked up, if any. */
-  languageLookup: string | null;
-  languageMessage?: string;
-  onRefresh: (source: Source) => void;
   onRename: (source: Source) => void;
   onRemove: (source: Source) => void;
   onEnabledChange: (source: Source, enabled: boolean) => void;
   onCheck: (source: Source, force?: boolean) => void;
   onStopCheck: () => void;
-  onLookupLanguages?: (source: Source) => void;
-  onStopLanguageLookup?: () => void;
 }
 
 /**
- * One source in the manager, laid out like a settings row: a monogram, the
- * name with its counts underneath, and a switch to turn the source on or
- * off. Anything that needs attention gets a third line in the warning
- * colour. A footer carries the two everyday actions; the rest open from
- * "更多" as a bottom sheet.
+ * One source in the manager: one line with the name on the left and its
+ * channel count and update time on the right, and a single line in the
+ * warning colour only when something needs attention. One footer row holds every
+ * control: 测试连通, 编辑 (name and link) and 删除 (in the error colour)
+ * on the left, the on/off switch at the right end.
  */
 export function SourceCard({
   source,
   check,
   summary,
   saving,
-  languageLookup,
-  languageMessage,
   ...props
 }: Props) {
-  const [moreOpen, setMoreOpen] = useState(false);
   // Day granularity: the time the manager opened is precise enough.
   const [now] = useState(() => Date.now());
   const running = check?.sourceId === source.id;
-  const lookupRunning = languageLookup === source.id;
   const checked = !!summary || typeof source.lastCheckedAt === "number";
   const unreachable = summary ? summary.unreachable : source.unreachableCount;
+  // Channels as the list shows them; addresses only come up when some
+  // of them cannot be reached.
   const meta = [
-    source.kind === "file" ? "本地文件" : "链接",
-    // The list shows logical channels; several addresses can share one.
-    source.addressCount > source.channelCount
-      ? `${source.channelCount} 个频道，${source.addressCount} 个地址`
-      : `${source.channelCount} 个频道`,
+    `${source.channelCount} 个频道`,
     updatedAgo(source.lastSuccessAt, now),
   ]
     .filter(Boolean)
@@ -70,56 +56,29 @@ export function SourceCard({
       ]
         .filter(Boolean)
         .join(" · ");
-  const sheetActions: SheetAction[] = [
-    ...(source.enabled && props.onLookupLanguages && !lookupRunning
-      ? [
-          {
-            label: "补全语言",
-            disabled:
-              !!languageLookup || !!check || saving || !source.channelCount,
-            onPress: () => props.onLookupLanguages?.(source),
-          },
-        ]
-      : []),
-    { label: "改名", disabled: saving, onPress: () => props.onRename(source) },
-    {
-      label: "删除",
-      danger: true,
-      disabled: saving,
-      onPress: () => props.onRemove(source),
-    },
-  ];
   return (
     <View style={cardStyles.card}>
       <View style={cardStyles.head}>
-        <View
-          accessible={false}
-          importantForAccessibility="no-hide-descendants"
-          style={[cardStyles.badge, !source.enabled && cardStyles.dimmed]}
-        >
-          <Text style={cardStyles.monogram}>
-            {channelMonogram(source.name)}
-          </Text>
-        </View>
         <View style={[cardStyles.text, !source.enabled && cardStyles.dimmed]}>
-          <Text style={cardStyles.title} numberOfLines={1}>
-            {source.name}
-          </Text>
-          <Text style={styles.caption}>{meta}</Text>
+          {/* Name on the left; its counts fill the right of the same
+              line. A long name ends in an ellipsis, the counts stay. */}
+          <View style={cardStyles.titleLine}>
+            <Text style={cardStyles.title} numberOfLines={1}>
+              {source.name}
+            </Text>
+            <Text style={[styles.caption, cardStyles.meta]} numberOfLines={1}>
+              {meta}
+            </Text>
+          </View>
           {!!attention && (
-            <Text style={[styles.caption, cardStyles.warnText]}>
+            <Text
+              style={[styles.caption, cardStyles.warnText]}
+              numberOfLines={1}
+            >
               {attention}
             </Text>
           )}
         </View>
-        <Switch
-          accessibilityLabel={source.enabled ? "停用" : "启用"}
-          accessibilityHint={saving ? "正在保存" : undefined}
-          value={source.enabled}
-          disabled={saving || running || lookupRunning}
-          trackColor={{ true: colors.accent }}
-          onValueChange={(enabled) => props.onEnabledChange(source, enabled)}
-        />
       </View>
       {running && (
         <View
@@ -154,69 +113,47 @@ export function SourceCard({
           </View>
         </View>
       )}
-      {lookupRunning && (
-        <Text
-          style={[styles.caption, cardStyles.note]}
-          accessibilityLiveRegion="polite"
-        >
-          正在补全语言…
-        </Text>
-      )}
-      {!lookupRunning && languageMessage && (
-        <Text style={[styles.caption, cardStyles.note]}>{languageMessage}</Text>
-      )}
+      {/* Every card shows the same four actions; one that cannot be used
+          right now is greyed out in place, not hidden. */}
       <View style={cardStyles.footer}>
-        {source.enabled && (
-          <>
-            <FooterAction
-              label={
-                source.lastErrorCategory
-                  ? "重试刷新"
-                  : source.kind === "file"
-                    ? "更新节目单"
-                    : "刷新"
-              }
-              accessibilityLabel={
-                source.kind === "file" ? "更新节目单 / 更换文件" : "刷新并预览"
-              }
-              disabled={saving || !!check || !!languageLookup}
-              onPress={() => props.onRefresh(source)}
-            />
-            {running ? (
-              <FooterAction label="停止测试" onPress={props.onStopCheck} />
-            ) : (
-              <FooterAction
-                label="测试连通"
-                accessibilityLabel={checked ? "重新测试连通" : "测试连通"}
-                disabled={saving || !!check || !source.channelCount}
-                onPress={() =>
-                  summary ? props.onCheck(source, true) : props.onCheck(source)
-                }
-              />
-            )}
-            {lookupRunning && (
-              <FooterAction
-                label="停止补全"
-                accessibilityLabel="停止补全语言"
-                onPress={() => props.onStopLanguageLookup?.()}
-              />
-            )}
-          </>
+        {running ? (
+          <FooterAction label="停止测试" onPress={props.onStopCheck} />
+        ) : (
+          <FooterAction
+            label="测试连通"
+            accessibilityLabel={checked ? "重新测试连通" : "测试连通"}
+            disabled={
+              !source.enabled || saving || !!check || !source.channelCount
+            }
+            onPress={() =>
+              summary ? props.onCheck(source, true) : props.onCheck(source)
+            }
+          />
         )}
-        <View style={cardStyles.spacer} />
         <FooterAction
-          label="更多"
-          accessibilityLabel="更多操作"
-          muted
-          onPress={() => setMoreOpen(true)}
+          label="编辑"
+          disabled={saving}
+          onPress={() => props.onRename(source)}
+        />
+        <FooterAction
+          label="删除"
+          danger
+          disabled={saving}
+          onPress={() => props.onRemove(source)}
+        />
+        <View style={cardStyles.spacer} />
+        {/* On/off sits at the row's end, leaving the text above the
+            card's full width. */}
+        <Switch
+          style={cardStyles.switch}
+          accessibilityLabel={source.enabled ? "停用" : "启用"}
+          accessibilityHint={saving ? "正在保存" : undefined}
+          value={source.enabled}
+          disabled={saving || running}
+          trackColor={{ true: colors.accent }}
+          onValueChange={(enabled) => props.onEnabledChange(source, enabled)}
         />
       </View>
-      <SourceActionSheet
-        visible={moreOpen}
-        title={source.name}
-        actions={sheetActions}
-        onClose={() => setMoreOpen(false)}
-      />
     </View>
   );
 }
@@ -226,14 +163,14 @@ function FooterAction({
   label,
   accessibilityLabel,
   disabled = false,
-  muted = false,
+  danger = false,
   onPress,
 }: {
   label: string;
   accessibilityLabel?: string;
   disabled?: boolean;
-  /** Secondary (更多): drawn in the muted colour. */
-  muted?: boolean;
+  /** Destructive (删除): drawn in the error colour. */
+  danger?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -249,7 +186,7 @@ function FooterAction({
         pressed && cardStyles.pressed,
       ]}
     >
-      <Text style={[cardStyles.footerText, muted && cardStyles.footerMuted]}>
+      <Text style={[cardStyles.footerText, danger && cardStyles.danger]}>
         {label}
       </Text>
     </Pressable>
@@ -277,17 +214,12 @@ const cardStyles = StyleSheet.create({
     paddingLeft: 14,
     paddingRight: 12,
   },
-  badge: {
-    width: sizes.logo,
-    height: sizes.logo,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.raised,
-  },
-  monogram: { ...type.heading, color: colors.accent },
   text: { flex: 1, minWidth: 0, gap: 2 },
-  title: { ...type.rowTitle, color: colors.text },
+  spacer: { flex: 1 },
+  switch: { marginRight: 8 },
+  titleLine: { flexDirection: "row", alignItems: "baseline", gap: 12 },
+  title: { ...type.rowTitle, color: colors.text, flex: 1, minWidth: 0 },
+  meta: { flexShrink: 0 },
   dimmed: { opacity: 0.45 },
   warnText: { color: colors.warn },
   note: { paddingHorizontal: 14, paddingBottom: 10 },
@@ -316,7 +248,6 @@ const cardStyles = StyleSheet.create({
     justifyContent: "center",
   },
   footerText: { ...type.chip, color: colors.accent, fontWeight: "600" },
-  footerMuted: { color: colors.muted },
-  spacer: { flex: 1 },
+  danger: { color: colors.bad },
   pressed: { opacity: 0.7 },
 });

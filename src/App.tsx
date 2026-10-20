@@ -99,14 +99,18 @@ export default function App() {
     playback,
   });
   const { recentBusy, recentEditing, setRecentEditing } = actions;
-  const importer = useSourceImport({
-    repo,
-    setError,
+  // What adding and editing a source go online and report back through.
+  const sourceNetwork = {
     mounted,
     remoteRef: settings.remoteRef,
     guardRemote: settings.guardRemote,
     checkNetwork: settings.checkNetwork,
     reconcilePlayingSources: playback.reconcilePlayingSources,
+  };
+  const importer = useSourceImport({
+    repo,
+    setError,
+    ...sourceNetwork,
     changed,
     onImported: () => {
       // The form opened over management; a saved list shows its channels.
@@ -182,12 +186,13 @@ export default function App() {
         // page's own dialogs first and stops playback only when nothing else
         // is open.
         if (playing && !playerMini) return false;
-        if (rename) {
-          setRename(null);
-          return true;
-        }
+        // The form can sit on top of the edit page, so it goes first.
         if (importer.form) {
           void importer.backForm();
+          return true;
+        }
+        if (rename) {
+          setRename(null);
           return true;
         }
         if (manage) {
@@ -438,6 +443,7 @@ export default function App() {
         onRemoveSource={(source) => void controls.removeSource(source)}
         onSetSourceEnabled={controls.setSourceEnabled}
         changed={changed}
+        editDeps={sourceNetwork}
       />
       <NetworkConsentDialog
         visible={settings.consentCellular !== null}

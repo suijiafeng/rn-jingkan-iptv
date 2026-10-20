@@ -115,6 +115,12 @@ export const repo = {
   deleteSource: jest.fn(async () => {}),
   setSourceEnabled: jest.fn(async () => {}),
   renameSource: jest.fn(async () => {}),
+  beginRefresh: jest.fn(async (sourceId: string) => ({
+    sourceId,
+    revision: 1,
+    generation: 1,
+  })),
+  refreshSource: jest.fn(async () => ({})),
   removeRecent: jest.fn(async (_channelId: string) => {}),
   clearRecent: jest.fn(async () => {}),
   recordRecent: jest.fn(async (_channelId: string) => {}),
@@ -172,6 +178,8 @@ export function resetAppMocks() {
   repo.deleteSource.mockReset().mockResolvedValue(undefined);
   repo.setSourceEnabled.mockReset().mockResolvedValue(undefined);
   repo.renameSource.mockReset().mockResolvedValue(undefined);
+  repo.beginRefresh.mockClear();
+  repo.refreshSource.mockReset().mockResolvedValue({});
   repo.removeRecent.mockReset().mockResolvedValue(undefined);
   repo.clearRecent.mockReset().mockResolvedValue(undefined);
   repo.recordRecent.mockReset().mockResolvedValue(undefined);

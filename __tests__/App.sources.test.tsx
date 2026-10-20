@@ -224,8 +224,7 @@ test("source deletion failure is shown inside source management", async () => {
       buttons?.[1]?.onPress?.(),
     );
   await openSourceManager();
-  await fireEvent.press(screen.getByRole("button", { name: "更多操作" }));
-  await fireEvent.press(screen.getByText("删除", { exact: true }));
+  await fireEvent.press(screen.getByRole("button", { name: "删除" }));
   await waitFor(() =>
     expect(screen.getByText("删除未完成，请重试")).toBeTruthy(),
   );
@@ -340,15 +339,14 @@ test("failed saving of finished results after a manual stop remains visible", as
 test("rename failure remains visible with the input and a working retry", async () => {
   repo.renameSource.mockRejectedValueOnce(new Error("disk unavailable"));
   await openSourceManager();
-  await fireEvent.press(screen.getByRole("button", { name: "更多操作" }));
-  await fireEvent.press(screen.getByText("改名", { exact: true }));
+  await fireEvent.press(screen.getByRole("button", { name: "编辑" }));
   await fireEvent.changeText(screen.getByLabelText("来源名称"), "新的名称");
-  await fireEvent.press(screen.getByText("保存名称"));
+  await fireEvent.press(screen.getByRole("button", { name: "保存" }));
   await waitFor(() =>
     expect(screen.getByText("名称未保存，请重试")).toBeTruthy(),
   );
   expect(screen.getByDisplayValue("新的名称")).toBeTruthy();
-  await fireEvent.press(screen.getByText("保存名称"));
+  await fireEvent.press(screen.getByRole("button", { name: "保存" }));
   await waitFor(() =>
     expect(screen.getByRole("header", { name: "节目来源" })).toBeTruthy(),
   );
@@ -368,4 +366,77 @@ test("the add form opens over management, which never closes and reopens", async
   );
   await waitFor(() => expect(screen.queryByLabelText("节目单链接")).toBeNull());
   expect(screen.getByRole("header", { name: "节目来源" })).toBeTruthy();
+});
+
+test("editing only the name renames without going online", async () => {
+  const { downloadPlaylist } = jest.requireMock("../src/data/importIO");
+  await openSourceManager();
+  await fireEvent.press(screen.getByRole("button", { name: "编辑" }));
+  await fireEvent.changeText(screen.getByLabelText("来源名称"), "新名字");
+  await fireEvent.press(screen.getByRole("button", { name: "保存" }));
+  await waitFor(() =>
+    expect(repo.renameSource).toHaveBeenCalledWith("s1", "新名字"),
+  );
+  expect(downloadPlaylist).not.toHaveBeenCalled();
+  expect(repo.refreshSource).not.toHaveBeenCalled();
+  await waitFor(() => expect(screen.queryByLabelText("来源名称")).toBeNull());
+});
+
+test("a new link is read and its channels replace the old in one save", async () => {
+  const { downloadPlaylist } = jest.requireMock("../src/data/importIO");
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" || key === "guideSeen" ? true : fallback,
+  );
+  (downloadPlaylist as jest.Mock).mockResolvedValue({
+    text: "#EXTM3U\n#EXTINF:-1,新频道\nhttps://b.example.com/1.m3u8",
+    url: "https://b.example.com/list.m3u",
+  });
+  await openSourceManager();
+  await fireEvent.press(screen.getByRole("button", { name: "编辑" }));
+  await fireEvent.changeText(
+    screen.getByLabelText("节目单链接"),
+    "https://b.example.com/list.m3u",
+  );
+  await fireEvent.press(screen.getByRole("button", { name: "保存" }));
+  await waitFor(() =>
+    expect(repo.refreshSource).toHaveBeenCalledWith(
+      "s1",
+      1,
+      expect.objectContaining({ stats: expect.objectContaining({ valid: 1 }) }),
+      expect.objectContaining({ location: "https://b.example.com/list.m3u" }),
+    ),
+  );
+  expect(downloadPlaylist).toHaveBeenCalledWith(
+    "https://b.example.com/list.m3u",
+    expect.anything(),
+    true,
+  );
+  expect(repo.renameSource).not.toHaveBeenCalled();
+  await waitFor(() => expect(screen.queryByLabelText("来源名称")).toBeNull());
+});
+
+test("a link that cannot be read keeps the page open and the old channels", async () => {
+  const { downloadPlaylist, ImportIOError } = jest.requireMock(
+    "../src/data/importIO",
+  );
+  repo.getSetting.mockImplementation(async (key, fallback) =>
+    key === "remoteAllowed" || key === "guideSeen" ? true : fallback,
+  );
+  (downloadPlaylist as jest.Mock).mockRejectedValue(
+    new ImportIOError("下载失败，请检查链接"),
+  );
+  await openSourceManager();
+  await fireEvent.press(screen.getByRole("button", { name: "编辑" }));
+  await fireEvent.changeText(
+    screen.getByLabelText("节目单链接"),
+    "https://b.example.com/broken.m3u",
+  );
+  await fireEvent.press(screen.getByRole("button", { name: "保存" }));
+  await waitFor(() =>
+    expect(screen.getByText("下载失败，请检查链接")).toBeTruthy(),
+  );
+  expect(repo.refreshSource).not.toHaveBeenCalled();
+  expect(
+    screen.getByDisplayValue("https://b.example.com/broken.m3u"),
+  ).toBeTruthy();
 });
