@@ -14,10 +14,7 @@ import {
   AvailabilitySaveError,
   checkAvailability,
 } from "../source/availabilityCoordinator";
-import {
-  lookupIptvOrgLanguages,
-  needsLanguageLookup,
-} from "../source/iptvOrgLanguages";
+import { lookupIptvOrgLanguages } from "../source/iptvOrgLanguages";
 import {
   CHECK_CONCURRENCY,
   UNMETERED_CHECK_CONCURRENCY,
@@ -99,20 +96,18 @@ export function useSourceTasks({
     try {
       if (!(await guardRemote(abort.signal)) || !current()) return;
       if (!(await checkNetwork(abort.signal)) || !current()) return;
-      const targets = (
-        await repo.listChannels({ sourceId, includeVariants: true })
-      ).filter(needsLanguageLookup);
+      const targets = await repo.listLanguageLookupTargets(sourceId);
       if (!current() || !targets.length) return;
       const found = await lookupIptvOrgLanguages(
-        new Set(targets.map((channel) => channel.tvgId!)),
+        new Set(targets.map((channel) => channel.tvgId)),
         abort.signal,
       );
       if (!current()) return;
       await repo.saveLookedUpLanguages(
         targets.flatMap((channel) => {
-          const languages = found.get(channel.tvgId!);
+          const languages = found.get(channel.tvgId);
           return languages
-            ? [{ channelId: channel.id, tvgId: channel.tvgId!, languages }]
+            ? [{ channelId: channel.id, tvgId: channel.tvgId, languages }]
             : [];
         }),
       );

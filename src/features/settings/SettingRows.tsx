@@ -7,13 +7,16 @@ export function SettingSection({
   label,
   children,
 }: {
-  label: string;
+  /** Omitted when something above already says what the card is. */
+  label?: string;
   children: React.ReactNode;
 }) {
   const rows = React.Children.toArray(children).filter(Boolean);
   return (
     <View style={rowStyles.section}>
-      <Text style={[styles.caption, rowStyles.sectionLabel]}>{label}</Text>
+      {!!label && (
+        <Text style={[styles.caption, rowStyles.sectionLabel]}>{label}</Text>
+      )}
       <View style={rowStyles.card}>
         {rows.map((row, index) => (
           <React.Fragment key={index}>

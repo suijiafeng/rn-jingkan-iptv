@@ -7,7 +7,7 @@ import {
 import { RepositoryError, type SqlExecutor } from "./sql";
 import { synchronizeChecks } from "./availability";
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 /**
  * Brings a database at any older user_version up to SCHEMA_VERSION inside
@@ -33,7 +33,32 @@ export async function migrateSchema(tx: SqlExecutor): Promise<void> {
     );
     await synchronizeChecks(tx);
   }
+  if (current < 9) await migrateV9(tx);
   await tx.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
+}
+
+/**
+ * v9: languages the user assigns by hand, for channels the playlist and the
+ * iptv-org lookup leave unlabelled: one per source, and one per group name
+ * within a source. Never inferred; removing a source removes its choices.
+ */
+async function migrateV9(tx: SqlExecutor): Promise<void> {
+  const columns = new Set(
+    (await tx.getAllAsync<{ name: string }>("PRAGMA table_info(sources)")).map(
+      (column) => column.name,
+    ),
+  );
+  if (!columns.has("defaultLanguage"))
+    await tx.execAsync(
+      "ALTER TABLE sources ADD COLUMN defaultLanguage TEXT NOT NULL DEFAULT '';",
+    );
+  await tx.execAsync(`
+    CREATE TABLE IF NOT EXISTS source_group_languages (
+      sourceId TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+      groupName TEXT NOT NULL, language TEXT NOT NULL,
+      PRIMARY KEY (sourceId, groupName)
+    );
+  `);
 }
 
 /** v7: a source can be hidden without deleting its channels or user data. */

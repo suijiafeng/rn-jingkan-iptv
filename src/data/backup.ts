@@ -1,6 +1,7 @@
 import { normalizeRemoteUrl } from "../domain/url";
 import { channelGroupKey } from "../domain/channelSources";
 import { utf8ByteLength } from "../domain/m3u";
+import { normalizeLanguages } from "../domain/channelFacets";
 import type { SqlExecutor, SqlValue } from "./sql";
 
 export const MAX_BACKUP_BYTES = 32 * 1024 * 1024;
@@ -15,7 +16,9 @@ const SOURCE_COLUMNS = [
   "lastSuccessAt",
   "revision",
   "enabled",
+  "defaultLanguage",
 ] as const;
+const GROUP_LANGUAGE_COLUMNS = ["sourceId", "groupName", "language"] as const;
 const CHANNEL_COLUMNS = [
   "id",
   "sourceId",
@@ -51,6 +54,8 @@ export interface LocalBackup {
   sources: BackupRow[];
   channels: BackupRow[];
   favorites: BackupRow[];
+  /** Added after version 1 files were written; missing means none. */
+  groupLanguages: BackupRow[];
   preferences: Record<string, boolean>;
 }
 export class BackupError extends Error {
@@ -82,6 +87,14 @@ function integer(value: unknown, min = 0): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < min)
     throw new BackupError();
   return value;
+}
+/** One language code or "", exactly as the app stores it. */
+function language(value: unknown, empty: boolean): string {
+  const raw = string(value, true);
+  if (!raw && empty) return "";
+  const codes = normalizeLanguages(raw);
+  if (codes.length !== 1 || codes[0] !== raw) throw new BackupError();
+  return raw;
 }
 function select(
   row: Record<string, unknown>,
@@ -126,7 +139,11 @@ export function parseBackup(text: string): LocalBackup {
       integer(row.revision, 1);
       if (row.enabled !== undefined && row.enabled !== 0 && row.enabled !== 1)
         throw new BackupError();
-      return select({ ...row, enabled: row.enabled ?? 1 }, SOURCE_COLUMNS);
+      const defaultLanguage = language(row.defaultLanguage ?? "", true);
+      return select(
+        { ...row, enabled: row.enabled ?? 1, defaultLanguage },
+        SOURCE_COLUMNS,
+      );
     });
     const channelIds = new Set<string>(),
       identities = new Set<string>(),
@@ -177,6 +194,21 @@ export function parseBackup(text: string): LocalBackup {
       integer(row.createdAt);
       return select(row, ["groupKey", "createdAt"]);
     });
+    const groupLanguageKeys = new Set<string>();
+    const groupLanguages = rows(data.groupLanguages ?? []).map((row) => {
+      const sourceId = string(row.sourceId),
+        groupName = string(row.groupName);
+      const key = JSON.stringify([sourceId, groupName]);
+      if (
+        !sourceIds.has(sourceId) ||
+        groupName.includes(";") ||
+        groupLanguageKeys.has(key)
+      )
+        throw new BackupError();
+      groupLanguageKeys.add(key);
+      language(row.language, false);
+      return select(row, GROUP_LANGUAGE_COLUMNS);
+    });
     const preferences: Record<string, boolean> = {};
     const saved = object(data.preferences);
     for (const key of PREFERENCES) {
@@ -195,6 +227,7 @@ export function parseBackup(text: string): LocalBackup {
       sources,
       channels,
       favorites,
+      groupLanguages,
       preferences,
     };
   } catch (error) {
@@ -238,6 +271,9 @@ export async function readBackup(
     favorites: await tx.getAllAsync<BackupRow>(
       "SELECT groupKey,createdAt FROM favorite_groups ORDER BY groupKey",
     ),
+    groupLanguages: await tx.getAllAsync<BackupRow>(
+      `SELECT ${GROUP_LANGUAGE_COLUMNS.join(",")} FROM source_group_languages ORDER BY sourceId,groupName`,
+    ),
     preferences,
   };
 }
@@ -248,6 +284,7 @@ export async function writeBackup(
   backup: LocalBackup,
 ): Promise<void> {
   for (const table of [
+    "source_group_languages",
     "recent_groups",
     "favorite_groups",
     "channels",
@@ -259,6 +296,7 @@ export async function writeBackup(
     ["sources", SOURCE_COLUMNS, backup.sources],
     ["channels", CHANNEL_COLUMNS, backup.channels],
     ["favorite_groups", ["groupKey", "createdAt"], backup.favorites],
+    ["source_group_languages", GROUP_LANGUAGE_COLUMNS, backup.groupLanguages],
   ] as const) {
     const batchSize = Math.floor(900 / columns.length);
     for (let offset = 0; offset < entries.length; offset += batchSize) {

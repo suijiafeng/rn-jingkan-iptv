@@ -8,6 +8,7 @@ import {
 import type { SqlExecutor } from "./sql";
 import {
   CHANNEL_SELECT,
+  EFFECTIVE_LANGUAGES,
   channelFilter,
   groupOrder,
   mapChannel,
@@ -110,7 +111,7 @@ export async function queryFacetRows(
     languages: string;
     groupName: string;
   }>(
-    `SELECT DISTINCT c.countries, CASE WHEN c.languages <> '' THEN c.languages ELSE c.lookupLanguages END AS languages, c.groupName
+    `SELECT DISTINCT c.countries, ${EFFECTIVE_LANGUAGES} AS languages, c.groupName
      FROM channels c JOIN sources s ON s.id = c.sourceId
      WHERE c.active = 1 AND s.enabled = 1${sourceId ? " AND c.sourceId = ?" : ""}`,
     sourceId ? [sourceId] : [],

@@ -130,3 +130,52 @@ test("the mini player choice travels in backups, and older files still restore",
     target.db.native.close();
   }
 });
+
+test("source and group languages travel in backups; older files restore without them", async () => {
+  const origin = await openTestRepository(),
+    target = await openTestRepository();
+  try {
+    await importInitialInto(origin.repo);
+    const [source] = await origin.repo.listSources();
+    await origin.repo.setSourceLanguages(source.id, {
+      defaultLanguage: "zh",
+      groups: { 体育: "en" },
+    });
+    const text = await origin.repo.exportBackup();
+    await target.repo.restoreBackup(text);
+    expect(await target.repo.getSourceLanguages(source.id)).toEqual({
+      defaultLanguage: "zh",
+      groups: { 体育: "en" },
+    });
+
+    // A file from before languages could be chosen.
+    const older = JSON.parse(text);
+    delete older.groupLanguages;
+    for (const row of older.sources) delete row.defaultLanguage;
+    await target.repo.restoreBackup(JSON.stringify(older));
+    expect(await target.repo.getSourceLanguages(source.id)).toEqual({
+      defaultLanguage: "",
+      groups: {},
+    });
+
+    // Anything but one stored code, or a dangling source, is refused.
+    for (const broken of [
+      {
+        ...JSON.parse(text),
+        groupLanguages: [
+          { sourceId: "nope", groupName: "体育", language: "en" },
+        ],
+      },
+      {
+        ...JSON.parse(text),
+        groupLanguages: [
+          { sourceId: source.id, groupName: "体育", language: "English" },
+        ],
+      },
+    ])
+      expect(() => parseBackup(JSON.stringify(broken))).toThrow();
+  } finally {
+    origin.db.native.close();
+    target.db.native.close();
+  }
+});

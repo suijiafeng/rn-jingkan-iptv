@@ -2,16 +2,17 @@ import React from "react";
 import {
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, ErrorNotice, Heading } from "../../components/ui";
 import type { Source } from "../../domain/types";
 import { colors, styles } from "../../theme";
 import type { Repository } from "../../data/repository";
+import { SourceLanguageSection } from "./SourceLanguageSection";
 import {
   useSourceEdit,
   type SourceEdit,
@@ -19,8 +20,9 @@ import {
 } from "./useSourceEdit";
 
 /**
- * Editing a source on one page: the name, and the link (a local list shows
- * its file instead, tapped to pick another). One 保存 applies both. A fresh
+ * Editing a source on one page: the name, the link (a local list shows its
+ * file instead, tapped to pick another) and the languages for channels the
+ * playlist leaves unlabelled. One 保存 applies them all. A fresh
  * page is mounted for each source, so its fields start from that source.
  */
 export function EditSourceModal({
@@ -73,7 +75,10 @@ export function EditSourceView({
 }) {
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.content}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.content}
+      >
         <Heading title="编辑节目来源" />
         <ErrorNotice message={edit.error} onDismiss={edit.dismissError} />
         <Text style={styles.caption}>名称</Text>
@@ -119,13 +124,21 @@ export function EditSourceView({
             placeholderTextColor={colors.muted}
           />
         )}
+        {edit.languages && (
+          <SourceLanguageSection
+            languages={edit.languages}
+            groups={edit.groups}
+            disabled={edit.busy}
+            onChange={edit.setLanguages}
+          />
+        )}
         <Button
           label={edit.busy ? "正在保存…" : "保存"}
           disabled={edit.busy || !edit.name.trim()}
           onPress={edit.save}
         />
         <Button label="取消" secondary onPress={edit.cancel} />
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }

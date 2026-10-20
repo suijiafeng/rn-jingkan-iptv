@@ -440,3 +440,37 @@ test("a link that cannot be read keeps the page open and the old channels", asyn
     screen.getByDisplayValue("https://b.example.com/broken.m3u"),
   ).toBeTruthy();
 });
+
+test("languages for the source and its groups are chosen on 编辑 and saved offline", async () => {
+  const { downloadPlaylist } = jest.requireMock("../src/data/importIO");
+  repo.listSourceGroups.mockResolvedValue(["香港", "央视"]);
+  repo.getSourceLanguages.mockResolvedValue({
+    defaultLanguage: "zh",
+    groups: {},
+  });
+  await openSourceManager();
+  await fireEvent.press(screen.getByRole("button", { name: "编辑" }));
+  await fireEvent.press(await screen.findByLabelText("香港的语言：不设置"));
+  await fireEvent.press(screen.getByLabelText("粤语"));
+  expect(screen.getByLabelText("香港的语言：粤语")).toBeTruthy();
+  expect(screen.getByLabelText("整个来源的语言：中文")).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "保存" }));
+  await waitFor(() =>
+    expect(repo.setSourceLanguages).toHaveBeenCalledWith("s1", {
+      defaultLanguage: "zh",
+      groups: { 香港: "yue" },
+    }),
+  );
+  expect(downloadPlaylist).not.toHaveBeenCalled();
+  expect(repo.renameSource).not.toHaveBeenCalled();
+});
+
+test("saving untouched languages writes nothing", async () => {
+  await openSourceManager();
+  await fireEvent.press(screen.getByRole("button", { name: "编辑" }));
+  await screen.findByLabelText("整个来源的语言：不设置");
+  await fireEvent.changeText(screen.getByLabelText("来源名称"), "新名字");
+  await fireEvent.press(screen.getByRole("button", { name: "保存" }));
+  await waitFor(() => expect(repo.renameSource).toHaveBeenCalled());
+  expect(repo.setSourceLanguages).not.toHaveBeenCalled();
+});

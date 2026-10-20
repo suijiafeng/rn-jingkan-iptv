@@ -22,6 +22,7 @@ jest.mock("../../source/iptvOrgLanguages", () => ({
 
 const repo = {
   listChannels: jest.fn(),
+  listLanguageLookupTargets: jest.fn(),
   saveLookedUpLanguages: jest.fn(),
 };
 
@@ -46,15 +47,15 @@ async function mount() {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  repo.listChannels.mockResolvedValue([
-    { id: "c1", tvgId: "CCTV1.cn@SD", languages: [] },
-    { id: "c2", tvgId: "BBCNews.uk@HD", languages: ["en"] },
-    { id: "c3", tvgId: null, languages: [] },
+  repo.listChannels.mockResolvedValue([]);
+  // The repository already narrows to unlabelled iptv-org rows.
+  repo.listLanguageLookupTargets.mockResolvedValue([
+    { id: "c1", tvgId: "CCTV1.cn@SD" },
   ]);
   repo.saveLookedUpLanguages.mockResolvedValue(1);
 });
 
-test("only unlabelled iptv-org channels are looked up and saved", async () => {
+test("the repository's lookup targets are looked up and saved", async () => {
   (lookupIptvOrgLanguages as jest.Mock).mockResolvedValueOnce(
     new Map([["CCTV1.cn@SD", ["zh"]]]),
   );

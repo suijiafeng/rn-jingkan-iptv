@@ -115,6 +115,12 @@ export const repo = {
   deleteSource: jest.fn(async () => {}),
   setSourceEnabled: jest.fn(async () => {}),
   renameSource: jest.fn(async () => {}),
+  getSourceLanguages: jest.fn(async () => ({
+    defaultLanguage: "",
+    groups: {},
+  })),
+  setSourceLanguages: jest.fn(async () => {}),
+  listSourceGroups: jest.fn(async (): Promise<string[]> => []),
   beginRefresh: jest.fn(async (sourceId: string) => ({
     sourceId,
     revision: 1,
@@ -172,6 +178,10 @@ export function resetAppMocks() {
       ) ?? null,
   );
   repo.listChannelSources.mockReset().mockResolvedValue([]);
+  repo.getSourceLanguages
+    .mockReset()
+    .mockResolvedValue({ defaultLanguage: "", groups: {} });
+  repo.listSourceGroups.mockReset().mockResolvedValue([]);
   repo.clearAll.mockReset().mockResolvedValue(undefined);
   repo.setSetting.mockImplementation(async () => {});
   repo.toggleFavorite.mockReset();

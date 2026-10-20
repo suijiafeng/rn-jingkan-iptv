@@ -22,6 +22,13 @@ import {
   toggleFavorite,
 } from "./channelLibrary";
 import { migrateSchema } from "./schema";
+import {
+  queryLanguageLookupTargets,
+  querySourceGroups,
+  readSourceLanguages,
+  writeSourceLanguages,
+  type SourceLanguages,
+} from "./sourceLanguages";
 import { readChecks, writeChecks } from "./availability";
 import {
   assertContent,
@@ -161,6 +168,29 @@ export class Repository {
 
   listGroups(sourceId?: string): Promise<string[]> {
     return queryGroups(this.db, sourceId);
+  }
+
+  /** Groups of one source, on or off, for choosing their languages. */
+  listSourceGroups(sourceId: string): Promise<string[]> {
+    return querySourceGroups(this.db, sourceId);
+  }
+
+  getSourceLanguages(sourceId: string): Promise<SourceLanguages> {
+    return readSourceLanguages(this.db, sourceId);
+  }
+
+  /** The user's own languages for a source and its groups, replaced whole. */
+  setSourceLanguages(
+    sourceId: string,
+    languages: SourceLanguages,
+  ): Promise<void> {
+    return this.transaction((tx) =>
+      writeSourceLanguages(tx, sourceId, languages),
+    );
+  }
+
+  listLanguageLookupTargets(sourceId: string) {
+    return queryLanguageLookupTargets(this.db, sourceId);
   }
 
   async listFacets(sourceId?: string): Promise<ChannelFacetOptions> {
@@ -317,7 +347,11 @@ export class Repository {
    * a refreshed row with a different address is never affected.
    */
   async saveCheckResults(
-    results: { channelId: string; streamUrl: string; ok: boolean }[],
+    results: {
+      channelId: string;
+      streamUrl: string;
+      ok: boolean;
+    }[],
   ): Promise<void> {
     if (!results.length) return;
     await this.transaction(async (tx) => {

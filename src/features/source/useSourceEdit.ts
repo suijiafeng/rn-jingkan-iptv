@@ -8,6 +8,7 @@ import {
 } from "../../data/importIO";
 import { M3UParseError, MAX_MIB, parseM3U } from "../../domain/m3u";
 import type { Source } from "../../domain/types";
+import type { SourceLanguages } from "../../data/sourceLanguages";
 
 /** What the edit page needs from the app to go online and to report back. */
 export interface SourceEditDeps {
@@ -19,8 +20,8 @@ export interface SourceEditDeps {
 }
 
 /**
- * Editing one source in a single save: its name, and its link (or, for a
- * local list, its file). A new link or file is read and its channels
+ * Editing one source in a single save: its name, its link (or, for a
+ * local list, its file), and the languages the user gives it and its groups. A new link or file is read and its channels
  * replace the old ones in one transaction; nothing changes if that fails.
  * Unchanged fields are left alone, so saving a new name never goes online.
  */
@@ -43,10 +44,33 @@ export function useSourceEdit({
     [file, setFile] = useState<{ name: string; content: string } | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  // Null until read (and if reading fails, the section stays hidden).
+  const [languages, setLanguages] = useState<SourceLanguages | null>(null),
+    [savedLanguages, setSavedLanguages] = useState<SourceLanguages | null>(
+      null,
+    ),
+    [groups, setGroups] = useState<string[]>([]);
   const controller = useRef<AbortController | null>(null);
 
   // Leaving the page stops a download or file read still running.
   useEffect(() => () => controller.current?.abort(), []);
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      repo.getSourceLanguages(source.id),
+      repo.listSourceGroups(source.id),
+    ])
+      .then(([stored, names]) => {
+        if (!active) return;
+        setLanguages(stored);
+        setSavedLanguages(stored);
+        setGroups(names);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [repo, source.id]);
 
   const cancel = () => {
     controller.current?.abort();
@@ -141,6 +165,19 @@ export function useSourceEdit({
           return;
         }
       }
+      if (
+        languages &&
+        JSON.stringify(languages) !== JSON.stringify(savedLanguages)
+      ) {
+        try {
+          await repo.setSourceLanguages(source.id, languages);
+          setSavedLanguages(languages);
+        } catch {
+          if (relink || file || newName !== source.name) changed();
+          if (deps.mounted.current) setError("语言未保存，请重试");
+          return;
+        }
+      }
       changed();
       if (!abort.signal.aborted) close();
     } catch (failure) {
@@ -170,6 +207,12 @@ export function useSourceEdit({
       setError("");
     },
     fileName: file?.name ?? (source.kind === "file" ? source.location : ""),
+    languages,
+    groups,
+    setLanguages: (next: SourceLanguages) => {
+      setLanguages(next);
+      setError("");
+    },
     chooseFile: () => void chooseFile(),
     busy,
     error,

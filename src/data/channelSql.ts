@@ -30,12 +30,30 @@ export interface RawChannel extends Omit<
   countries: string;
   languages: string;
   lookupLanguages?: string;
+  effectiveLanguages?: string;
   favoriteCreatedAt?: number | null;
   sourceCreatedAt?: number;
   groupRow?: number;
   preferredChannelId?: string | null;
   sourceEnabled?: number;
 }
+
+/**
+ * The language a channel is filtered and shown by: playlist labels first,
+ * then the iptv-org lookup, then the user's languages for the channel's
+ * groups (in the playlist's group order), then the user's language for the whole source. Needs
+ * channels as c joined with sources as s.
+ */
+export const EFFECTIVE_LANGUAGES = `COALESCE(
+  NULLIF(c.languages, ''),
+  NULLIF(c.lookupLanguages, ''),
+  (SELECT group_concat(language, ';') FROM (
+    SELECT g.language FROM source_group_languages g
+    WHERE g.sourceId = c.sourceId
+      AND instr(';' || c.groupName || ';', ';' || g.groupName || ';') > 0
+    ORDER BY instr(';' || c.groupName || ';', ';' || g.groupName || ';'))),
+  NULLIF(s.defaultLanguage, ''),
+  '')`;
 
 export const SOURCE_SELECT = `SELECT s.id, s.name, s.kind, s.location, s.createdAt, s.lastSuccessAt,
   s.lastErrorCategory, s.revision, s.enabled,
@@ -53,7 +71,7 @@ export const SOURCE_SELECT = `SELECT s.id, s.name, s.kind, s.location, s.created
     WHERE c.sourceId = s.id AND c.active = 1) AS lastCheckedAt
   FROM sources s`;
 export const CHANNEL_SELECT = `SELECT c.*, s.name AS sourceName, s.createdAt AS sourceCreatedAt,
-  s.enabled AS sourceEnabled,
+  s.enabled AS sourceEnabled, ${EFFECTIVE_LANGUAGES} AS effectiveLanguages,
   CASE WHEN fg.groupKey IS NULL THEN 0 ELSE 1 END AS favorite,
   fg.createdAt AS favoriteCreatedAt, rg.lastPlayedAt, rg.preferredChannelId
   FROM channels c JOIN sources s ON s.id = c.sourceId
@@ -167,13 +185,10 @@ export function assertContent(content: string): void {
   )
     throw new RepositoryError("invalid_input");
 }
-// Playlist labels win; otherwise the iptv-org lookup (if the user ran it).
-const EFFECTIVE_LANGUAGES =
-  "(CASE WHEN c.languages <> '' THEN c.languages ELSE c.lookupLanguages END)";
-
 export function mapChannel(row: RawChannel): Channel {
   const {
     lookupLanguages,
+    effectiveLanguages,
     favoriteCreatedAt: _favoriteCreatedAt,
     sourceCreatedAt: _sourceCreatedAt,
     groupRow: _groupRow,
@@ -184,7 +199,9 @@ export function mapChannel(row: RawChannel): Channel {
   return {
     ...rest,
     countries: normalizeCountries(row.countries),
-    languages: normalizeLanguages(row.languages || lookupLanguages),
+    languages: normalizeLanguages(
+      effectiveLanguages ?? (row.languages || lookupLanguages),
+    ),
     active: row.active === 1 && sourceEnabled !== 0,
     favorite: row.favorite === 1,
   };

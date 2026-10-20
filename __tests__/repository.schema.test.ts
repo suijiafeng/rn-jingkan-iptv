@@ -43,17 +43,17 @@ describe("SQLite repository with real SQLite", () => {
       { id: channel.id, favorite: true },
     ]);
     expect(await db.getFirstAsync("PRAGMA user_version")).toEqual({
-      user_version: 8,
+      user_version: 9,
     });
   });
 
   it("does not rewrite a database newer than this app", async () => {
-    await db.execAsync("PRAGMA user_version = 9");
+    await db.execAsync("PRAGMA user_version = 10");
     await expect(createRepository(db)).rejects.toMatchObject({
       code: "newer_schema",
     });
     expect(await db.getFirstAsync("PRAGMA user_version")).toEqual({
-      user_version: 9,
+      user_version: 10,
     });
   });
 
@@ -78,7 +78,7 @@ describe("SQLite repository with real SQLite", () => {
     `);
     const migrated = await createRepository(legacy);
     expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
-      user_version: 8,
+      user_version: 9,
     });
     expect(await migrated.listGroups()).toEqual(
       ["纪录片", "旅游", "文化", UNGROUPED].sort((left, right) =>
@@ -135,7 +135,7 @@ describe("SQLite repository with real SQLite", () => {
         "hd",
       );
       expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
-        user_version: 8,
+        user_version: 9,
       });
     } finally {
       legacy.native.close();
@@ -165,7 +165,7 @@ describe("SQLite repository with real SQLite", () => {
         Repository,
       );
       expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
-        user_version: 8,
+        user_version: 9,
       });
     } finally {
       legacy.native.close();
@@ -239,7 +239,7 @@ describe("SQLite repository with real SQLite", () => {
         { id: "legacy-channel" },
       ]);
       expect(await legacy.getFirstAsync("PRAGMA user_version")).toEqual({
-        user_version: 8,
+        user_version: 9,
       });
       expect(await legacy.getAllAsync("PRAGMA foreign_key_check")).toEqual([]);
     } finally {
