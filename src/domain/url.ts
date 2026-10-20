@@ -131,3 +131,12 @@ export function safeHostname(input: string): string {
     return "网络来源";
   }
 }
+
+/**
+ * A stream address for display: everything up to the query. The query and
+ * fragment often carry tokens, so they show only as "?…".
+ */
+export function displayStreamAddress(url: string): string {
+  const cut = url.search(/[?#]/);
+  return cut === -1 ? url : `${url.slice(0, cut)}?…`;
+}

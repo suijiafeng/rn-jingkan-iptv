@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { colors } from "../../theme";
 import type { Channel } from "../../domain/types";
 import { qualityName } from "../../domain/channelSources";
+import { displayStreamAddress } from "../../domain/url";
 
 export function SourceList({
   current,
@@ -40,6 +41,10 @@ export function SourceList({
             >
               {selected ? "●" : "○"} {qualityName(source)} · {source.sourceName}
             </Text>
+            {/* The full address, its query (often a token) hidden. */}
+            <Text style={styles.sourceAddress} numberOfLines={3}>
+              {displayStreamAddress(source.streamUrl)}
+            </Text>
             {source.checkStatus === "unreachable" && (
               <Text style={styles.sourceWarning}>上次检测未连通</Text>
             )}
@@ -66,5 +71,6 @@ const styles = StyleSheet.create({
   },
   sourceRowSelected: { borderColor: colors.accent },
   sourceText: { color: colors.text, fontSize: 14, lineHeight: 21 },
+  sourceAddress: { color: colors.muted, fontSize: 11, lineHeight: 16 },
   sourceWarning: { color: colors.warn, fontSize: 11, lineHeight: 16 },
 });
