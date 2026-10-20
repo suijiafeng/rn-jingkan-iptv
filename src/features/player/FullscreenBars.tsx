@@ -61,6 +61,8 @@ export function FullscreenBars({
         {/* Source leads the right-hand group. */}
         {props.fullscreen && sourceButton}
         {props.fullscreen && favoriteButton}
+        {/* Listen/watch in the top-right corner, as in portrait. */}
+        {props.fullscreen && view.audioButton}
       </View>
       {props.fullscreen && controlsVisible && (
         <View
@@ -80,11 +82,6 @@ export function FullscreenBars({
             </View>
             {/* Volume leads the right-hand group. */}
             {view.muteButton}
-            <OverlayButton
-              label={props.audioOnly ? "看视频" : "听音频"}
-              selected={props.audioOnly}
-              onPress={props.onToggleAudioOnly}
-            />
             <OverlayButton
               label="退出横屏"
               icon={<ExitFullscreenIcon size={20} />}

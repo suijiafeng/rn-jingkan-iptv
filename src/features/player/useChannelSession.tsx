@@ -25,6 +25,8 @@ import {
   PictureInPictureIcon,
   PlayIcon,
   RefreshIcon,
+  HeadphonesIcon,
+  ScreenIcon,
   VolumeIcon,
 } from "./playerIcons";
 import { OverlayButton, SourceChip } from "./overlayWidgets";
@@ -401,6 +403,16 @@ export function useChannelSession(props: SessionProps) {
       onPress={() => props.onMutedChange(!props.muted)}
     />
   );
+  // The glyph names what a tap switches to: headphones while watching, a
+  // screen while listening (the picture itself says it is listening).
+  const audioButton = (
+    <OverlayButton
+      label={props.audioOnly ? "看视频" : "听音频"}
+      icon={props.audioOnly ? <ScreenIcon /> : <HeadphonesIcon />}
+      variant="quiet"
+      onPress={props.onToggleAudioOnly}
+    />
+  );
 
   return {
     insets,
@@ -437,6 +449,7 @@ export function useChannelSession(props: SessionProps) {
     favoriteButton,
     pictureInPictureButton,
     muteButton,
+    audioButton,
   };
 }
 

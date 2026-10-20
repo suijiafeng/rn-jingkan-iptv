@@ -357,7 +357,74 @@ export function RefreshIcon({ size = 16, color = colors.text }: IconProps) {
   );
 }
 
+/** Listen only: a headband arc with an ear cup at each end. */
+export function HeadphonesIcon({ size = 22, color = colors.text }: IconProps) {
+  const band = size * 0.74;
+  const cup = { width: size * 0.2, height: size * 0.32, top: size * 0.56 };
+  return (
+    <View style={{ width: size, height: size }} pointerEvents="none">
+      <View
+        style={{
+          position: "absolute",
+          left: (size - band) / 2,
+          top: size * 0.14,
+          width: band,
+          height: band * 0.62,
+          borderTopLeftRadius: band / 2,
+          borderTopRightRadius: band / 2,
+          borderWidth: 2,
+          borderBottomWidth: 0,
+          borderColor: color,
+        }}
+      />
+      <View
+        style={[
+          styles.cup,
+          cup,
+          { left: (size - band) / 2 - 1, backgroundColor: color },
+        ]}
+      />
+      <View
+        style={[
+          styles.cup,
+          cup,
+          { right: (size - band) / 2 - 1, backgroundColor: color },
+        ]}
+      />
+    </View>
+  );
+}
+
+/** Watch the picture again: a screen outline on a short stand. */
+export function ScreenIcon({ size = 22, color = colors.text }: IconProps) {
+  return (
+    <View
+      style={[styles.box, { width: size, height: size, gap: size * 0.1 }]}
+      pointerEvents="none"
+    >
+      <View
+        style={{
+          width: size * 0.84,
+          height: size * 0.56,
+          borderRadius: 3,
+          borderWidth: 2,
+          borderColor: color,
+        }}
+      />
+      <View
+        style={{
+          width: size * 0.36,
+          height: 2,
+          borderRadius: 1,
+          backgroundColor: color,
+        }}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   box: { alignItems: "center", justifyContent: "center" },
   corner: { position: "absolute" },
+  cup: { position: "absolute", borderRadius: 2 },
 });

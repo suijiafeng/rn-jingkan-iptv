@@ -7,10 +7,14 @@ export const sessionStyles = StyleSheet.create({
   audioStage: {
     backgroundColor: colors.surface,
     alignItems: "center",
+    // Above the centre key, which sits over the picture's middle.
     paddingTop: 12,
     gap: 4,
   },
   audioSymbol: { color: colors.accent, fontSize: 32 },
+  // The docked window has no centre key: the note sits in the middle.
+  miniAudioStage: { justifyContent: "center", paddingTop: 0 },
+  audioCaption: { color: colors.muted, fontSize: 12, lineHeight: 18 },
   fullscreenSources: {
     position: "absolute",
     top: 82,
@@ -32,7 +36,6 @@ export const sessionStyles = StyleSheet.create({
   // Docked: the picture fills the owner's floating window, which draws
   // the frame, close key and resize edges.
   miniWindow: { flex: 1 },
-  miniAudioStage: { justifyContent: "center", paddingTop: 0 },
   osd: {
     position: "absolute",
     top: 24,

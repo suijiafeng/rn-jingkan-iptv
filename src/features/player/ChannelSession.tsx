@@ -128,6 +128,9 @@ export function ChannelSession(props: SessionProps) {
             testID="audio-stage"
           >
             <Text style={sessionStyles.audioSymbol}>♫</Text>
+            {!props.mini && (
+              <Text style={sessionStyles.audioCaption}>正在听音频</Text>
+            )}
           </View>
         )}
         {/* The whole picture: tap toggles the overlay; in fullscreen a
@@ -280,6 +283,8 @@ export function ChannelSession(props: SessionProps) {
             </View>
             <View style={sessionStyles.portraitTopRight}>
               {!props.audioOnly && view.pictureInPictureButton}
+              {/* Listen/watch keeps the corner in both modes. */}
+              {view.audioButton}
             </View>
           </>
         )}
@@ -300,11 +305,6 @@ export function ChannelSession(props: SessionProps) {
           </View>
           <View style={sessionStyles.infoRow}>
             {sourceButton}
-            <OverlayButton
-              label={props.audioOnly ? "看视频" : "听音频"}
-              selected={props.audioOnly}
-              onPress={props.onToggleAudioOnly}
-            />
             {/* The risk is explained in the confirmation this opens. */}
             {props.audioOnly &&
               !props.backgroundAllowed &&
