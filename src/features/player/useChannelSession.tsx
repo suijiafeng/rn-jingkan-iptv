@@ -44,6 +44,7 @@ import {
   PlaybackController,
 } from "./playbackController";
 import {
+  CONTROLS_FIRST_HIDE_MS,
   CONTROLS_HIDE_MS,
   descriptions,
   OSD_MS,
@@ -150,9 +151,21 @@ export function useChannelSession(props: SessionProps) {
     !scrubbing &&
     !screenReader &&
     state.phase === "playing";
+  // The first show of a new stream stays longer; once hidden (by the timer
+  // or a tap), later shows use the short delay.
+  const firstShow = useRef(true);
+  useEffect(() => {
+    firstShow.current = true;
+  }, [state.attemptId]);
+  useEffect(() => {
+    if (!controlsShown) firstShow.current = false;
+  }, [controlsShown]);
   useEffect(() => {
     if (!autoHide) return;
-    const timer = setTimeout(() => setControlsShown(false), CONTROLS_HIDE_MS);
+    const timer = setTimeout(
+      () => setControlsShown(false),
+      firstShow.current ? CONTROLS_FIRST_HIDE_MS : CONTROLS_HIDE_MS,
+    );
     return () => clearTimeout(timer);
   }, [autoHide, setControlsShown]);
   // Loading keeps the picture clear for zapping; states that need a decision

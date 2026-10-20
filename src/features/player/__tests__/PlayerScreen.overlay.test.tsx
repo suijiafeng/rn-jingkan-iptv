@@ -453,3 +453,39 @@ test("listening requires explicit confirmation for background permission and can
     alert.mockRestore();
   }
 });
+
+describe("controls timing and the docked title", () => {
+  const start = async () => {
+    await act(() =>
+      mockAttempt?.controller.nativeStarted(mockAttempt.attemptId),
+    );
+  };
+
+  test("the first show of a stream stays 6s; later shows hide after 4s", async () => {
+    jest.useFakeTimers();
+    try {
+      const ui = await render(<PlayerScreen {...props()} />);
+      await start();
+      const shown = () => !!ui.queryByRole("button", { name: "横屏全屏" });
+      expect(shown()).toBe(true);
+      await act(() => jest.advanceTimersByTime(4000));
+      expect(shown()).toBe(true);
+      await act(() => jest.advanceTimersByTime(2000));
+      expect(shown()).toBe(false);
+      const layer = ui.getByTestId("video-tap-layer");
+      await act(() => {
+        layer.props.onResponderGrant({ nativeEvent: { pageX: 50, pageY: 50 } });
+        layer.props.onResponderRelease({
+          nativeEvent: { pageX: 50, pageY: 50 },
+        });
+      });
+      expect(shown()).toBe(true);
+      await act(() => jest.advanceTimersByTime(4000));
+      expect(shown()).toBe(false);
+      await ui.unmount();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+});
