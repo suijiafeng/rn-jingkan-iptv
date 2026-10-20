@@ -158,3 +158,63 @@ test("choices survive a refresh of the same list", async () => {
   );
   expect((await languagesByName())["CCTV-1"]).toEqual(["zh"]);
 });
+
+describe("audio languages a stream declares", () => {
+  const url = "https://a.example.com/cctv1";
+
+  test("rank after the lookup and before the user's own choices", async () => {
+    const source = await importPlaylist();
+    await repo.setSourceLanguages(source.id, {
+      defaultLanguage: "zh",
+      groups: { 央视: "en" },
+    });
+    const [cctv] = (await repo.listChannels()).filter(
+      (channel) => channel.name === "CCTV-1",
+    );
+    await repo.saveCheckResults([
+      { channelId: cctv.id, streamUrl: url, ok: true, languages: ["yue"] },
+    ]);
+    expect((await languagesByName())["CCTV-1"]).toEqual(["yue"]);
+    // A later check that read no master playlist keeps what was learned.
+    await repo.saveCheckResults([
+      { channelId: cctv.id, streamUrl: url, ok: true },
+    ]);
+    expect((await languagesByName())["CCTV-1"]).toEqual(["yue"]);
+    // One that read a playlist without languages clears it.
+    await repo.saveCheckResults([
+      { channelId: cctv.id, streamUrl: url, ok: true, languages: [] },
+    ]);
+    expect((await languagesByName())["CCTV-1"]).toEqual(["en"]);
+  });
+
+  test("belong to the address: a new address forgets them, a new source with it inherits them", async () => {
+    const source = await importPlaylist();
+    const [cctv] = (await repo.listChannels()).filter(
+      (channel) => channel.name === "CCTV-1",
+    );
+    await repo.saveCheckResults([
+      { channelId: cctv.id, streamUrl: url, ok: true, languages: ["yue"] },
+    ]);
+    const other = await repo.importSource({
+      name: "另一份",
+      kind: "file",
+      location: "other.m3u",
+      content: content([{ name: "一台", url, group: "其他" }]),
+      preview: await parseM3U(content([{ name: "一台", url, group: "其他" }])),
+    });
+    expect(
+      (await repo.listChannels({ sourceId: other.id }))[0].languages,
+    ).toEqual(["yue"]);
+
+    const moved = playlist.replace(url, "https://a.example.com/cctv1-new");
+    const token = await repo.beginRefresh(source.id);
+    await repo.refreshSource(source.id, token.revision, await parseM3U(moved), {
+      generation: token.generation,
+      content: moved,
+    });
+    const [refreshed] = (
+      await repo.listChannels({ sourceId: source.id })
+    ).filter((channel) => channel.name === "CCTV-1");
+    expect(refreshed.languages).toEqual([]);
+  });
+});

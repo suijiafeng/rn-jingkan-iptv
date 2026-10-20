@@ -38,11 +38,22 @@ export async function migrateSchema(tx: SqlExecutor): Promise<void> {
 }
 
 /**
- * v9: languages the user assigns by hand, for channels the playlist and the
- * iptv-org lookup leave unlabelled: one per source, and one per group name
- * within a source. Never inferred; removing a source removes its choices.
+ * v9: two more language sources for channels the playlist and the iptv-org
+ * lookup leave unlabelled. Audio languages a stream's master playlist
+ * declares, recorded per address by an availability check; and languages
+ * the user assigns by hand, one per source and one per group name within a
+ * source. Never inferred; removing a source removes its choices.
  */
 async function migrateV9(tx: SqlExecutor): Promise<void> {
+  const channelColumns = new Set(
+    (await tx.getAllAsync<{ name: string }>("PRAGMA table_info(channels)")).map(
+      (column) => column.name,
+    ),
+  );
+  if (!channelColumns.has("streamLanguages"))
+    await tx.execAsync(
+      "ALTER TABLE channels ADD COLUMN streamLanguages TEXT NOT NULL DEFAULT '';",
+    );
   const columns = new Set(
     (await tx.getAllAsync<{ name: string }>("PRAGMA table_info(sources)")).map(
       (column) => column.name,

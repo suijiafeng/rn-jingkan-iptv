@@ -62,3 +62,28 @@ test("each result is handed over as it lands, the same object as returned", asyn
   expect(landed).toHaveLength(5);
   results.forEach((result, index) => expect(landed[index]).toBe(result));
 });
+
+test("languages a stream declared ride along with its result", async () => {
+  const results = await checkChannels(
+    [
+      { id: "a", streamUrl: "https://a.example.com/a" },
+      { id: "b", streamUrl: "https://a.example.com/b" },
+    ],
+    {
+      signal: signal(),
+      check: async (url) =>
+        url.endsWith("a") ? { ok: true, languages: ["yue"] } : { ok: true },
+    },
+  );
+  expect(results).toEqual(
+    expect.arrayContaining([
+      {
+        channelId: "a",
+        streamUrl: "https://a.example.com/a",
+        ok: true,
+        languages: ["yue"],
+      },
+      { channelId: "b", streamUrl: "https://a.example.com/b", ok: true },
+    ]),
+  );
+});

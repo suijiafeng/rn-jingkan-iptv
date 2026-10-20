@@ -1,5 +1,5 @@
 import { M3U_LIMITS, utf8ByteLength } from "../domain/m3u";
-import { synchronizeChecks } from "./availability";
+import { synchronizeChecks, synchronizeStreamLanguages } from "./availability";
 import type {
   Channel,
   ChannelQuery,
@@ -31,6 +31,7 @@ export interface RawChannel extends Omit<
   languages: string;
   lookupLanguages?: string;
   effectiveLanguages?: string;
+  streamLanguages?: string;
   favoriteCreatedAt?: number | null;
   sourceCreatedAt?: number;
   groupRow?: number;
@@ -40,13 +41,15 @@ export interface RawChannel extends Omit<
 
 /**
  * The language a channel is filtered and shown by: playlist labels first,
- * then the iptv-org lookup, then the user's languages for the channel's
+ * then the iptv-org lookup, then the audio languages the stream itself
+ * declared to an availability check, then the user's languages for the channel's
  * groups (in the playlist's group order), then the user's language for the whole source. Needs
  * channels as c joined with sources as s.
  */
 export const EFFECTIVE_LANGUAGES = `COALESCE(
   NULLIF(c.languages, ''),
   NULLIF(c.lookupLanguages, ''),
+  NULLIF(c.streamLanguages, ''),
   (SELECT group_concat(language, ';') FROM (
     SELECT g.language FROM source_group_languages g
     WHERE g.sourceId = c.sourceId
@@ -189,6 +192,7 @@ export function mapChannel(row: RawChannel): Channel {
   const {
     lookupLanguages,
     effectiveLanguages,
+    streamLanguages: _streamLanguages,
     favoriteCreatedAt: _favoriteCreatedAt,
     sourceCreatedAt: _sourceCreatedAt,
     groupRow: _groupRow,
@@ -262,12 +266,14 @@ export async function upsertChannels(
       lookupLanguages=CASE WHEN channels.tvgId IS excluded.tvgId THEN channels.lookupLanguages ELSE '' END,
       checkStatus=CASE WHEN channels.streamUrl=excluded.streamUrl THEN channels.checkStatus END,
       checkedAt=CASE WHEN channels.streamUrl=excluded.streamUrl THEN channels.checkedAt END,
+      streamLanguages=CASE WHEN channels.streamUrl=excluded.streamUrl THEN channels.streamLanguages ELSE '' END,
       streamUrl=excluded.streamUrl,qualityLabel=excluded.qualityLabel,qualityRank=excluded.qualityRank,
       sortIndex=excluded.sortIndex,active=1,lastSeenRevision=excluded.lastSeenRevision`,
       params,
     );
   }
   await synchronizeChecks(tx, sourceId);
+  await synchronizeStreamLanguages(tx, sourceId);
   // Favorite/recent state is keyed by groupKey, so newly imported
   // alternatives inherit it without copying per-stream rows.
 }

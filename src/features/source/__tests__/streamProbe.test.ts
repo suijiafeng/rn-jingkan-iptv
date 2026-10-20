@@ -2,6 +2,7 @@ import {
   CHECK_RETRY_DELAY_MS,
   CHECK_TIMEOUT_MS,
   checkStream,
+  probeStream,
 } from "../streamProbe";
 
 jest.mock("expo/fetch", () => ({ fetch: jest.fn() }));
@@ -219,4 +220,32 @@ test("a stalled server is retried once and then reported unreachable", async () 
   } finally {
     jest.useRealTimers();
   }
+});
+
+test("a reachable master playlist reports its audio languages; a failure reports none", async () => {
+  const master =
+    '#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="a",LANGUAGE="yue",URI="a.m3u8"\n#EXT-X-STREAM-INF:BANDWIDTH=1,AUDIO="a"\nv.m3u8\n';
+  const media = "#EXTM3U\n#EXTINF:6,\nseg1.ts\n";
+  fetchMock
+    .mockResolvedValueOnce(reply(200, master))
+    .mockResolvedValueOnce(reply(200, media))
+    .mockResolvedValueOnce(reply(206, "binary"));
+  await expect(
+    probeStream("https://a.example.com/live.m3u8", signal()),
+  ).resolves.toEqual({ ok: true, languages: ["yue"] });
+
+  // The segment is gone: unreachable, and what the playlist said is dropped.
+  fetchMock
+    .mockResolvedValueOnce(reply(200, master))
+    .mockResolvedValueOnce(reply(200, media))
+    .mockResolvedValueOnce(reply(404));
+  await expect(
+    probeStream("https://a.example.com/live.m3u8", signal()),
+  ).resolves.toEqual({ ok: false });
+
+  // A plain stream has no playlist to read a language from.
+  fetchMock.mockResolvedValueOnce(reply(206, "binary"));
+  await expect(
+    probeStream("https://a.example.com/x.ts", signal()),
+  ).resolves.toEqual({ ok: true });
 });

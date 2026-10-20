@@ -1,3 +1,4 @@
+import { normalizeLanguages } from "../domain/channelFacets";
 import type { SqlExecutor } from "./sql";
 
 export interface StoredCheck {
@@ -48,16 +49,52 @@ export async function synchronizeChecks(
   );
 }
 
+/**
+ * New imports also inherit the audio languages another row with the same
+ * address already learned. Separate from synchronizeChecks, which runs in
+ * migrations from before the column existed.
+ */
+export async function synchronizeStreamLanguages(
+  db: SqlExecutor,
+  sourceId: string,
+): Promise<void> {
+  await db.runAsync(
+    `UPDATE channels AS c SET streamLanguages = (
+      SELECT known.streamLanguages FROM channels known
+      WHERE known.streamUrl = c.streamUrl AND known.streamLanguages <> ''
+      ORDER BY known.checkedAt DESC, known.id LIMIT 1
+    ) WHERE c.sourceId = ? AND c.streamLanguages = '' AND EXISTS (
+      SELECT 1 FROM channels known
+      WHERE known.streamUrl = c.streamUrl AND known.streamLanguages <> ''
+    )`,
+    [sourceId],
+  );
+}
+
+/**
+ * Records reachability per address. Declared audio languages replace the
+ * stored ones only when the check read a master playlist; otherwise the
+ * last known languages stay.
+ */
 export async function writeChecks(
   db: SqlExecutor,
-  results: { streamUrl: string; ok: boolean }[],
+  results: { streamUrl: string; ok: boolean; languages?: string[] }[],
   now: number,
 ): Promise<void> {
   for (const result of new Map(
     results.map((item) => [item.streamUrl, item]),
   ).values())
     await db.runAsync(
-      "UPDATE channels SET checkStatus = ?, checkedAt = ? WHERE streamUrl = ?",
-      [result.ok ? "ok" : "unreachable", now, result.streamUrl],
+      result.languages
+        ? "UPDATE channels SET checkStatus = ?, checkedAt = ?, streamLanguages = ? WHERE streamUrl = ?"
+        : "UPDATE channels SET checkStatus = ?, checkedAt = ? WHERE streamUrl = ?",
+      [
+        result.ok ? "ok" : "unreachable",
+        now,
+        ...(result.languages
+          ? [normalizeLanguages(result.languages.join(";")).join(";")]
+          : []),
+        result.streamUrl,
+      ],
     );
 }
