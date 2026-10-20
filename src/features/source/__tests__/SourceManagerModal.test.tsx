@@ -324,3 +324,26 @@ test("a local list shows its file in place of the link, tapped to change", async
   );
   expect(chooseFile).toHaveBeenCalledTimes(1);
 });
+
+test("switching a source off keeps its warning line, so the card keeps its height", async () => {
+  const warned = { ...source, lastCheckedAt: 1, unreachableCount: 3 };
+  const modal = (enabled: boolean) => (
+    <SourceManagerModal
+      visible
+      sources={[{ ...warned, enabled }]}
+      check={null}
+      summaries={{}}
+      onClose={() => {}}
+      onAdd={() => {}}
+      onRename={() => {}}
+      onRemove={() => {}}
+      onCheck={() => {}}
+      onStopCheck={() => {}}
+      onEnabledChange={() => {}}
+    />
+  );
+  const ui = await render(modal(true));
+  expect(screen.getByText("3 个地址暂时无法连接")).toBeTruthy();
+  await ui.rerender(modal(false));
+  expect(screen.getByText("3 个地址暂时无法连接")).toBeTruthy();
+});
